@@ -475,12 +475,51 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
         const sock = this.sockets.get(botId);
 
         if (!sock) {
-            logger.error('❌ Bot not initialized - socket not found!', {
+            logger.warn('⚠️ Socket not found, checking bot status...', {
                 bot_id: botId,
                 available_sockets: Array.from(this.sockets.keys()),
                 total_sockets: this.sockets.size
             });
-            throw new Error(`Bot not initialized: ${botId}`);
+
+            // Check if bot is connected in database
+            try {
+                const bot = await botRepository.findById(botId);
+
+                if (bot && bot.status === 'connected') {
+                    logger.info('🔄 Bot is connected but socket missing, re-initializing...', {
+                        bot_id: botId,
+                        bot_name: bot.name
+                    });
+
+                    // Re-initialize the bot
+                    await this.initializeBot(botId);
+
+                    // Wait a bit for connection to establish
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    // Try to get socket again
+                    const newSock = this.sockets.get(botId);
+                    if (newSock) {
+                        logger.info('✅ Bot re-initialized successfully', { bot_id: botId });
+                        // Continue with sending message using newSock
+                        // (will be handled by retry or next message)
+                    } else {
+                        logger.error('❌ Re-initialization failed - socket still not found', { bot_id: botId });
+                        throw new Error(`Bot re-initialization failed: ${botId}`);
+                    }
+                } else {
+                    logger.error('❌ Bot not initialized - socket not found!', {
+                        bot_id: botId,
+                        bot_status: bot?.status || 'not found',
+                        available_sockets: Array.from(this.sockets.keys()),
+                        total_sockets: this.sockets.size
+                    });
+                    throw new Error(`Bot not initialized: ${botId}`);
+                }
+            } catch (error) {
+                logger.error('Failed to check/reinitialize bot', { error, bot_id: botId });
+                throw new Error(`Bot not initialized: ${botId}`);
+            }
         }
 
         logger.info('✅ Socket found, sending message', {

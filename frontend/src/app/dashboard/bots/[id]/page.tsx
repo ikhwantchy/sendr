@@ -315,50 +315,6 @@ export default function BotDetailPage() {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Quick Actions */}
-                            {bot.status === 'connected' && (
-                                <div>
-                                    <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                        <button
-                                            onClick={() => setActiveTab('rules')}
-                                            className="glass rounded-xl p-4 border border-white/10 hover:border-cyan-500/50 transition-all text-left group"
-                                        >
-                                            <div className="text-2xl mb-2">📋</div>
-                                            <div className="font-semibold text-white group-hover:text-cyan-400 transition-colors">Create Rule</div>
-                                            <div className="text-xs text-gray-400 mt-1">Auto-reply setup</div>
-                                        </button>
-
-                                        <button
-                                            onClick={() => setActiveTab('campaigns')}
-                                            className="glass rounded-xl p-4 border border-white/10 hover:border-cyan-500/50 transition-all text-left group"
-                                        >
-                                            <div className="text-2xl mb-2">📢</div>
-                                            <div className="font-semibold text-white group-hover:text-cyan-400 transition-colors">New Campaign</div>
-                                            <div className="text-xs text-gray-400 mt-1">Broadcast message</div>
-                                        </button>
-
-                                        <button
-                                            onClick={() => setActiveTab('reminders')}
-                                            className="glass rounded-xl p-4 border border-white/10 hover:border-cyan-500/50 transition-all text-left group"
-                                        >
-                                            <div className="text-2xl mb-2">⏰</div>
-                                            <div className="font-semibold text-white group-hover:text-cyan-400 transition-colors">Schedule Reminder</div>
-                                            <div className="text-xs text-gray-400 mt-1">Set up reminder</div>
-                                        </button>
-
-                                        <button
-                                            onClick={() => setActiveTab('settings')}
-                                            className="glass rounded-xl p-4 border border-white/10 hover:border-cyan-500/50 transition-all text-left group"
-                                        >
-                                            <div className="text-2xl mb-2">⚙️</div>
-                                            <div className="font-semibold text-white group-hover:text-cyan-400 transition-colors">Bot Settings</div>
-                                            <div className="text-xs text-gray-400 mt-1">Configure bot</div>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     )}
 
