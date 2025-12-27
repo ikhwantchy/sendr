@@ -3,9 +3,23 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+interface DashboardStats {
+    totalBots: number
+    activeRules: number
+    campaigns: number
+    messagesSent: number
+}
+
 export default function DashboardPage() {
     const router = useRouter()
     const [user, setUser] = useState<any>(null)
+    const [stats, setStats] = useState<DashboardStats>({
+        totalBots: 0,
+        activeRules: 0,
+        campaigns: 0,
+        messagesSent: 0
+    })
+    const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         // Check if user is logged in
@@ -19,10 +33,33 @@ export default function DashboardPage() {
 
         if (userData) {
             setUser(JSON.parse(userData))
+            fetchDashboardStats(token)
         }
     }, [router])
 
-    if (!user) {
+    const fetchDashboardStats = async (token: string) => {
+        try {
+            const response = await fetch('http://localhost:3001/api/analytics/dashboard-stats', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                if (data.success) {
+                    setStats(data.data)
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch dashboard stats:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    if (!user || loading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
@@ -70,7 +107,7 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <StatCard
                         title="Total Bots"
-                        value="0"
+                        value={stats.totalBots.toString()}
                         icon={
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
@@ -81,7 +118,7 @@ export default function DashboardPage() {
                     />
                     <StatCard
                         title="Active Rules"
-                        value="0"
+                        value={stats.activeRules.toString()}
                         icon={
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -92,7 +129,7 @@ export default function DashboardPage() {
                     />
                     <StatCard
                         title="Campaigns"
-                        value="0"
+                        value={stats.campaigns.toString()}
                         icon={
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
@@ -103,7 +140,7 @@ export default function DashboardPage() {
                     />
                     <StatCard
                         title="Messages Sent"
-                        value="0"
+                        value={stats.messagesSent.toString()}
                         icon={
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -115,7 +152,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="glass rounded-2xl border border-white/10 p-6 mb-8 hover-lift">
+                <div className="glass rounded-2xl border border-white/10 p-6 hover-lift">
                     <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                         <span className="w-1.5 h-8 bg-gradient-to-b from-cyan-400 to-purple-600 rounded-full"></span>
                         Quick Actions
@@ -145,37 +182,6 @@ export default function DashboardPage() {
                             hoverGradient="from-orange-500/30 to-red-500/30"
                             onClick={() => router.push('/dashboard/campaigns')}
                         />
-                    </div>
-                </div>
-
-                {/* Platform Info */}
-                <div className="glass rounded-2xl border border-white/10 p-6">
-                    <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg">
-                            <span className="text-2xl">🎉</span>
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-xl font-bold text-white mb-3">Platform Ready!</h3>
-                            <p className="text-gray-400 mb-4">
-                                Your BroBot Platform is now running! This is a production-ready, multi-tenant platform with:
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                                <FeatureItem text="Event-driven architecture" />
-                                <FeatureItem text="Multi-tenant isolation" />
-                                <FeatureItem text="Role-based access control" />
-                                <FeatureItem text="WhatsApp QR authentication" />
-                                <FeatureItem text="Keyword-based automation" />
-                                <FeatureItem text="Broadcast campaigns" />
-                                <FeatureItem text="Data source integration" />
-                                <FeatureItem text="Real-time analytics" />
-                            </div>
-                            <div className="glass-strong rounded-xl p-4 border border-cyan-500/20">
-                                <p className="text-sm text-gray-300">
-                                    <span className="font-semibold text-cyan-400">Next steps:</span> The full dashboard UI will be implemented as you build out features.
-                                    For now, you can use the API directly or build custom pages for your specific needs.
-                                </p>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </main>
@@ -219,18 +225,5 @@ function ActionButton({ title, description, icon, gradient, hoverGradient, onCli
                 <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors">{description}</p>
             </div>
         </button>
-    )
-}
-
-function FeatureItem({ text }: { text: string }) {
-    return (
-        <div className="flex items-center gap-2">
-            <div className="w-5 h-5 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-md flex items-center justify-center flex-shrink-0">
-                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-            </div>
-            <span className="text-gray-300 text-sm">{text}</span>
-        </div>
     )
 }
