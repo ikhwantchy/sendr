@@ -1,0 +1,137 @@
+/**
+ * Invitations Controller
+ * Handles user invitation and acceptance
+ */
+
+const { query } = require('../database/connection-sqlite');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+
+/**
+ * Validate invitation token
+ * GET /api/invitations/validate/:token
+ */
+const validateToken = async (req, res) => {
+    try {
+        const { token } = req.params;
+
+        const result = await query(
+            `SELECT * FROM user_invitations 
+             WHERE token = ? AND status = 'pending' AND expires_at > datetime('now')`,
+            [token]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Invalid or expired invitation'
+            });
+        }
+
+        const invitation = result.rows[0];
+
+        res.json({
+            success: true,
+            data: {
+                email: invitation.email,
+                role: invitation.role,
+                expires_at: invitation.expires_at
+            }
+        });
+    } catch (error) {
+        console.error('Validate token error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to validate invitation'
+        });
+    }
+};
+
+/**
+ * Accept invitation and create user
+ * POST /api/invitations/accept
+ */
+const acceptInvitation = async (req, res) => {
+    try {
+        const { token, name, password } = req.body;
+
+        if (!token || !name || !password) {
+            return res.status(400).json({
+                success: false,
+                error: 'Token, name, and password are required'
+            });
+        }
+
+        // Get invitation
+        const invitationResult = await query(
+            `SELECT * FROM user_invitations 
+             WHERE token = ? AND status = 'pending' AND expires_at > datetime('now')`,
+            [token]
+        );
+
+        if (invitationResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Invalid or expired invitation'
+            });
+        }
+
+        const invitation = invitationResult.rows[0];
+
+        // Check if user already exists
+        const existingUser = await query(
+            'SELECT id FROM users WHERE email = ?',
+            [invitation.email]
+        );
+
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'User already exists'
+            });
+        }
+
+        // Hash password
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        // Create user
+        const userId = crypto.randomUUID();
+        await query(
+            `INSERT INTO users (id, tenant_id, email, name, password_hash, role, status, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
+            [userId, 'default-tenant', invitation.email, name, passwordHash, invitation.role]
+        );
+
+        // Mark invitation as accepted
+        await query(
+            `UPDATE user_invitations 
+             SET status = 'accepted', accepted_at = datetime('now') 
+             WHERE id = ?`,
+            [invitation.id]
+        );
+
+        // TODO: Assign bot permissions based on invitation metadata
+        // This would be stored in invitation when created
+
+        res.json({
+            success: true,
+            message: 'Account created successfully! You can now login.',
+            data: {
+                email: invitation.email,
+                name: name,
+                role: invitation.role
+            }
+        });
+    } catch (error) {
+        console.error('Accept invitation error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to accept invitation'
+        });
+    }
+};
+
+module.exports = {
+    validateToken,
+    acceptInvitation
+};

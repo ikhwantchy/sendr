@@ -1,0 +1,92 @@
+/**
+ * Authentication Middleware
+ * JWT-based authentication with RBAC
+ */
+
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { logger } from '../../utils/logger';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+export interface AuthUser {
+    id: string;
+    tenant_id: string;
+    email: string;
+    role: 'OWNER' | 'OPERATOR' | 'VIEWER';
+}
+
+declare global {
+    namespace Express {
+        interface Request {
+            user?: AuthUser;
+        }
+    }
+}
+
+/**
+ * Authenticate JWT token
+ */
+export function authenticate(req: Request, res: Response, next: NextFunction) {
+    try {
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({
+                success: false,
+                error: 'No token provided',
+            });
+        }
+
+        const token = authHeader.substring(7);
+
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET) as AuthUser;
+            req.user = decoded;
+            next();
+        } catch (error) {
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid token',
+            });
+        }
+    } catch (error: any) {
+        logger.error('Authentication error', { error });
+        return res.status(500).json({
+            success: false,
+            error: 'Authentication failed',
+        });
+    }
+}
+
+/**
+ * Require specific roles
+ */
+export function requireRole(roles: string[]) {
+    return (req: Request, res: Response, next: NextFunction) => {
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                error: 'Not authenticated',
+            });
+        }
+
+        if (!roles.includes(req.user.role)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Insufficient permissions',
+            });
+        }
+
+        next();
+    };
+}
+
+/**
+ * Generate JWT token
+ */
+export function generateToken(user: AuthUser): string {
+    return jwt.sign(user, JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    });
+}
