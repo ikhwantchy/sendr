@@ -1,10 +1,11 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useState } from 'react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import CreateRuleModal from '@/components/modals/CreateRuleModal'
 import CreateCampaignModal from '@/components/modals/CreateCampaignModal'
 import CreateReminderModal from '@/components/modals/CreateReminderModal'
@@ -58,6 +59,35 @@ export default function BotDetailPage() {
             return response.data.data || response.data || []
         },
         enabled: !!botId,
+    })
+
+    // Pause/Resume mutations
+    const queryClient = useQueryClient()
+
+    const pauseMutation = useMutation({
+        mutationFn: async () => {
+            return await api.bots.pause(botId)
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['bot', botId] })
+            toast.success('Bot paused successfully')
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.error || 'Failed to pause bot')
+        },
+    })
+
+    const resumeMutation = useMutation({
+        mutationFn: async () => {
+            return await api.bots.resume(botId)
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['bot', botId] })
+            toast.success('Bot is resuming...')
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.error || 'Failed to resume bot')
+        },
     })
 
     // Calculate statistics
@@ -176,8 +206,8 @@ export default function BotDetailPage() {
                             <div>
                                 <h2 className="text-2xl font-bold text-white mb-6">Bot Overview</h2>
 
-                                {/* Connection Section - Prominent if not connected */}
-                                {bot.status !== 'connected' && (
+                                {/* Connection Section - Only show if bot has never been connected */}
+                                {bot.status !== 'connected' && !bot.phone_number && (
                                     <div className="glass rounded-2xl p-8 border-2 border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 mb-8">
                                         <div className="flex items-start gap-6">
                                             <div className="flex-shrink-0">
@@ -289,6 +319,36 @@ export default function BotDetailPage() {
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* Pause/Resume Button */}
+                                        {!isLoading && bot?.phone_number && (
+                                            <div className="mt-4 pt-4 border-t border-white/10">
+                                                {bot?.status === 'connected' ? (
+                                                    <button
+                                                        onClick={() => pauseMutation.mutate()}
+                                                        disabled={pauseMutation.isPending}
+                                                        className="w-full px-4 py-2.5 bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 rounded-xl hover:bg-yellow-500/30 transition-all text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                        {pauseMutation.isPending ? 'Pausing...' : 'Pause Bot'}
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => resumeMutation.mutate()}
+                                                        disabled={resumeMutation.isPending}
+                                                        className="w-full px-4 py-2.5 bg-green-500/20 border border-green-500/30 text-green-400 rounded-xl hover:bg-green-500/30 transition-all text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                        {resumeMutation.isPending ? 'Resuming...' : 'Resume Bot'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Reminders Stats */}

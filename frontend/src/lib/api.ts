@@ -53,6 +53,8 @@ export const api = {
         connect: (id: string) => apiClient.post(`/bots/${id}/connect`),
         status: (id: string) => apiClient.get(`/bots/${id}/status`),
         disconnect: (id: string) => apiClient.post(`/bots/${id}/disconnect`),
+        pause: (id: string) => apiClient.post(`/bots/${id}/pause`),
+        resume: (id: string) => apiClient.post(`/bots/${id}/resume`),
         delete: (id: string) => apiClient.delete(`/bots/${id}`),
         getGroups: (id: string) => apiClient.get(`/bots/${id}/groups`),
     },

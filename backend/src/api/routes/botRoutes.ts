@@ -233,6 +233,98 @@ router.post('/:id/disconnect', requireRole(['OWNER', 'OPERATOR']), async (req, r
 });
 
 /**
+ * POST /api/bots/:id/pause
+ * Pause bot (disconnect but keep session for quick resume)
+ */
+router.post('/:id/pause', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const tenantId = req.user!.tenant_id;
+
+        const bot = await botRepository.findById(id, tenantId);
+
+        if (!bot) {
+            return res.status(404).json({
+                success: false,
+                error: 'Bot not found',
+            });
+        }
+
+        if (bot.status !== 'connected') {
+            return res.status(400).json({
+                success: false,
+                error: 'Bot is not connected',
+            });
+        }
+
+        // Pause bot (disconnect socket but keep session)
+        await whatsappAdapter.pauseBot(id);
+
+        // Update status to paused
+        await botRepository.update(id, {
+            status: 'disconnected', // We use disconnected status for paused state
+        });
+
+        logger.info('Bot paused successfully', { bot_id: id });
+
+        res.json({
+            success: true,
+            message: 'Bot paused successfully',
+        });
+    } catch (error: any) {
+        logger.error('Failed to pause bot', { error });
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
+/**
+ * POST /api/bots/:id/resume
+ * Resume paused bot (reconnect using saved session)
+ */
+router.post('/:id/resume', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const tenantId = req.user!.tenant_id;
+
+        const bot = await botRepository.findById(id, tenantId);
+
+        if (!bot) {
+            return res.status(404).json({
+                success: false,
+                error: 'Bot not found',
+            });
+        }
+
+        // Check if bot has session data (was previously connected)
+        if (!bot.phone_number) {
+            return res.status(400).json({
+                success: false,
+                error: 'Bot has no saved session. Please connect with QR code first.',
+            });
+        }
+
+        // Resume bot (re-initialize with saved session)
+        await whatsappAdapter.initializeBot(id);
+
+        logger.info('Bot resume initiated', { bot_id: id });
+
+        res.json({
+            success: true,
+            message: 'Bot is resuming connection...',
+        });
+    } catch (error: any) {
+        logger.error('Failed to resume bot', { error });
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
+/**
  * DELETE /api/bots/:id
  * Delete bot
  */

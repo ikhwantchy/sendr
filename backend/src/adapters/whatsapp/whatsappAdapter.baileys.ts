@@ -21,6 +21,7 @@ import { botRepository } from '../../database/repositories/botRepository';
 class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
     private sockets: Map<string, WASocket> = new Map();
     private qrCodes: Map<string, { qr_code: string; expires_at: string }> = new Map();
+    private pausedBots: Set<string> = new Set(); // Track paused bots
     private sessionPath: string;
 
     constructor() {
@@ -37,6 +38,9 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             logger.warn('Bot already initialized - reusing existing socket', { bot_id: botId });
             return;
         }
+
+        // Remove from paused bots if resuming
+        this.pausedBots.delete(botId);
 
         logger.info('Initializing WhatsApp bot with Baileys', { bot_id: botId });
 
@@ -235,9 +239,13 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                     error: lastDisconnect?.error
                 });
 
+                // Check if this bot was paused (user-initiated)
+                const wasPaused = this.pausedBots.has(botId);
+
                 await botRepository.update(botId, {
                     status: 'disconnected',
-                    phone_number: null,
+                    // Only clear phone_number if logged out AND not paused
+                    ...(disconnectReason === DisconnectReason.loggedOut && !wasPaused ? { phone_number: null } : {}),
                 });
 
                 // Emit disconnect event
@@ -262,7 +270,8 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 this.sockets.delete(botId);
                 this.qrCodes.delete(botId);
 
-                if (shouldReconnect) {
+                // Don't auto-reconnect if bot was paused by user
+                if (shouldReconnect && !wasPaused) {
                     // Auto-reconnect with longer delay to avoid WhatsApp anti-spam
                     logger.info('⏳ Will attempt reconnect in 30 seconds...', { bot_id: botId });
                     setTimeout(() => {
@@ -271,6 +280,8 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                             logger.error('Failed to reconnect', { error: err, bot_id: botId });
                         });
                     }, 30000); // 30 seconds delay (safer than 5 seconds)
+                } else if (wasPaused) {
+                    logger.info('⏸️ Bot was paused by user - not auto-reconnecting', { bot_id: botId });
                 } else {
                     logger.info('❌ Not reconnecting - user logged out', { bot_id: botId });
                 }
@@ -453,6 +464,40 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
         }
 
         return { status: 'connecting' };
+    }
+
+    /**
+     * Pause bot (disconnect socket but keep session data)
+     */
+    public async pauseBot(botId: string): Promise<void> {
+        logger.info('Pausing bot', { bot_id: botId });
+
+        // Mark this bot as paused
+        this.pausedBots.add(botId);
+
+        const sock = this.sockets.get(botId);
+
+        if (sock) {
+            try {
+                // Close the socket connection gracefully
+                sock.end(undefined);
+                logger.info('Socket connection closed', { bot_id: botId });
+            } catch (error) {
+                logger.warn('Error closing socket', { error, bot_id: botId });
+            }
+
+            // Remove socket from memory
+            this.sockets.delete(botId);
+            logger.info('Socket removed from memory', {
+                bot_id: botId,
+                remaining_sockets: this.sockets.size
+            });
+        } else {
+            logger.warn('No socket found to pause', { bot_id: botId });
+        }
+
+        // NOTE: We do NOT delete session data from auth_info_baileys folder
+        // This allows the bot to resume without scanning QR code again
     }
 
     /**
