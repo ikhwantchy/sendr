@@ -15,14 +15,21 @@ class GroupService {
      * Sync groups for a bot
      * Called when bot connects
      */
-    async syncGroupsForBot(botId: string): Promise<void> {
+    async syncGroupsForBot(botId: string, retryCount = 0): Promise<void> {
         try {
-            logger.info('Syncing groups for bot', { bot_id: botId });
+            logger.info('Syncing groups for bot', { bot_id: botId, retry: retryCount });
 
             // Get socket for this bot
             const sock = whatsappAdapter.getSocket(botId);
             if (!sock) {
-                logger.warn('No socket found for bot', { bot_id: botId });
+                // Retry up to 3 times with 2 second delay
+                if (retryCount < 3) {
+                    logger.warn('No socket found for bot, retrying...', { bot_id: botId, retry: retryCount });
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    return this.syncGroupsForBot(botId, retryCount + 1);
+                }
+
+                logger.warn('No socket found for bot after retries', { bot_id: botId });
                 return;
             }
 
@@ -39,7 +46,7 @@ class GroupService {
                 await this.upsertGroup(botId, groupId, groupData.subject);
             }
 
-            logger.info('Groups synced successfully', { bot_id: botId });
+            logger.info('Groups synced successfully', { bot_id: botId, count: Object.keys(groups).length });
         } catch (error: any) {
             logger.error('Failed to sync groups', {
                 bot_id: botId,
@@ -59,16 +66,16 @@ class GroupService {
         try {
             // Check if exists
             const existing = await query(
-                'SELECT id FROM wa_groups WHERE bot_id = ? AND group_id = ?',
+                'SELECT id FROM wa_groups WHERE bot_id = ? AND group_jid = ?',
                 [botId, groupId]
             );
 
-            if (existing.rows.length > 0) {
+            if (existing.length > 0) {
                 // Update
                 await query(
                     `UPDATE wa_groups 
-                    SET group_name = ?, updated_at = datetime('now') 
-                    WHERE bot_id = ? AND group_id = ?`,
+                    SET group_name = ?, last_synced_at = datetime('now') 
+                    WHERE bot_id = ? AND group_jid = ?`,
                     [groupName, botId, groupId]
                 );
             } else {
@@ -76,9 +83,9 @@ class GroupService {
                 const id = uuidv4();
                 await query(
                     `INSERT INTO wa_groups (
-                        id, bot_id, group_id, group_name, is_active
-                    ) VALUES (?, ?, ?, ?, ?)`,
-                    [id, botId, groupId, groupName, 0]
+                        id, bot_id, group_jid, group_name, is_active, last_synced_at
+                    ) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+                    [id, botId, groupId, groupName, 1]
                 );
             }
         } catch (error: any) {

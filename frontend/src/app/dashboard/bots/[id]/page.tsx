@@ -8,7 +8,6 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import CreateRuleModal from '@/components/modals/CreateRuleModal'
 import CreateCampaignModal from '@/components/modals/CreateCampaignModal'
-import CreateReminderModal from '@/components/modals/CreateReminderModal'
 import RulesTable from '@/components/tables/RulesTable'
 import CampaignsTable from '@/components/tables/CampaignsTable'
 import RemindersTable from '@/components/tables/RemindersTable'
@@ -22,7 +21,6 @@ export default function BotDetailPage() {
     // Modal states
     const [showCreateRuleModal, setShowCreateRuleModal] = useState(false)
     const [showCreateCampaignModal, setShowCreateCampaignModal] = useState(false)
-    const [showCreateReminderModal, setShowCreateReminderModal] = useState(false)
 
     // Fetch bot details
     const { data: bot, isLoading } = useQuery({
@@ -413,7 +411,7 @@ export default function BotDetailPage() {
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-2xl font-bold text-white">Scheduled Reminders</h2>
                                 <button
-                                    onClick={() => setShowCreateReminderModal(true)}
+                                    onClick={() => router.push(`/dashboard/reminders/create?botId=${botId}`)}
                                     className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
                                 >
                                     + Create Reminder
@@ -471,12 +469,7 @@ export default function BotDetailPage() {
                 />
             )}
 
-            {showCreateReminderModal && (
-                <CreateReminderModal
-                    botId={botId}
-                    onClose={() => setShowCreateReminderModal(false)}
-                />
-            )}
+
         </div>
     )
 }

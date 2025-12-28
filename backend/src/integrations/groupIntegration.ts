@@ -17,7 +17,7 @@ import { logger } from '../utils/logger';
 export function initializeGroupIntegration(): void {
     // Sync groups when bot connects
     eventBus.on(EventType.WA_CONNECTED, async (event) => {
-        const { bot_id } = event;
+        const { bot_id } = event.context; // <-- FIX: bot_id is in context!
 
         logger.info('Bot connected, syncing groups', { bot_id });
 

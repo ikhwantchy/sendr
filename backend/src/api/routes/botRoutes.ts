@@ -374,4 +374,101 @@ router.delete('/:id', requireRole(['OWNER']), async (req, res) => {
     }
 });
 
+/**
+ * GET /api/bots/:id/groups
+ * Get WhatsApp groups for a bot
+ */
+router.get('/:id/groups', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const tenantId = req.user!.tenant_id;
+
+        const bot = await botRepository.findById(id, tenantId);
+
+        if (!bot) {
+            return res.status(404).json({
+                success: false,
+                error: 'Bot not found',
+            });
+        }
+
+        // Fetch groups from database
+        const { query } = await import('../../database/connection-sqlite');
+
+        logger.info('Fetching groups from database', { bot_id: id });
+
+        const dbGroups = await query(`
+            SELECT * FROM wa_groups
+            WHERE bot_id = ?
+            ORDER BY group_name ASC
+        `, [id]);
+
+        logger.info('Groups fetched from database', { bot_id: id, count: dbGroups.rows.length });
+
+        // Map database columns to frontend expected format
+        const groups = dbGroups.rows.map((g: any) => ({
+            id: g.id,
+            jid: g.group_jid,
+            name: g.group_name,
+            participant_count: g.participant_count,
+            is_active: g.is_active,
+            last_synced_at: g.last_synced_at,
+            created_at: g.created_at
+        }));
+
+        logger.info('Groups mapped successfully', { bot_id: id, count: groups.length });
+
+        res.json({
+            success: true,
+            data: groups,
+        });
+    } catch (error: any) {
+        logger.error('Failed to get bot groups', {
+            error: error.message,
+            stack: error.stack,
+            bot_id: id
+        });
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
+/**
+ * POST /api/bots/:id/sync-groups
+ * Manually trigger group sync for a bot
+ */
+router.post('/:id/sync-groups', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const tenantId = req.user!.tenant_id;
+
+        const bot = await botRepository.findById(id, tenantId);
+
+        if (!bot) {
+            return res.status(404).json({
+                success: false,
+                error: 'Bot not found',
+            });
+        }
+
+        // Trigger group sync
+        const { groupService } = await import('../../modules/group/groupService');
+        await groupService.syncGroupsForBot(id);
+
+        res.json({
+            success: true,
+            message: 'Group sync triggered successfully',
+        });
+    } catch (error: any) {
+        logger.error('Failed to sync groups', { error });
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
 export default router;

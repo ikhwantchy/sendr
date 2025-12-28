@@ -137,6 +137,15 @@ const server = app.listen(PORT, async () => {
     } catch (error: any) {
         logger.error('❌ Failed to auto-initialize bots', { error: error.message });
     }
+
+    // ✅ Initialize reminder scheduler
+    try {
+        const reminderSchedulerService = (await import('./services/reminderSchedulerService')).default;
+        await reminderSchedulerService.initialize();
+        logger.info('✅ Reminder scheduler initialized');
+    } catch (error: any) {
+        logger.error('❌ Failed to initialize reminder scheduler', { error: error.message });
+    }
 });
 
 // Graceful shutdown
