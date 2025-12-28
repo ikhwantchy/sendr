@@ -70,7 +70,7 @@ class GroupService {
                 [botId, groupId]
             );
 
-            if (existing.length > 0) {
+            if (existing.rows && existing.rows.length > 0) {
                 // Update
                 await query(
                     `UPDATE wa_groups 
@@ -101,7 +101,7 @@ class GroupService {
             await query(
                 `UPDATE wa_groups 
                 SET is_active = 1, updated_at = datetime('now') 
-                WHERE bot_id = ? AND group_id = ?`,
+                WHERE bot_id = ? AND group_jid = ?`,
                 [botId, groupId]
             );
 
@@ -121,7 +121,7 @@ class GroupService {
             await query(
                 `UPDATE wa_groups 
                 SET is_active = 0, updated_at = datetime('now') 
-                WHERE bot_id = ? AND group_id = ?`,
+                WHERE bot_id = ? AND group_jid = ?`,
                 [botId, groupId]
             );
 

@@ -1,4 +1,12 @@
 import cron from 'node-cron';
+// Handle cron-parser import issues for different environments
+let cronParser: any;
+try {
+    const cp = require('cron-parser');
+    cronParser = cp.default || cp;
+} catch (e) {
+    cronParser = require('cron-parser');
+}
 import { query } from '../database/connection-sqlite';
 import googleSheetsService from './googleSheetsService';
 import templateEngineService from './templateEngineService';
@@ -23,10 +31,12 @@ class ReminderSchedulerService {
         try {
             console.log('🔄 Initializing Reminder Scheduler...');
 
-            const reminders = await query(`
+            const result = await query(`
                 SELECT * FROM reminders 
                 WHERE is_active = 1
             `);
+
+            const reminders = result.rows || [];
 
             for (const reminder of reminders) {
                 await this.scheduleReminder(reminder);
@@ -48,6 +58,12 @@ class ReminderSchedulerService {
                 this.unscheduleReminder(reminder.id);
             }
 
+            // Skip if schedule is 'now'
+            if (reminder.schedule === 'now') {
+                console.log(`⚡ Reminder ${reminder.id} is set to 'now', skipping cron registration`);
+                return;
+            }
+
             // Create cron task
             const task = cron.schedule(reminder.schedule, async () => {
                 await this.executeReminder(reminder.id);
@@ -60,6 +76,18 @@ class ReminderSchedulerService {
                 cronExpression: reminder.schedule,
                 task,
             });
+
+            // Calculate next run at
+            try {
+                const interval = cronParser.parseExpression(reminder.schedule, {
+                    tz: reminder.timezone || 'Asia/Jakarta'
+                });
+                const nextRunAt = interval.next().toISOString();
+
+                await query('UPDATE reminders SET next_run_at = ? WHERE id = ?', [nextRunAt, reminder.id]);
+            } catch (err) {
+                console.error('Error calculating next run:', err);
+            }
 
             console.log(`✅ Scheduled reminder: ${reminder.name} (${reminder.schedule})`);
         } catch (error) {
@@ -86,45 +114,53 @@ class ReminderSchedulerService {
         try {
             console.log(`⚡ Executing reminder: ${reminderId}`);
 
-            // Get reminder details
-            const reminderRows = await query(
+            const result = await query(
                 'SELECT * FROM reminders WHERE id = ?',
                 [reminderId]
             );
 
-            if (reminderRows.length === 0) {
+            if (result.rows.length === 0) {
                 console.error(`❌ Reminder ${reminderId} not found`);
                 return;
             }
 
-            const reminder = reminderRows[0];
+            const reminder = result.rows[0];
 
             // Get data source if exists
             let variables: Record<string, any> = {};
 
             if (reminder.data_source_id) {
-                const dataSourceRows = await query(
+                const dsResult = await query(
                     'SELECT * FROM data_sources WHERE id = ?',
                     [reminder.data_source_id]
                 );
 
-                if (dataSourceRows.length > 0) {
-                    const dataSource = dataSourceRows[0];
+                if (dsResult.rows.length > 0) {
+                    const dataSource = dsResult.rows[0];
                     variables = await this.fetchDataAndGenerateVariables(dataSource, reminder.timezone);
                 }
             }
 
             // Process template
             const templateConfig = JSON.parse(reminder.template_config || '{}');
-            const message = templateEngineService.processTemplate(templateConfig.template || '', variables);
+            const templateText = templateConfig.body || templateConfig.template || '';
+            const message = templateEngineService.processTemplate(templateText, variables);
 
             // Send message via WhatsApp
-            await this.sendMessage(reminder.bot_id, reminder.target_id, message, templateConfig.image_url);
+            const targetIds = reminder.target_id.split(',');
+            for (const targetJid of targetIds) {
+                if (!targetJid.trim()) continue;
+                try {
+                    await this.sendMessageWithRetry(reminder.bot_id, targetJid.trim(), message, templateConfig.image_url);
+                } catch (sendError: any) {
+                    console.error(`❌ Permanent failure sending message to ${targetJid}:`, sendError);
+                }
+            }
 
             // Log execution
             await this.logExecution(reminderId, 'success', message);
 
-            console.log(`✅ Reminder executed successfully: ${reminderId}`);
+            console.log(`✅ Reminder processed successfully: ${reminderId}`);
         } catch (error: any) {
             console.error(`❌ Error executing reminder ${reminderId}:`, error);
             await this.logExecution(reminderId, 'failed', error.message);
@@ -170,6 +206,24 @@ class ReminderSchedulerService {
         } catch (error) {
             console.error('Error fetching data:', error);
             return {};
+        }
+    }
+
+    /**
+     * Send message with retry logic for connection issues
+     */
+    private async sendMessageWithRetry(botId: string, targetJid: string, message: string, imageUrl?: string, retryCount = 0) {
+        try {
+            await this.sendMessage(botId, targetJid, message, imageUrl);
+            console.log(`✅ Message sent to ${targetJid}`);
+        } catch (error: any) {
+            // If connection closed and we haven't retried yet
+            if (retryCount < 1 && (error.message?.includes('Closed') || error.output?.statusCode === 428)) {
+                console.warn(`⚠️ Connection closed for bot ${botId}, retrying in 3 seconds...`);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                return this.sendMessageWithRetry(botId, targetJid, message, imageUrl, retryCount + 1);
+            }
+            throw error;
         }
     }
 

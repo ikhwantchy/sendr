@@ -23,39 +23,67 @@ export default function RemindersPage() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        // Mock data for now - will be replaced with API call
-        setTimeout(() => {
-            setReminders([
-                {
-                    id: '1',
-                    name: 'Daily Digest Kuliah',
-                    description: 'Jadwal kuliah dan tugas deadline',
-                    schedule: '0 8 * * *',
-                    scheduleText: 'Every day at 08:00 WIB',
-                    targetType: 'group',
-                    targetName: 'Kelas A',
-                    isActive: true,
-                    lastRun: '2025-12-27 08:00:00',
-                    nextRun: '2025-12-28 08:00:00',
-                    lastStatus: 'success'
-                },
-                {
-                    id: '2',
-                    name: 'Weekly Summary',
-                    description: 'Ringkasan mingguan',
-                    schedule: '0 20 * * 0',
-                    scheduleText: 'Every Sunday at 20:00 WIB',
-                    targetType: 'group',
-                    targetName: 'Kelas A',
-                    isActive: false,
-                    lastRun: null,
-                    nextRun: '2025-12-29 20:00:00',
-                    lastStatus: null
+        const fetchReminders = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const urlParams = new URLSearchParams(window.location.search);
+                const botId = urlParams.get('botId');
+
+                let url = 'http://localhost:3001/api/reminders';
+                if (botId) {
+                    url = `http://localhost:3001/api/reminders/bot/${botId}`;
                 }
-            ])
-            setLoading(false)
-        }, 500)
-    }, [])
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    setReminders(data.data.map((r: any) => ({
+                        id: r.id,
+                        name: r.name,
+                        description: r.description || '',
+                        schedule: r.schedule,
+                        scheduleText: formatSchedule(r.schedule),
+                        targetType: r.target_type,
+                        targetName: r.group_name || (r.target_id?.includes(',') ? `${r.target_id.split(',').length} Groups` : r.target_id) || 'Unknown',
+                        isActive: r.is_active === 1,
+                        lastRun: r.last_run_at,
+                        nextRun: r.next_run_at || 'Not scheduled',
+                        lastStatus: r.last_status
+                    })));
+                }
+            } catch (error) {
+                console.error('Failed to fetch reminders:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchReminders();
+    }, []);
+
+    const formatSchedule = (cron: string): string => {
+        if (cron === 'now') return 'Send immediately';
+        const parts = cron.split(' ');
+        if (parts.length !== 5) return cron;
+
+        const [minute, hour, dom, month, dow] = parts;
+
+        if (dow !== '*') {
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            return `Every ${days[parseInt(dow)]} at ${hour.padStart(2, '0')}:${minute.padStart(2, '0')} WIB`;
+        }
+
+        if (dom === '*' && month === '*') {
+            return `Every day at ${hour.padStart(2, '0')}:${minute.padStart(2, '0')} WIB`;
+        }
+
+        return cron;
+    };
 
     const toggleActive = (id: string) => {
         setReminders(reminders.map(r =>
@@ -149,8 +177,8 @@ function ReminderCard({ reminder, onToggle, onEdit, onDelete, onTest }: any) {
                     <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-xl font-bold text-white">{reminder.name}</h3>
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${reminder.isActive
-                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                            : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
                             }`}>
                             {reminder.isActive ? 'Active' : 'Inactive'}
                         </span>
@@ -207,12 +235,13 @@ function ReminderCard({ reminder, onToggle, onEdit, onDelete, onTest }: any) {
                     <div>
                         <span className="text-xs text-gray-400 block mb-1">Next Run</span>
                         <span className="text-sm text-cyan-400 font-medium">
-                            {new Date(reminder.nextRun).toLocaleString('id-ID', {
-                                day: '2-digit',
-                                month: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                            })}
+                            {reminder.nextRun === 'Not scheduled' || !reminder.nextRun || isNaN(Date.parse(reminder.nextRun)) ? 'Not scheduled' :
+                                new Date(reminder.nextRun).toLocaleString('id-ID', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
                         </span>
                     </div>
                 </div>
@@ -223,8 +252,8 @@ function ReminderCard({ reminder, onToggle, onEdit, onDelete, onTest }: any) {
                 <button
                     onClick={onToggle}
                     className={`flex-1 px-4 py-2 rounded-xl font-semibold transition-all duration-300 ${reminder.isActive
-                            ? 'bg-gray-500/20 text-gray-300 hover:bg-gray-500/30'
-                            : 'bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30'
+                        ? 'bg-gray-500/20 text-gray-300 hover:bg-gray-500/30'
+                        : 'bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30'
                         }`}
                 >
                     {reminder.isActive ? 'Pause' : 'Activate'}

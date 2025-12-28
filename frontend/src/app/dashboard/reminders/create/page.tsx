@@ -176,10 +176,68 @@ export default function CreateReminderPage() {
         }
     }
 
-    const handleSubmit = () => {
-        console.log('Creating reminder:', formData)
-        // TODO: API call
-        router.push('/dashboard/reminders')
+    const handleSubmit = async () => {
+        try {
+            setLoading(true);
+            const token = localStorage.getItem('token');
+
+            // Format targetId from selectedGroups
+            const targetId = selectedGroups.join(',');
+
+            // Format schedule based on scheduleType
+            let schedule = 'now';
+            if (formData.scheduleType !== 'now') {
+                const [hour, minute] = formData.time.split(':');
+                if (formData.scheduleType === 'daily') {
+                    schedule = `${parseInt(minute)} ${parseInt(hour)} * * *`;
+                } else if (formData.scheduleType === 'weekly') {
+                    const dow = formData.date ? new Date(formData.date).getDay() : 0;
+                    schedule = `${parseInt(minute)} ${parseInt(hour)} * * ${dow}`;
+                } else if (formData.scheduleType === 'once') {
+                    if (formData.date) {
+                        const dateObj = new Date(formData.date);
+                        schedule = `${parseInt(minute)} ${parseInt(hour)} ${dateObj.getDate()} ${dateObj.getMonth() + 1} *`;
+                    }
+                }
+            }
+
+            const payload = {
+                name: formData.name,
+                description: formData.description,
+                botId: formData.botId,
+                targetType: formData.targetType,
+                targetId: targetId,
+                schedule: schedule,
+                timezone: formData.timezone,
+                dataSourceId: formData.dataSourceId || null,
+                googleSheetsUrl: formData.googleSheetsUrl || null,
+                templateConfig: {
+                    body: formData.template
+                }
+            };
+
+            const response = await fetch('http://localhost:3001/api/reminders', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                router.push('/dashboard/reminders?botId=' + formData.botId);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (error) {
+            console.error('Error creating reminder:', error);
+            alert('Failed to connect to server');
+        } finally {
+            setLoading(false);
+        }
     }
 
     // Get today's date in YYYY-MM-DD format for min date
@@ -448,7 +506,6 @@ export default function CreateReminderPage() {
                                         <div className="glass-strong rounded-xl p-4 border border-cyan-500/20">
                                             <p className="text-sm text-gray-300">
                                                 <span className="font-semibold text-cyan-400">Preview:</span> {' '}
-                                                {formData.scheduleType === 'now' && 'Send immediately after creation'}
                                                 {formData.scheduleType === 'once' && formData.date && `Send once on ${new Date(formData.date).toLocaleDateString('id-ID')} at ${formData.time}`}
                                                 {formData.scheduleType === 'daily' && formData.date && `Every day at ${formData.time} ${formData.timezone.split('/')[1]}, starting from ${new Date(formData.date).toLocaleDateString('id-ID')}`}
                                                 {formData.scheduleType === 'daily' && !formData.date && `Every day at ${formData.time} ${formData.timezone.split('/')[1]}`}

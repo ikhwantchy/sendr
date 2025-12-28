@@ -82,6 +82,7 @@ export const api = {
         getByBot: (botId: string) => apiClient.get(`/reminders/bot/${botId}`),
         create: (data: any) => apiClient.post('/reminders', data),
         update: (id: string, data: any) => apiClient.put(`/reminders/${id}`, data),
+        toggle: (id: string) => apiClient.patch(`/reminders/${id}/toggle`),
         delete: (id: string) => apiClient.delete(`/reminders/${id}`),
     },
 

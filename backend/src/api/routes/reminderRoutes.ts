@@ -1,10 +1,23 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../../database/connection-sqlite';
+import { authenticate } from '../middleware/auth';
 import googleSheetsService from '../../services/googleSheetsService';
 import reminderSchedulerService from '../../services/reminderSchedulerService';
 
+// Handle cron-parser import issues
+let cronParser: any;
+try {
+    const cp = require('cron-parser');
+    cronParser = cp.default || cp;
+} catch (e) {
+    cronParser = require('cron-parser');
+}
+
 const router = Router();
+
+// All reminder routes require authentication
+router.use(authenticate);
 
 /**
  * GET /api/reminders
@@ -12,19 +25,20 @@ const router = Router();
  */
 router.get('/', async (req, res) => {
     try {
-        const userId = (req as any).user.id;
+        const tenantId = (req as any).user.tenant_id;
 
-        const reminders = await query(`
-            SELECT r.*, b.name as bot_name, b.phone_number
+        const result = await query(`
+            SELECT r.*, b.name as bot_name, b.phone_number,
+                   (SELECT group_name FROM wa_groups WHERE group_jid = r.target_id AND bot_id = r.bot_id) as group_name
             FROM reminders r
             LEFT JOIN bots b ON r.bot_id = b.id
-            WHERE b.created_by = ?
+            WHERE r.tenant_id = ?
             ORDER BY r.created_at DESC
-        `, [userId]);
+        `, [tenantId]);
 
         res.json({
             success: true,
-            data: reminders,
+            data: result.rows,
         });
     } catch (error: any) {
         console.error('Error fetching reminders:', error);
@@ -36,25 +50,56 @@ router.get('/', async (req, res) => {
 });
 
 /**
- * GET /api/reminders/by-bot/:botId
+ * GET /api/reminders/bot/:botId
  * Get reminders for a specific bot
+ */
+router.get('/bot/:botId', async (req, res) => {
+    try {
+        const { botId } = req.params;
+        const tenantId = (req as any).user.tenant_id;
+
+        const result = await query(`
+            SELECT r.*, b.name as bot_name, b.phone_number,
+                   (SELECT group_name FROM wa_groups WHERE group_jid = r.target_id AND bot_id = r.bot_id) as group_name
+            FROM reminders r
+            LEFT JOIN bots b ON r.bot_id = b.id
+            WHERE r.bot_id = ? AND r.tenant_id = ?
+            ORDER BY r.created_at DESC
+        `, [botId, tenantId]);
+
+        res.json({
+            success: true,
+            data: result.rows,
+        });
+    } catch (error: any) {
+        console.error('Error fetching reminders:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch reminders',
+        });
+    }
+});
+
+/**
+ * GET /api/reminders/by-bot/:botId (Alias for compatibility)
  */
 router.get('/by-bot/:botId', async (req, res) => {
     try {
         const { botId } = req.params;
-        const userId = (req as any).user.id;
+        const tenantId = (req as any).user.tenant_id;
 
-        const reminders = await query(`
-            SELECT r.*, b.name as bot_name, b.phone_number
+        const result = await query(`
+            SELECT r.*, b.name as bot_name, b.phone_number,
+                   (SELECT group_name FROM wa_groups WHERE group_jid = r.target_id AND bot_id = r.bot_id) as group_name
             FROM reminders r
             LEFT JOIN bots b ON r.bot_id = b.id
-            WHERE r.bot_id = ? AND b.created_by = ?
+            WHERE r.bot_id = ? AND r.tenant_id = ?
             ORDER BY r.created_at DESC
-        `, [botId, userId]);
+        `, [botId, tenantId]);
 
         res.json({
             success: true,
-            data: reminders,
+            data: result.rows,
         });
     } catch (error: any) {
         console.error('Error fetching reminders:', error);
@@ -72,16 +117,17 @@ router.get('/by-bot/:botId', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = (req as any).user.id;
+        const tenantId = (req as any).user.tenant_id;
 
-        const reminderRows = await query(`
-            SELECT r.*, b.name as bot_name, b.phone_number
+        const result = await query(`
+            SELECT r.*, b.name as bot_name, b.phone_number,
+                   (SELECT group_name FROM wa_groups WHERE group_jid = r.target_id AND bot_id = r.bot_id) as group_name
             FROM reminders r
             LEFT JOIN bots b ON r.bot_id = b.id
-            WHERE r.id = ? AND b.created_by = ?
-        `, [id, userId]);
+            WHERE r.id = ? AND r.tenant_id = ?
+        `, [id, tenantId]);
 
-        if (reminderRows.length === 0) {
+        if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
                 error: 'Reminder not found',
@@ -90,7 +136,7 @@ router.get('/:id', async (req, res) => {
 
         res.json({
             success: true,
-            data: reminderRows[0],
+            data: result.rows[0],
         });
     } catch (error: any) {
         console.error('Error fetching reminder:', error);
@@ -108,38 +154,36 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const userId = (req as any).user.id;
+        const tenantId = (req as any).user.tenant_id;
         const {
             name,
             description,
             botId,
             targetType,
-            targetJid,
-            scheduleType,
-            date,
-            time,
+            targetId, // Changed from targetJid
+            schedule, // Changed from cronExpression
             timezone,
-            cronExpression,
             dataSourceId,
             googleSheetsUrl,
-            messageTemplate,
-            imageUrl,
+            templateConfig, // Changed from messageTemplate
         } = req.body;
 
         // Validate required fields
-        if (!name || !botId || !targetJid || !messageTemplate) {
+        if (!name || !botId || !targetId || !templateConfig) {
             return res.status(400).json({
                 success: false,
                 error: 'Missing required fields',
+                details: { name, botId, targetId, templateConfig }
             });
         }
 
         // Verify bot ownership
-        const botRows = await query(
-            'SELECT * FROM bots WHERE id = ? AND created_by = ?',
-            [botId, userId]
+        const botResult = await query(
+            'SELECT * FROM bots WHERE id = ? AND tenant_id = ?',
+            [botId, tenantId]
         );
 
-        if (botRows.length === 0) {
+        if (botResult.rows.length === 0) {
             return res.status(403).json({
                 success: false,
                 error: 'Bot not found or access denied',
@@ -151,63 +195,52 @@ router.post('/', async (req, res) => {
 
         // Create data source if Google Sheets URL is provided
         if (googleSheetsUrl && !dataSourceId) {
-            const validation = await googleSheetsService.validateSheetAccess(googleSheetsUrl);
-
-            if (!validation.valid) {
-                return res.status(400).json({
-                    success: false,
-                    error: validation.message,
-                });
-            }
-
             finalDataSourceId = uuidv4();
             await query(`
-                INSERT INTO data_sources (id, name, type, source_url, config, created_by, created_at)
-                VALUES (?, ?, 'google_sheets', ?, '{}', ?, datetime('now'))
-            `, [finalDataSourceId, `Data Source for ${name}`, googleSheetsUrl, userId]);
+                INSERT INTO data_sources (id, tenant_id, name, type, source_url, config, created_by, created_at)
+                VALUES (?, ?, ?, 'google_sheets', ?, '{}', ?, datetime('now'))
+            `, [finalDataSourceId, tenantId, `Data Source for ${name}`, googleSheetsUrl, userId]);
         }
 
-        // Determine status based on schedule type
-        const status = scheduleType === 'now' ? 'completed' : 'pending';
-
-        // Create reminder
+        // Create reminder - matching the connection-sqlite schema
         await query(`
             INSERT INTO reminders (
-                id, name, description, bot_id, target_type, target_jid,
-                schedule_type, cron_expression, timezone, data_source_id,
-                message_template, image_url, is_active, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'))
+                id, tenant_id, bot_id, name, description, 
+                schedule, timezone, is_active, target_type, target_id, 
+                data_source_id, pipeline_config, template_config, 
+                created_by, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, '{}', ?, ?, datetime('now'))
         `, [
             reminderId,
+            tenantId,
+            botId,
             name,
             description || '',
-            botId,
-            targetType,
-            targetJid,
-            scheduleType,
-            cronExpression || '',
+            schedule || '',
             timezone || 'Asia/Jakarta',
+            targetType,
+            targetId,
             finalDataSourceId || null,
-            messageTemplate,
-            imageUrl || null,
-            status,
+            typeof templateConfig === 'string' ? JSON.stringify({ body: templateConfig }) : JSON.stringify(templateConfig),
+            userId
         ]);
 
-        // Schedule or execute immediately
-        if (scheduleType === 'now') {
-            // Execute immediately
+        // Re-fetch and Schedule
+        const result = await query('SELECT * FROM reminders WHERE id = ?', [reminderId]);
+        const reminder = result.rows[0];
+
+        if (reminder.schedule === 'now') {
+            console.log(`⚡ Executing reminder ${reminderId} immediately`);
             await reminderSchedulerService.executeImmediately(reminderId);
         } else {
-            // Schedule for later
-            const reminder = await query('SELECT * FROM reminders WHERE id = ?', [reminderId]);
-            await reminderSchedulerService.scheduleReminder(reminder[0]);
+            await reminderSchedulerService.scheduleReminder(reminder);
         }
 
         res.status(201).json({
             success: true,
             data: {
                 id: reminderId,
-                message: scheduleType === 'now' ? 'Reminder sent immediately' : 'Reminder scheduled successfully',
+                message: 'Reminder created and scheduled successfully',
             },
         });
     } catch (error: any) {
@@ -221,29 +254,102 @@ router.post('/', async (req, res) => {
 });
 
 /**
- * PATCH /api/reminders/:id/toggle
- * Toggle reminder active status
+ * PUT /api/reminders/:id
+ * Update an existing reminder
  */
-router.patch('/:id/toggle', async (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = (req as any).user.id;
+        const tenantId = (req as any).user.tenant_id;
+        const {
+            name,
+            description,
+            botId,
+            targetType,
+            targetId,
+            schedule,
+            timezone,
+            dataSourceId,
+            templateConfig,
+        } = req.body;
 
         // Verify ownership
-        const reminderRows = await query(`
-            SELECT r.* FROM reminders r
-            LEFT JOIN bots b ON r.bot_id = b.id
-            WHERE r.id = ? AND b.created_by = ?
-        `, [id, userId]);
+        const verifyResult = await query(`
+            SELECT * FROM reminders WHERE id = ? AND tenant_id = ?
+        `, [id, tenantId]);
 
-        if (reminderRows.length === 0) {
+        if (verifyResult.rows.length === 0) {
             return res.status(404).json({
                 success: false,
                 error: 'Reminder not found',
             });
         }
 
-        const reminder = reminderRows[0];
+        // Update reminder
+        await query(`
+            UPDATE reminders 
+            SET name = ?, description = ?, bot_id = ?, target_type = ?, target_id = ?, 
+                schedule = ?, timezone = ?, data_source_id = ?, template_config = ?, updated_at = datetime('now')
+            WHERE id = ?
+        `, [
+            name,
+            description,
+            botId,
+            targetType,
+            targetId,
+            schedule,
+            timezone,
+            dataSourceId,
+            JSON.stringify(templateConfig),
+            id
+        ]);
+
+        // Re-Schedule
+        const result = await query('SELECT * FROM reminders WHERE id = ?', [id]);
+        const reminder = result.rows[0];
+
+        if (reminder.schedule === 'now') {
+            await reminderSchedulerService.executeImmediately(id);
+        } else {
+            await reminderSchedulerService.scheduleReminder(reminder);
+        }
+
+        res.json({
+            success: true,
+            message: 'Reminder updated successfully',
+        });
+    } catch (error: any) {
+        console.error('Error updating reminder:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update reminder',
+            details: error.message,
+        });
+    }
+});
+
+/**
+ * PATCH /api/reminders/:id/toggle
+ * Toggle reminder active status
+ */
+router.patch('/:id/toggle', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const tenantId = (req as any).user.tenant_id;
+
+        // Verify ownership
+        const result = await query(`
+            SELECT * FROM reminders WHERE id = ? AND tenant_id = ?
+        `, [id, tenantId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Reminder not found',
+            });
+        }
+
+        const reminder = result.rows[0];
         const newStatus = reminder.is_active === 1 ? 0 : 1;
 
         await query('UPDATE reminders SET is_active = ? WHERE id = ?', [newStatus, id]);
@@ -251,7 +357,7 @@ router.patch('/:id/toggle', async (req, res) => {
         if (newStatus === 1) {
             // Re-schedule
             const updated = await query('SELECT * FROM reminders WHERE id = ?', [id]);
-            await reminderSchedulerService.scheduleReminder(updated[0]);
+            await reminderSchedulerService.scheduleReminder(updated.rows[0]);
         } else {
             // Unschedule
             reminderSchedulerService.unscheduleReminder(id);
@@ -279,16 +385,14 @@ router.patch('/:id/toggle', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = (req as any).user.id;
+        const tenantId = (req as any).user.tenant_id;
 
         // Verify ownership
-        const reminderRows = await query(`
-            SELECT r.* FROM reminders r
-            LEFT JOIN bots b ON r.bot_id = b.id
-            WHERE r.id = ? AND b.created_by = ?
-        `, [id, userId]);
+        const result = await query(`
+            SELECT * FROM reminders WHERE id = ? AND tenant_id = ?
+        `, [id, tenantId]);
 
-        if (reminderRows.length === 0) {
+        if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
                 error: 'Reminder not found',
@@ -321,23 +425,21 @@ router.delete('/:id', async (req, res) => {
 router.get('/:id/logs', async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = (req as any).user.id;
+        const tenantId = (req as any).user.tenant_id;
 
         // Verify ownership
-        const reminderRows = await query(`
-            SELECT r.* FROM reminders r
-            LEFT JOIN bots b ON r.bot_id = b.id
-            WHERE r.id = ? AND b.created_by = ?
-        `, [id, userId]);
+        const result = await query(`
+            SELECT * FROM reminders WHERE id = ? AND tenant_id = ?
+        `, [id, tenantId]);
 
-        if (reminderRows.length === 0) {
+        if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
                 error: 'Reminder not found',
             });
         }
 
-        const logs = await query(`
+        const logsResult = await query(`
             SELECT * FROM reminder_logs
             WHERE reminder_id = ?
             ORDER BY executed_at DESC
@@ -346,7 +448,7 @@ router.get('/:id/logs', async (req, res) => {
 
         res.json({
             success: true,
-            data: logs,
+            data: logsResult.rows,
         });
     } catch (error: any) {
         console.error('Error fetching logs:', error);

@@ -95,7 +95,7 @@ export default function BotDetailPage() {
         totalRules: rulesData?.length || 0,
         activeCampaigns: campaignsData?.filter((c: any) => c.status === 'sending' || c.status === 'scheduled').length || 0,
         totalCampaigns: campaignsData?.length || 0,
-        activeReminders: remindersData?.filter((r: any) => r.is_active && r.status === 'pending').length || 0,
+        activeReminders: remindersData?.filter((r: any) => r.is_active === 1).length || 0,
         totalReminders: remindersData?.length || 0,
     }
 
