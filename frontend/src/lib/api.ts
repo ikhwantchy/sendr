@@ -1,8 +1,3 @@
-/**
- * API Client
- * Axios-based API client with authentication
- */
-
 import axios from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
@@ -65,6 +60,7 @@ export const api = {
         getByBot: (botId: string) => apiClient.get(`/rules/bot/${botId}`),
         create: (data: any) => apiClient.post('/rules', data),
         update: (id: string, data: any) => apiClient.put(`/rules/${id}`, data),
+        toggle: (id: string) => apiClient.patch(`/rules/${id}/toggle`),
         delete: (id: string) => apiClient.delete(`/rules/${id}`),
     },
 
@@ -94,6 +90,10 @@ export const api = {
     // Analytics
     analytics: {
         get: () => apiClient.get('/analytics'),
+        getFull: (timeRange: '24h' | '7d' | '30d') => apiClient.get(`/analytics/full?timeRange=${timeRange}`),
+        getDashboardStats: () => apiClient.get('/analytics/dashboard-stats'),
+        getActivityLogs: (limit: number = 8) => apiClient.get(`/analytics/activity-logs?limit=${limit}`),
+        getSystemStatus: () => apiClient.get('/analytics/system-status'),
     },
 
     // Users (Owner only)

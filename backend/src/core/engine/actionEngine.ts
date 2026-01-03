@@ -52,6 +52,7 @@ class ActionExecutionEngine {
      */
     private async handleKeywordMatched(event: BaseEvent<KeywordMatchedPayload>): Promise<void> {
         const { context, payload } = event;
+        context.source = 'auto_reply'; // Set source for logging
 
         // Parse actions if it's a string (from database)
         let actions: ActionConfig[] = [];
@@ -198,6 +199,11 @@ class ActionExecutionEngine {
             }
         );
 
+        // Log message to database (non-blocking, won't break if fails)
+        this.logMessageToDatabase(context, 'text', renderedMessage, result).catch(err => {
+            logger.warn('Failed to log message to database', { error: err.message });
+        });
+
         return result;
     }
 
@@ -222,6 +228,11 @@ class ActionExecutionEngine {
                 caption: renderedCaption,
             }
         );
+
+        // Log message to database (non-blocking, won't break if fails)
+        this.logMessageToDatabase(context, 'image', renderedCaption || '', result, image_url).catch(err => {
+            logger.warn('Failed to log message to database', { error: err.message });
+        });
 
         return result;
     }
@@ -299,6 +310,60 @@ class ActionExecutionEngine {
         });
 
         return { reminder_id, scheduled: true };
+    }
+
+    /**
+     * Log outbound message to database
+     * This is non-blocking and won't break if table doesn't exist
+     */
+    private async logMessageToDatabase(
+        context: any,
+        messageType: string,
+        content: string,
+        result: any,
+        mediaUrl?: string
+    ): Promise<void> {
+        try {
+            // Dynamically import query to avoid circular dependencies
+            const { query } = await import('../../database/connection-sqlite');
+            const { v4: uuidv4 } = await import('uuid');
+
+            // Only log if we have necessary context
+            if (!context.bot_id || (!context.contact_id && !context.group_id)) {
+                return;
+            }
+
+            const messageId = uuidv4();
+            const recipient = context.contact_id || context.group_id;
+            const waMessageId = result?.key?.id || result?.id || null;
+
+            await query(`
+                INSERT INTO messages (
+                    id, bot_id, wa_message_id, direction, 
+                    message_type, content, media_url, source, created_at
+                ) VALUES (?, ?, ?, 'outbound', ?, ?, ?, ?, datetime('now'))
+            `, [
+                messageId,
+                context.bot_id,
+                waMessageId,
+                messageType,
+                content,
+                mediaUrl || null,
+                context.source || null,
+            ]);
+
+            logger.debug('Message logged to database', {
+                message_id: messageId,
+                bot_id: context.bot_id,
+                type: messageType
+            });
+        } catch (error: any) {
+            // Silently fail - don't break auto-reply if logging fails
+            logger.debug('Could not log message to database', {
+                error: error.message,
+                reason: 'Table may not exist yet or database error'
+            });
+        }
     }
 }
 

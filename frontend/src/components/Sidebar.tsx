@@ -3,23 +3,37 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import {
+    LayoutDashboard,
+    Bot,
+    Database,
+    BarChart3,
+    Users,
+    LogOut,
+    Menu,
+    X,
+    ChevronLeft,
+    ChevronRight,
+    Settings,
+    User
+} from 'lucide-react'
 
 export default function Sidebar() {
     const pathname = usePathname()
     const router = useRouter()
     const [user, setUser] = useState<any>(null)
+    const [isExpanded, setIsExpanded] = useState(true)
+    const [isMobileOpen, setIsMobileOpen] = useState(false)
 
     useEffect(() => {
         const userData = localStorage.getItem('user')
         if (userData) {
-            const parsedUser = JSON.parse(userData)
-            setUser(parsedUser)
-            // Debug logging
-            console.log('🔍 Sidebar - User loaded:', parsedUser)
-            console.log('🔍 Sidebar - User role:', parsedUser.role)
-            console.log('🔍 Sidebar - Is owner?:', parsedUser.role?.toLowerCase() === 'owner')
+            setUser(JSON.parse(userData))
         }
-    }, [])
+
+        // Close mobile menu on route change
+        setIsMobileOpen(false)
+    }, [pathname])
 
     const handleLogout = () => {
         localStorage.removeItem('token')
@@ -31,116 +45,84 @@ export default function Sidebar() {
         {
             name: 'Dashboard',
             href: '/dashboard',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-            ),
+            icon: LayoutDashboard,
         },
         {
             name: 'Bots',
             href: '/dashboard/bots',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                </svg>
-            ),
+            icon: Bot,
         },
         {
             name: 'Data Sources',
             href: '/dashboard/datasources',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                </svg>
-            ),
+            icon: Database,
         },
         {
             name: 'Analytics',
             href: '/dashboard/analytics',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-            ),
+            icon: BarChart3,
         },
     ]
 
-    // Owner-only navigation items
     const ownerNavigation = [
         {
             name: 'Users',
             href: '/dashboard/users',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-            ),
+            icon: Users,
         },
     ]
 
-    return (
-        <div className="flex flex-col w-72 bg-gradient-to-b from-gray-900 via-gray-900 to-black min-h-screen border-r border-white/10 relative overflow-hidden">
-            {/* Animated Background */}
-            <div className="absolute inset-0 opacity-30">
-                <div className="absolute top-0 -left-4 w-72 h-72 bg-cyan-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
-                <div className="absolute top-0 -right-4 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '2s' }}></div>
-                <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '4s' }}></div>
-            </div>
-
+    const SidebarContent = () => (
+        <>
             {/* Logo */}
-            <div className="relative flex items-center space-x-3 px-6 py-6 border-b border-white/10">
-                <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg glow-cyan relative group">
-                    <svg className="w-7 h-7 text-white relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                    </svg>
-                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-2xl blur-md opacity-50 group-hover:opacity-75 transition-opacity"></div>
+            <div className="flex items-center justify-between px-4 py-6 border-b border-zinc-800/50">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
+                        <img src="/brobot-logo.png" alt="BroBot" className="w-10 h-10 object-contain" />
+                    </div>
+                    {isExpanded && (
+                        <div className="min-w-0">
+                            <h1 className="text-zinc-100 font-semibold text-sm tracking-tight truncate">BroBot</h1>
+                            <p className="text-zinc-600 text-xs truncate">Automation Platform</p>
+                        </div>
+                    )}
                 </div>
-                <div>
-                    <h1 className="text-white font-bold text-xl tracking-tight">BroBot</h1>
-                    <p className="text-cyan-400 text-xs font-medium">Automation Made Easy</p>
-                </div>
+
+                {/* Desktop Toggle */}
+                <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="hidden md:flex items-center justify-center w-6 h-6 rounded-md hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-100 transition-colors"
+                >
+                    {isExpanded ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
+
+                {/* Mobile Close */}
+                <button
+                    onClick={() => setIsMobileOpen(false)}
+                    className="md:hidden flex items-center justify-center w-6 h-6 rounded-md hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-100 transition-colors"
+                >
+                    <X className="w-4 h-4" />
+                </button>
             </div>
 
             {/* Navigation */}
-            <nav className="relative flex-1 px-4 py-6 space-y-2">
+            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
                 {navigation.map((item) => {
                     const isActive = pathname === item.href
+                    const Icon = item.icon
                     return (
                         <Link
                             key={item.name}
                             href={item.href}
-                            className={`group flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-300 relative overflow-hidden ${isActive
-                                ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-white shadow-lg'
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                            className={`group flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${isActive
+                                ? 'bg-zinc-900 text-zinc-100 shadow-[0_1px_0_0_rgba(255,255,255,0.05)] inset'
+                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/40'
                                 }`}
+                            title={!isExpanded ? item.name : undefined}
                         >
-                            {/* Active indicator */}
-                            {isActive && (
-                                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-cyan-400 to-purple-600 rounded-r-full"></div>
-                            )}
-
-                            {/* Icon with gradient background */}
-                            <div className={`relative p-2 rounded-lg transition-all duration-300 ${isActive
-                                ? 'bg-gradient-to-br from-cyan-500 to-purple-600 shadow-lg'
-                                : 'bg-white/5 group-hover:bg-white/10'
-                                }`}>
-                                <div className={isActive ? 'text-white' : 'text-gray-400 group-hover:text-cyan-400'}>
-                                    {item.icon}
-                                </div>
-                                {isActive && (
-                                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-lg blur-md opacity-50"></div>
-                                )}
-                            </div>
-
-                            <span className={`font-semibold transition-all duration-300 ${isActive ? 'text-white' : 'group-hover:text-white'
-                                }`}>
-                                {item.name}
-                            </span>
-
-                            {/* Hover effect */}
-                            {!isActive && (
-                                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-purple-500/5 to-pink-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"></div>
+                            <Icon className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive ? 'text-zinc-100' : 'text-zinc-500 group-hover:text-zinc-300'}`} />
+                            {isExpanded && (
+                                <span className="text-sm font-medium tracking-tight truncate">{item.name}</span>
                             )}
                         </Link>
                     )
@@ -149,41 +131,20 @@ export default function Sidebar() {
                 {/* Owner-only navigation */}
                 {user?.role?.toLowerCase() === 'owner' && ownerNavigation.map((item) => {
                     const isActive = pathname === item.href
+                    const Icon = item.icon
                     return (
                         <Link
                             key={item.name}
                             href={item.href}
-                            className={`group flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-300 relative overflow-hidden ${isActive
-                                ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-white shadow-lg'
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                            className={`group flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${isActive
+                                ? 'bg-zinc-900 text-zinc-100 shadow-[0_1px_0_0_rgba(255,255,255,0.05)] inset'
+                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/40'
                                 }`}
+                            title={!isExpanded ? item.name : undefined}
                         >
-                            {/* Active indicator */}
-                            {isActive && (
-                                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-cyan-400 to-purple-600 rounded-r-full"></div>
-                            )}
-
-                            {/* Icon with gradient background */}
-                            <div className={`relative p-2 rounded-lg transition-all duration-300 ${isActive
-                                ? 'bg-gradient-to-br from-cyan-500 to-purple-600 shadow-lg'
-                                : 'bg-white/5 group-hover:bg-white/10'
-                                }`}>
-                                <div className={isActive ? 'text-white' : 'text-gray-400 group-hover:text-cyan-400'}>
-                                    {item.icon}
-                                </div>
-                                {isActive && (
-                                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-lg blur-md opacity-50"></div>
-                                )}
-                            </div>
-
-                            <span className={`font-semibold transition-all duration-300 ${isActive ? 'text-white' : 'group-hover:text-white'
-                                }`}>
-                                {item.name}
-                            </span>
-
-                            {/* Hover effect */}
-                            {!isActive && (
-                                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-purple-500/5 to-pink-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"></div>
+                            <Icon className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive ? 'text-zinc-100' : 'text-zinc-500 group-hover:text-zinc-300'}`} />
+                            {isExpanded && (
+                                <span className="text-sm font-medium tracking-tight truncate">{item.name}</span>
                             )}
                         </Link>
                     )
@@ -192,33 +153,90 @@ export default function Sidebar() {
 
             {/* User Info */}
             {user && (
-                <div className="relative border-t border-white/10 p-5 backdrop-blur-sm">
-                    <div className="glass-strong rounded-xl p-4 mb-3">
-                        <div className="flex items-center space-x-3 mb-3">
-                            <div className="relative w-11 h-11 bg-gradient-to-br from-pink-500 via-purple-500 to-cyan-500 rounded-full flex items-center justify-center shadow-lg">
-                                <span className="text-white font-bold text-base relative z-10">
-                                    {user.name?.charAt(0) || 'A'}
-                                </span>
-                                <div className="absolute inset-0 bg-gradient-to-br from-pink-500 to-cyan-500 rounded-full blur-md opacity-50"></div>
+                <div className="p-4 border-t border-zinc-900 bg-zinc-950">
+                    <div className={`flex items-center ${isExpanded ? 'justify-between' : 'justify-center'}`}>
+                        <div className="flex items-center gap-3 overflow-hidden">
+                            {/* Avatar */}
+                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 text-zinc-500">
+                                {user.name ? (
+                                    <span className="font-medium text-sm text-zinc-300">{user.name.charAt(0)}</span>
+                                ) : (
+                                    <User className="w-5 h-5" />
+                                )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-white text-sm font-semibold truncate">{user.name}</p>
-                                <p className="text-cyan-400 text-xs font-medium truncate capitalize">{user.role}</p>
-                            </div>
-                        </div>
-                    </div>
 
-                    <button
-                        onClick={handleLogout}
-                        className="group w-full px-4 py-3 text-sm font-semibold text-gray-400 hover:text-white bg-white/5 hover:bg-gradient-to-r hover:from-red-500/20 hover:to-pink-500/20 rounded-xl transition-all duration-300 flex items-center justify-center space-x-2 border border-white/10 hover:border-red-500/30"
-                    >
-                        <svg className="w-4 h-4 group-hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
-                        <span className="group-hover:text-red-400 transition-colors">Logout</span>
-                    </button>
+                            {/* Text Info */}
+                            {isExpanded && (
+                                <div className="min-w-0 transition-opacity duration-200">
+                                    <h4 className="text-sm font-medium text-white truncate leading-none mb-1">
+                                        {user.name || 'Admin'}
+                                    </h4>
+                                    <p className="text-xs text-zinc-500 truncate font-medium">
+                                        Pro Plan
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Actions */}
+                        {isExpanded && (
+                            <div className="flex items-center gap-1">
+                                <button
+                                    className="text-zinc-600 hover:text-white transition-colors p-1.5 rounded-md hover:bg-zinc-900"
+                                    onClick={() => router.push('/dashboard/settings')}
+                                    title="Settings"
+                                >
+                                    <Settings className="w-4 h-4" />
+                                </button>
+                                <button
+                                    className="text-zinc-600 hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-red-500/10"
+                                    onClick={handleLogout}
+                                    title="Logout"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
-        </div>
+        </>
+    )
+
+    return (
+        <>
+            {/* Mobile Header */}
+            <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800/50 z-40 flex items-center justify-between px-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 flex items-center justify-center">
+                        <img src="/brobot-logo.png" alt="BroBot" className="w-10 h-10 object-contain" />
+                    </div>
+                    <h1 className="text-zinc-100 font-semibold text-sm tracking-tight">BroBot</h1>
+                </div>
+                <button
+                    onClick={() => setIsMobileOpen(true)}
+                    className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-100 transition-colors"
+                >
+                    <Menu className="w-5 h-5" />
+                </button>
+            </div>
+
+            {/* Mobile Backdrop */}
+            {isMobileOpen && (
+                <div
+                    className="md:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 animate-fade-in"
+                    onClick={() => setIsMobileOpen(false)}
+                />
+            )}
+
+            {/* Sidebar - Desktop & Mobile */}
+            <aside
+                className={`fixed top-0 left-0 h-screen bg-zinc-950 border-r border-zinc-800/50 z-50 flex flex-col transition-all duration-300 ${isExpanded ? 'w-64' : 'w-20'
+                    } ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+                    }`}
+            >
+                <SidebarContent />
+            </aside>
+        </>
     )
 }

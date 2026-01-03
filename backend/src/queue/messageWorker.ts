@@ -7,6 +7,7 @@
  */
 
 import { messageQueue } from './messageQueue';
+import { v4 as uuidv4 } from 'uuid';
 import { whatsappAdapter } from '../adapters/whatsapp/whatsappAdapter.baileys';
 import { campaignService } from '../modules/campaign/campaignService';
 import { reminderService } from '../modules/reminder/reminderService';
@@ -46,10 +47,22 @@ messageQueue.process('campaign-message', async (job) => {
         const message = replaceTemplateVariables(template, variables);
 
         // ✅ Call existing adapter (NO socket creation!)
-        await whatsappAdapter.sendMessage(bot_id, phone, {
+        const result = await whatsappAdapter.sendMessage(bot_id, phone, {
             type: 'text',
             content: message,
         });
+
+        // Log to messages table
+        try {
+            await query(`
+                INSERT INTO messages (
+                    id, bot_id, direction, source,
+                    message_type, content, created_at
+                ) VALUES (?, ?, 'outbound', 'campaign', 'text', ?, datetime('now'))
+            `, [uuidv4(), bot_id, message]);
+        } catch (logError) {
+            logger.warn('Failed to log campaign message', { error: logError });
+        }
 
         // Update recipient status
         await campaignService.updateRecipientStatus(recipient_id, 'sent');
@@ -108,11 +121,36 @@ messageQueue.process('reminder-message', async (job) => {
 
         const group = groupResult.rows[0];
 
+        // Get exact content from message or template_config
+        let content = reminder.message;
+        if (!content && reminder.template_config) {
+            try {
+                const config = typeof reminder.template_config === 'string'
+                    ? JSON.parse(reminder.template_config)
+                    : reminder.template_config;
+                content = config.message || config.text || config.caption;
+            } catch (e) { }
+        }
+
+        if (!content) content = 'Reminder Executed';
+
         // ✅ Send to GROUP via adapter (NO socket creation!)
-        await whatsappAdapter.sendMessage(reminder.bot_id, group.group_id, {
+        const result = await whatsappAdapter.sendMessage(reminder.bot_id, group.group_id, {
             type: 'text',
-            content: reminder.message,
+            content: content,
         });
+
+        // Log to messages table
+        try {
+            await query(`
+                INSERT INTO messages (
+                    id, bot_id, direction, source,
+                    message_type, content, created_at
+                ) VALUES (?, ?, 'outbound', 'reminder', 'text', ?, datetime('now'))
+            `, [uuidv4(), reminder.bot_id, content]);
+        } catch (logError) {
+            logger.warn('Failed to log reminder message', { error: logError });
+        }
 
         // Update last_run_at
         await reminderService.updateLastRun(reminder_id);

@@ -4,15 +4,16 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
+import { Zap, Edit, Trash2, Circle } from 'lucide-react'
 
 interface Rule {
     id: string
-    trigger: string // This will be mapped from 'keyword'
-    reply: string // This will be extracted from 'actions'
-    is_active: boolean // This will be converted from 1/0
-    match_type: 'equals' | 'contains' | 'regex' // Backend values, but frontend uses these
+    trigger: string
+    reply: string
+    is_active: boolean
+    match_type: 'equals' | 'contains' | 'regex'
     created_at: string
-    name?: string // New field
+    name?: string
 }
 
 interface RulesTableProps {
@@ -29,53 +30,34 @@ export default function RulesTable({ botId }: RulesTableProps) {
             const response = await api.rules.getByBot(botId)
             const rawRules = response.data.data || response.data || []
 
-            console.log('=== RULES DEBUG ===')
-            console.log('Raw rules from API:', rawRules)
-
-            // Transform backend data to frontend format
             return rawRules.map((rule: any) => {
-                console.log('Processing rule:', rule.id)
-                console.log('  - keyword:', rule.keyword)
-                console.log('  - actions (raw):', rule.actions)
-                console.log('  - actions type:', typeof rule.actions)
-
                 let replyMessage = ''
 
-                // Parse actions to get reply message
                 if (rule.actions) {
                     try {
                         const actions = typeof rule.actions === 'string'
                             ? JSON.parse(rule.actions)
                             : rule.actions
 
-                        console.log('  - actions (parsed):', actions)
-
-                        // Find SEND_TEXT action
                         const sendTextAction = actions.find((a: any) => a.type === 'SEND_TEXT')
                         if (sendTextAction && sendTextAction.config) {
                             replyMessage = sendTextAction.config.message || ''
-                            console.log('  - reply message:', replyMessage)
                         }
                     } catch (e) {
                         console.error('Failed to parse actions:', e)
                     }
                 }
 
-                const transformed = {
+                return {
                     ...rule,
-                    trigger: rule.keyword || '',  // Map keyword to trigger for display
+                    trigger: rule.keyword || '',
                     reply: replyMessage,
-                    is_active: Boolean(rule.is_active)  // Convert 1/0 to boolean
+                    is_active: Boolean(rule.is_active)
                 }
-
-                console.log('  - transformed:', transformed)
-                console.log('==================')
-
-                return transformed
             })
         },
-        staleTime: 0, // Always fetch fresh data
-        gcTime: 0, // Don't cache (v5 uses gcTime instead of cacheTime)
+        staleTime: 0,
+        gcTime: 0,
         refetchOnMount: true,
         refetchOnWindowFocus: true,
     })
@@ -109,177 +91,258 @@ export default function RulesTable({ botId }: RulesTableProps) {
 
     const getMatchTypeLabel = (type: string) => {
         const labels: Record<string, string> = {
-            exact: 'Exact Match',
+            exact: 'Exact',
             contains: 'Contains',
-            starts_with: 'Starts With',
-            ends_with: 'Ends With',
+            starts_with: 'Starts',
+            ends_with: 'Ends',
         }
         return labels[type] || type
-    }
-
-    const getMatchTypeColor = (type: string) => {
-        const colors: Record<string, string> = {
-            exact: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-            contains: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-            starts_with: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-            ends_with: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
-        }
-        return colors[type] || 'bg-gray-500/20 text-gray-400 border-gray-500/30'
     }
 
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
+                <div className="relative w-12 h-12">
+                    <div className="absolute inset-0 rounded-full border-2 border-zinc-800"></div>
+                    <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
+                </div>
             </div>
         )
     }
 
     if (!rules || rules.length === 0) {
         return (
-            <div className="text-center py-12">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-500/20 rounded-full flex items-center justify-center">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+            <div className="text-center py-16 bg-zinc-900/50 border border-dashed border-zinc-800/50 rounded-2xl">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-800/50 rounded-2xl mb-4">
+                    <Zap className="w-8 h-8 text-zinc-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">No Rules Yet</h3>
-                <p className="text-gray-400 text-sm">Create your first auto-reply rule to get started</p>
+                <h3 className="text-lg font-semibold text-zinc-100 mb-2">No Rules Yet</h3>
+                <p className="text-zinc-400 text-sm">Create your first auto-reply rule to get started</p>
             </div>
         )
     }
 
     return (
-        <div className="space-y-3">
-            {rules.map((rule: Rule) => (
-                <div
-                    key={rule.id}
-                    className="glass rounded-xl border border-white/10 p-4 hover:border-white/20 transition-all"
-                >
-                    <div className="flex items-start justify-between gap-4">
-                        {/* Rule Content */}
-                        <div className="flex-1 space-y-3">
-                            {/* Header */}
-                            <div className="flex items-center gap-3">
-                                {/* Active Toggle */}
-                                <button
-                                    onClick={() =>
-                                        toggleMutation.mutate({
-                                            id: rule.id,
-                                            is_active: !rule.is_active,
-                                        })
-                                    }
-                                    className={`relative w-11 h-6 rounded-full transition-colors ${rule.is_active ? 'bg-green-500' : 'bg-gray-600'
-                                        }`}
-                                >
-                                    <div
-                                        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${rule.is_active ? 'translate-x-5' : 'translate-x-0'
+        <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+                <table className="w-full">
+                    <thead>
+                        <tr className="border-b border-zinc-800/50">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Status</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Trigger</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Reply</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Type</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Created</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-zinc-400">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rules.map((rule: Rule) => (
+                            <tr
+                                key={rule.id}
+                                className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors"
+                            >
+                                {/* Status Toggle */}
+                                <td className="py-4 px-4">
+                                    <button
+                                        onClick={() =>
+                                            toggleMutation.mutate({
+                                                id: rule.id,
+                                                is_active: !rule.is_active,
+                                            })
+                                        }
+                                        className={`relative w-11 h-6 rounded-full transition-colors ${rule.is_active ? 'bg-emerald-500' : 'bg-zinc-700'
                                             }`}
-                                    />
-                                </button>
+                                    >
+                                        <div
+                                            className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${rule.is_active ? 'translate-x-5' : 'translate-x-0'
+                                                }`}
+                                        />
+                                    </button>
+                                </td>
 
-                                {/* Match Type Badge */}
-                                <span
-                                    className={`px-3 py-1 rounded-lg text-xs font-medium border ${getMatchTypeColor(
-                                        rule.match_type
-                                    )}`}
-                                >
-                                    {getMatchTypeLabel(rule.match_type)}
-                                </span>
+                                {/* Trigger */}
+                                <td className="py-4 px-4">
+                                    <div className="flex items-center gap-2">
+                                        <Zap className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                        <span className="text-zinc-100 font-medium truncate max-w-[200px]">
+                                            "{rule.trigger}"
+                                        </span>
+                                    </div>
+                                </td>
 
-                                {/* Status */}
-                                <span
-                                    className={`px-2 py-1 rounded text-xs font-medium ${rule.is_active
-                                        ? 'bg-green-500/20 text-green-400'
-                                        : 'bg-gray-500/20 text-gray-400'
-                                        }`}
-                                >
-                                    {rule.is_active ? 'Active' : 'Inactive'}
-                                </span>
-                            </div>
-
-                            {/* Trigger & Reply */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <div className="text-xs text-gray-400 mb-1 flex items-center gap-1">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                        </svg>
-                                        Trigger
-                                    </div>
-                                    <div className="text-white font-medium break-words">
-                                        "{rule.trigger}"
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-xs text-gray-400 mb-1 flex items-center gap-1">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                                        </svg>
-                                        Reply
-                                    </div>
-                                    <div className="text-gray-300 text-sm break-words line-clamp-2">
+                                {/* Reply */}
+                                <td className="py-4 px-4">
+                                    <div className="text-zinc-400 text-sm truncate max-w-[300px]">
                                         {rule.reply}
                                     </div>
-                                </div>
-                            </div>
+                                </td>
 
-                            {/* Created Date */}
-                            <div className="text-xs text-gray-500">
-                                Created {new Date(rule.created_at).toLocaleDateString('en-US', {
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                })}
-                            </div>
-                        </div>
+                                {/* Match Type */}
+                                <td className="py-4 px-4">
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-zinc-800/50 text-zinc-400 border border-zinc-700/50">
+                                        {getMatchTypeLabel(rule.match_type)}
+                                    </span>
+                                </td>
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-2">
-                            {/* Edit Button */}
+                                {/* Created Date */}
+                                <td className="py-4 px-4">
+                                    <div className="text-zinc-500 text-sm font-mono">
+                                        {new Date(rule.created_at).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                        })}
+                                    </div>
+                                </td>
+
+                                {/* Actions */}
+                                <td className="py-4 px-4">
+                                    <div className="flex items-center justify-end gap-2">
+                                        <button
+                                            onClick={() => toast.info('Edit functionality coming soon!')}
+                                            className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-blue-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-blue-400"
+                                            title="Edit rule"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+
+                                        {deleteConfirm === rule.id ? (
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => deleteMutation.mutate(rule.id)}
+                                                    className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
+                                                >
+                                                    Confirm
+                                                </button>
+                                                <button
+                                                    onClick={() => setDeleteConfirm(null)}
+                                                    className="px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 text-xs font-medium hover:bg-zinc-800 transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => setDeleteConfirm(rule.id)}
+                                                className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
+                                                title="Delete rule"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
+                {rules.map((rule: Rule) => (
+                    <div
+                        key={rule.id}
+                        className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4 hover:bg-zinc-900/80 transition-all"
+                    >
+                        {/* Top: Toggle + Status Badge */}
+                        <div className="flex items-center justify-between mb-4">
                             <button
-                                onClick={() => toast.info('Edit functionality coming soon!')}
-                                className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-cyan-500 transition-all flex items-center justify-center text-gray-400 hover:text-cyan-400"
-                                title="Edit rule"
+                                onClick={() =>
+                                    toggleMutation.mutate({
+                                        id: rule.id,
+                                        is_active: !rule.is_active,
+                                    })
+                                }
+                                className={`relative w-11 h-6 rounded-full transition-colors ${rule.is_active ? 'bg-emerald-500' : 'bg-zinc-700'
+                                    }`}
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
+                                <div
+                                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${rule.is_active ? 'translate-x-5' : 'translate-x-0'
+                                        }`}
+                                />
                             </button>
 
-                            {/* Delete Button */}
-                            {deleteConfirm === rule.id ? (
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => deleteMutation.mutate(rule.id)}
-                                        className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
-                                    >
-                                        Confirm
-                                    </button>
-                                    <button
-                                        onClick={() => setDeleteConfirm(null)}
-                                        className="px-3 py-1.5 rounded-lg bg-white/5 text-gray-400 text-xs font-medium hover:bg-white/10 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
+                            <div className="flex items-center gap-2">
+                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border ${rule.is_active
+                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                                        : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
+                                    }`}>
+                                    <Circle className="w-2 h-2 fill-current" />
+                                    <span>{rule.is_active ? 'Active' : 'Inactive'}</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-zinc-800/50 text-zinc-400 border border-zinc-700/50">
+                                    {getMatchTypeLabel(rule.match_type)}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Middle: Trigger + Reply */}
+                        <div className="space-y-3 mb-4">
+                            <div>
+                                <div className="flex items-center gap-2 text-xs text-zinc-500 mb-1">
+                                    <Zap className="w-3 h-3" />
+                                    <span>Trigger</span>
                                 </div>
-                            ) : (
+                                <div className="text-zinc-100 font-medium break-words">
+                                    "{rule.trigger}"
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-zinc-500 mb-1">Reply</div>
+                                <div className="text-zinc-400 text-sm break-words line-clamp-2">
+                                    {rule.reply}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bottom: Date + Actions */}
+                        <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
+                            <div className="text-xs text-zinc-500 font-mono">
+                                {new Date(rule.created_at).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                })}
+                            </div>
+
+                            <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => setDeleteConfirm(rule.id)}
-                                    className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 hover:border-red-500 transition-all flex items-center justify-center text-gray-400 hover:text-red-400"
-                                    title="Delete rule"
+                                    onClick={() => toast.info('Edit functionality coming soon!')}
+                                    className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-blue-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-blue-400"
                                 >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
+                                    <Edit className="w-4 h-4" />
                                 </button>
-                            )}
+
+                                {deleteConfirm === rule.id ? (
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => deleteMutation.mutate(rule.id)}
+                                            className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium"
+                                        >
+                                            Confirm
+                                        </button>
+                                        <button
+                                            onClick={() => setDeleteConfirm(null)}
+                                            className="px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 text-xs font-medium"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => setDeleteConfirm(rule.id)}
+                                        className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
-            ))}
-        </div>
+                ))}
+            </div>
+        </>
     )
 }

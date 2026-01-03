@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { Clock, Edit, Trash2, ChevronDown, Circle, Calendar, Target } from 'lucide-react'
 
 interface Reminder {
     id: string
@@ -93,137 +94,322 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
+                <div className="relative w-12 h-12">
+                    <div className="absolute inset-0 rounded-full border-2 border-zinc-800"></div>
+                    <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
+                </div>
             </div>
         )
     }
 
     if (!reminders || reminders.length === 0) {
         return (
-            <div className="text-center py-12 glass rounded-2xl border border-white/10">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-500/20 rounded-full flex items-center justify-center text-3xl">
-                    ⏰
+            <div className="text-center py-16 bg-zinc-900/50 border border-dashed border-zinc-800/50 rounded-2xl">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-800/50 rounded-2xl mb-4">
+                    <Clock className="w-8 h-8 text-zinc-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">No Reminders Yet</h3>
-                <p className="text-gray-400 text-sm">Schedule your first automated message for this bot</p>
+                <h3 className="text-lg font-semibold text-zinc-100 mb-2">No Reminders Yet</h3>
+                <p className="text-zinc-400 text-sm">Schedule your first automated message for this bot</p>
             </div>
         )
     }
 
     return (
-        <div className="space-y-4">
-            {reminders.map((reminder: Reminder) => {
-                const isExpanded = expandedId === reminder.id
-                const templateConfig = JSON.parse(reminder.template_config || '{}')
-                const isActive = reminder.is_active === 1
+        <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+                <table className="w-full">
+                    <thead>
+                        <tr className="border-b border-zinc-800/50">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Status</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Name</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Schedule</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Target</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Next Run</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-zinc-400">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {reminders.map((reminder: Reminder) => {
+                            const isActive = reminder.is_active === 1
+                            const isExpanded = expandedId === reminder.id
+                            const templateConfig = JSON.parse(reminder.template_config || '{}')
 
-                return (
-                    <div
-                        key={reminder.id}
-                        className="glass rounded-xl border border-white/10 overflow-hidden hover:border-white/20 transition-all"
-                    >
-                        <div className="p-5">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                {/* Reminder Info */}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <button
-                                            onClick={() => toggleMutation.mutate(reminder.id)}
-                                            disabled={toggleMutation.isPending}
-                                            className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${isActive ? 'bg-green-500' : 'bg-gray-600'}`}
-                                        >
-                                            <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${isActive ? 'translate-x-5' : 'translate-x-0'}`} />
-                                        </button>
-                                        <h3 className="text-lg font-bold text-white truncate">{reminder.name}</h3>
-                                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${isActive ? 'bg-green-500/20 text-green-400 border border-green-500/50' : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'}`}>
-                                            {isActive ? 'Active' : 'Paused'}
-                                        </span>
-                                    </div>
+                            return (
+                                <>
+                                    <tr
+                                        key={reminder.id}
+                                        className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors"
+                                    >
+                                        {/* Status Toggle */}
+                                        <td className="py-4 px-4">
+                                            <button
+                                                onClick={() => toggleMutation.mutate(reminder.id)}
+                                                disabled={toggleMutation.isPending}
+                                                className={`relative w-11 h-6 rounded-full transition-colors ${isActive ? 'bg-emerald-500' : 'bg-zinc-700'
+                                                    }`}
+                                            >
+                                                <div
+                                                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${isActive ? 'translate-x-5' : 'translate-x-0'
+                                                        }`}
+                                                />
+                                            </button>
+                                        </td>
 
-                                    <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-sm text-gray-400">
-                                        <div className="flex items-center gap-1.5">
-                                            <span>📅</span>
-                                            <span>{formatSchedule(reminder.schedule)}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                            <span>🎯</span>
-                                            <span className="truncate max-w-[200px]">{reminder.group_name || reminder.target_id || 'Unknown'}</span>
-                                        </div>
-                                        {reminder.next_run_at && isActive && (
-                                            <div className="flex items-center gap-1.5 text-cyan-400">
-                                                <span>⏳ Next:</span>
-                                                <span>{new Date(reminder.next_run_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                        {/* Name */}
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center gap-2">
+                                                <Clock className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                                <span className="text-zinc-100 font-medium truncate max-w-[200px]">
+                                                    {reminder.name}
+                                                </span>
                                             </div>
-                                        )}
+                                        </td>
+
+                                        {/* Schedule */}
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center gap-2">
+                                                <Calendar className="w-3.5 h-3.5 text-zinc-600" />
+                                                <span className="text-zinc-400 text-sm">
+                                                    {formatSchedule(reminder.schedule)}
+                                                </span>
+                                            </div>
+                                        </td>
+
+                                        {/* Target */}
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center gap-2">
+                                                <Target className="w-3.5 h-3.5 text-zinc-600" />
+                                                <span className="text-zinc-400 text-sm truncate max-w-[150px]">
+                                                    {reminder.group_name || reminder.target_id || 'Unknown'}
+                                                </span>
+                                            </div>
+                                        </td>
+
+                                        {/* Next Run */}
+                                        <td className="py-4 px-4">
+                                            {reminder.next_run_at && isActive ? (
+                                                <div className="text-blue-400 text-sm font-mono">
+                                                    {new Date(reminder.next_run_at).toLocaleString('en-US', {
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <span className="text-zinc-600 text-sm">-</span>
+                                            )}
+                                        </td>
+
+                                        {/* Actions */}
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => router.push(`/dashboard/reminders/${reminder.id}/edit`)}
+                                                    className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-blue-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-blue-400"
+                                                    title="Edit reminder"
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                </button>
+
+                                                <button
+                                                    onClick={() => setExpandedId(isExpanded ? null : reminder.id)}
+                                                    className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-purple-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-purple-400"
+                                                    title={isExpanded ? 'Collapse' : 'Expand'}
+                                                >
+                                                    <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                                </button>
+
+                                                {deleteConfirm === reminder.id ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => deleteMutation.mutate(reminder.id)}
+                                                            className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
+                                                        >
+                                                            Confirm
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setDeleteConfirm(null)}
+                                                            className="px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 text-xs font-medium hover:bg-zinc-800 transition-colors"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => setDeleteConfirm(reminder.id)}
+                                                        className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
+                                                        title="Delete reminder"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    {/* Expanded Row */}
+                                    {isExpanded && (
+                                        <tr>
+                                            <td colSpan={6} className="border-b border-zinc-800/50">
+                                                <div className="p-4 bg-zinc-900/30 space-y-3">
+                                                    <div>
+                                                        <div className="text-xs text-zinc-500 mb-2">Message Content</div>
+                                                        <div className="p-3 bg-zinc-800/50 rounded-lg text-sm text-zinc-300 whitespace-pre-wrap border border-zinc-700/50 font-mono">
+                                                            {templateConfig.body || templateConfig.template || 'No content'}
+                                                        </div>
+                                                    </div>
+                                                    {reminder.description && (
+                                                        <div>
+                                                            <div className="text-xs text-zinc-500 mb-1">Description</div>
+                                                            <p className="text-sm text-zinc-400">{reminder.description}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
+                {reminders.map((reminder: Reminder) => {
+                    const isActive = reminder.is_active === 1
+                    const isExpanded = expandedId === reminder.id
+                    const templateConfig = JSON.parse(reminder.template_config || '{}')
+
+                    return (
+                        <div
+                            key={reminder.id}
+                            className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl overflow-hidden hover:bg-zinc-900/80 transition-all"
+                        >
+                            <div className="p-4">
+                                {/* Top: Toggle + Name + Status */}
+                                <div className="flex items-center gap-3 mb-3">
+                                    <button
+                                        onClick={() => toggleMutation.mutate(reminder.id)}
+                                        disabled={toggleMutation.isPending}
+                                        className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${isActive ? 'bg-emerald-500' : 'bg-zinc-700'
+                                            }`}
+                                    >
+                                        <div
+                                            className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${isActive ? 'translate-x-5' : 'translate-x-0'
+                                                }`}
+                                        />
+                                    </button>
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Clock className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                            <h3 className="text-zinc-100 font-semibold truncate">{reminder.name}</h3>
+                                        </div>
                                     </div>
+
+                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border flex-shrink-0 ${isActive
+                                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                                            : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
+                                        }`}>
+                                        <Circle className="w-2 h-2 fill-current" />
+                                        <span>{isActive ? 'Active' : 'Paused'}</span>
+                                    </span>
                                 </div>
 
-                                {/* Actions */}
-                                <div className="flex items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 border-white/5">
+                                {/* Middle: Schedule + Target */}
+                                <div className="space-y-2 mb-3">
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Calendar className="w-3.5 h-3.5 text-zinc-600" />
+                                        <span className="text-zinc-400">{formatSchedule(reminder.schedule)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Target className="w-3.5 h-3.5 text-zinc-600" />
+                                        <span className="text-zinc-400 truncate">
+                                            {reminder.group_name || reminder.target_id || 'Unknown'}
+                                        </span>
+                                    </div>
+                                    {reminder.next_run_at && isActive && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <Clock className="w-3.5 h-3.5 text-blue-500" />
+                                            <span className="text-blue-400 font-mono">
+                                                Next: {new Date(reminder.next_run_at).toLocaleString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Bottom: Actions */}
+                                <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800/50">
                                     <button
                                         onClick={() => router.push(`/dashboard/reminders/${reminder.id}/edit`)}
-                                        className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 hover:border-cyan-500 transition-all flex items-center justify-center text-gray-400 hover:text-cyan-400"
-                                        title="Edit"
+                                        className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-blue-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-blue-400"
                                     >
-                                        ✏️
+                                        <Edit className="w-4 h-4" />
                                     </button>
 
                                     <button
                                         onClick={() => setExpandedId(isExpanded ? null : reminder.id)}
-                                        className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 hover:border-purple-500 transition-all flex items-center justify-center text-gray-400 hover:text-purple-400 text-xs"
-                                        title="Preview Message"
+                                        className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-purple-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-purple-400"
                                     >
-                                        👁️
+                                        <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                     </button>
 
                                     {deleteConfirm === reminder.id ? (
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => deleteMutation.mutate(reminder.id)}
-                                                className="px-2 py-1.5 rounded-lg bg-red-500 text-white text-[10px] font-bold hover:bg-red-600 transition-colors"
+                                                className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium"
                                             >
                                                 Confirm
                                             </button>
                                             <button
                                                 onClick={() => setDeleteConfirm(null)}
-                                                className="px-2 py-1.5 rounded-lg bg-white/5 text-gray-400 text-[10px] font-bold"
+                                                className="px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 text-xs font-medium"
                                             >
-                                                X
+                                                Cancel
                                             </button>
                                         </div>
                                     ) : (
                                         <button
                                             onClick={() => setDeleteConfirm(reminder.id)}
-                                            className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 hover:border-red-500 transition-all flex items-center justify-center text-gray-400 hover:text-red-400"
-                                            title="Delete"
+                                            className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
                                         >
-                                            🗑️
+                                            <Trash2 className="w-4 h-4" />
                                         </button>
                                     )}
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Preview Section */}
-                        {isExpanded && (
-                            <div className="border-t border-white/10 p-5 bg-white/5 space-y-4">
-                                <div>
-                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Message Content</h4>
-                                    <div className="p-4 bg-black/40 rounded-xl text-sm text-gray-300 whitespace-pre-wrap border border-white/5 font-mono">
-                                        {templateConfig.body || templateConfig.template || 'No content'}
-                                    </div>
-                                </div>
-                                {reminder.description && (
+                            {/* Expanded Content */}
+                            {isExpanded && (
+                                <div className="border-t border-zinc-800/50 p-4 bg-zinc-900/30 space-y-3">
                                     <div>
-                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Description</h4>
-                                        <p className="text-sm text-gray-400">{reminder.description}</p>
+                                        <div className="text-xs text-zinc-500 mb-2">Message Content</div>
+                                        <div className="p-3 bg-zinc-800/50 rounded-lg text-sm text-zinc-300 whitespace-pre-wrap border border-zinc-700/50 font-mono">
+                                            {templateConfig.body || templateConfig.template || 'No content'}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )
-            })}
-        </div>
+                                    {reminder.description && (
+                                        <div>
+                                            <div className="text-xs text-zinc-500 mb-1">Description</div>
+                                            <p className="text-sm text-zinc-400">{reminder.description}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )
+                })}
+            </div>
+        </>
     )
 }

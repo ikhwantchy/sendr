@@ -13,37 +13,37 @@ const DB_PATH = join(__dirname, '../../data/database.sqlite');
 let db: Database | null = null;
 
 export async function initDatabase(): Promise<void> {
-    try {
-        const SQL = await initSqlJs();
+  try {
+    const SQL = await initSqlJs();
 
-        // Load existing database or create new one
-        if (existsSync(DB_PATH)) {
-            const buffer = readFileSync(DB_PATH);
-            db = new SQL.Database(buffer);
-            logger.info('✅ SQLite database loaded from file');
-        } else {
-            db = new SQL.Database();
-            logger.info('✅ SQLite database created (new)');
-        }
-
-        // Always initialize schema (CREATE TABLE IF NOT EXISTS handles existing tables)
-        await initSchema();
-
-        // Save to file
-        saveDatabase();
-    } catch (error) {
-        logger.error('Failed to initialize SQLite database', { error });
-        throw error;
+    // Load existing database or create new one
+    if (existsSync(DB_PATH)) {
+      const buffer = readFileSync(DB_PATH);
+      db = new SQL.Database(buffer);
+      logger.info('✅ SQLite database loaded from file');
+    } else {
+      db = new SQL.Database();
+      logger.info('✅ SQLite database created (new)');
     }
+
+    // Always initialize schema (CREATE TABLE IF NOT EXISTS handles existing tables)
+    await initSchema();
+
+    // Save to file
+    saveDatabase();
+  } catch (error) {
+    logger.error('Failed to initialize SQLite database', { error });
+    throw error;
+  }
 }
 
 async function initSchema(): Promise<void> {
-    if (!db) return;
+  if (!db) return;
 
-    logger.info('Creating database schema...');
+  logger.info('Creating database schema...');
 
-    // Create tables (simplified schema for SQLite)
-    const schema = `
+  // Create tables (simplified schema for SQLite)
+  const schema = `
     -- Tenants
     CREATE TABLE IF NOT EXISTS tenants (
       id TEXT PRIMARY KEY,
@@ -177,6 +177,20 @@ async function initSchema(): Promise<void> {
       FOREIGN KEY (reminder_id) REFERENCES reminders(id)
     );
 
+    -- Messages (for tracking sent/received messages)
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      bot_id TEXT NOT NULL,
+      wa_message_id TEXT,
+      direction TEXT NOT NULL CHECK(direction IN ('inbound', 'outbound')),
+      source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound')),
+      message_type TEXT NOT NULL CHECK(message_type IN ('text', 'image', 'video', 'audio', 'document')),
+      content TEXT,
+      media_url TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (bot_id) REFERENCES bots(id)
+    );
+
     -- WhatsApp Groups
     CREATE TABLE IF NOT EXISTS wa_groups (
       id TEXT PRIMARY KEY,
@@ -206,86 +220,142 @@ async function initSchema(): Promise<void> {
     );
   `;
 
-    db.run(schema);
-    logger.info('✅ Database schema created');
+  db.run(schema);
+
+  // Activity Logs Table for persistent history
+  db.run(`
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        metadata TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+  // MIGRATION: Add source column if it doesn't exist
+  try {
+    db.run("ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound'))");
+    logger.info('✅ MIGRATION: Added source column to messages table');
+  } catch (e) {
+    // Column likely exists, ignore
+  }
+
+  // DATA REPAIR: Backfill messages from reminder_logs (for historical charts)
+  try {
+    db.run(`
+        INSERT INTO messages (id, bot_id, direction, source, message_type, content, created_at)
+        SELECT 
+          'rem-log-' || rl.id, 
+          r.bot_id, 
+          'outbound', 
+          'reminder', 
+          'text', 
+          rl.message_sent, 
+          rl.executed_at
+        FROM reminder_logs rl
+        JOIN reminders r ON rl.reminder_id = r.id
+        WHERE rl.status = 'success'
+          AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.id = 'rem-log-' || rl.id)
+      `);
+    logger.info('✅ DATA REPAIR: Backfilled reminders into messages');
+  } catch (e) {
+    logger.warn('Failed to backfill reminders', { error: e });
+  }
+
+  logger.info('✅ Database schema created');
 }
 
 export function saveDatabase(): void {
-    if (!db) return;
+  if (!db) return;
 
-    try {
-        const data = db.export();
-        const buffer = Buffer.from(data);
-        writeFileSync(DB_PATH, buffer);
-        logger.debug('Database saved to file');
-    } catch (error) {
-        logger.error('Failed to save database', { error });
-    }
+  try {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    writeFileSync(DB_PATH, buffer);
+    logger.debug('Database saved to file');
+  } catch (error) {
+    logger.error('Failed to save database', { error });
+  }
 }
 
 // Auto-save every 5 seconds
 setInterval(() => {
-    saveDatabase();
+  saveDatabase();
 }, 5000);
 
 export async function query(sql: string, params: any[] = []): Promise<any> {
-    if (!db) {
-        await initDatabase();
+  if (!db) {
+    await initDatabase();
+  }
+
+  try {
+    const stmt = db!.prepare(sql);
+    stmt.bind(params);
+
+    const rows: any[] = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject());
+    }
+    stmt.free();
+
+    // Save after write operations
+    if (sql.trim().toUpperCase().startsWith('INSERT') ||
+      sql.trim().toUpperCase().startsWith('UPDATE') ||
+      sql.trim().toUpperCase().startsWith('DELETE')) {
+      saveDatabase();
     }
 
-    try {
-        const stmt = db!.prepare(sql);
-        stmt.bind(params);
-
-        const rows: any[] = [];
-        while (stmt.step()) {
-            rows.push(stmt.getAsObject());
-        }
-        stmt.free();
-
-        // Save after write operations
-        if (sql.trim().toUpperCase().startsWith('INSERT') ||
-            sql.trim().toUpperCase().startsWith('UPDATE') ||
-            sql.trim().toUpperCase().startsWith('DELETE')) {
-            saveDatabase();
-        }
-
-        return { rows, rowCount: rows.length };
-    } catch (error) {
-        logger.error('Query error', { error, sql, params });
-        throw error;
-    }
+    return { rows, rowCount: rows.length };
+  } catch (error) {
+    logger.error('Query error', { error, sql, params });
+    throw error;
+  }
 }
 
 export async function transaction<T>(
-    callback: (client: any) => Promise<T>
+  callback: (client: any) => Promise<T>
 ): Promise<T> {
-    if (!db) {
-        await initDatabase();
-    }
+  if (!db) {
+    await initDatabase();
+  }
 
-    try {
-        db!.run('BEGIN TRANSACTION');
-        const result = await callback(db);
-        db!.run('COMMIT');
-        saveDatabase();
-        return result;
-    } catch (error) {
-        db!.run('ROLLBACK');
-        throw error;
-    }
+  try {
+    db!.run('BEGIN TRANSACTION');
+    const result = await callback(db);
+    db!.run('COMMIT');
+    saveDatabase();
+    return result;
+  } catch (error) {
+    db!.run('ROLLBACK');
+    throw error;
+  }
 }
 
 export async function closePool(): Promise<void> {
-    if (db) {
-        saveDatabase();
-        db.close();
-        db = null;
-        logger.info('Database closed');
-    }
+  if (db) {
+    saveDatabase();
+    db.close();
+    db = null;
+    logger.info('Database closed');
+  }
 }
 
 // Initialize on import
 initDatabase().catch((error) => {
-    logger.error('Failed to initialize database on startup', { error });
+  logger.error('Failed to initialize database on startup', { error });
 });
+
+// Helper to log system activity
+export async function logActivity(type: 'bot' | 'rule' | 'campaign' | 'message' | 'error', message: string, metadata: any = {}) {
+  if (!db) await initDatabase();
+  try {
+    const stmt = db?.prepare('INSERT INTO activity_logs (type, message, metadata) VALUES (?, ?, ?)');
+    stmt?.bind([type, message, JSON.stringify(metadata)]);
+    stmt?.step();
+    stmt?.free();
+    saveDatabase();
+  } catch (error) {
+    console.error('Failed to log activity:', error);
+  }
+}

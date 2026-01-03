@@ -6,6 +6,7 @@ import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import RichTextEditor from '@/components/editors/RichTextEditor'
 import WhatsAppPreview from '@/components/previews/WhatsAppPreview'
+import { X, Zap, ChevronRight, Image as ImageIcon, Trash2 } from 'lucide-react'
 
 interface CreateRuleModalProps {
     botId: string
@@ -19,34 +20,59 @@ export default function CreateRuleModal({ botId, onClose }: CreateRuleModalProps
         reply: '',
         match_type: 'contains' as 'exact' | 'contains' | 'starts_with' | 'ends_with',
         is_active: true,
+        media: null as File | null
     })
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            setFormData({ ...formData, media: file })
+            const url = URL.createObjectURL(file)
+            setPreviewUrl(url)
+        }
+    }
+
+    const removeImage = () => {
+        setFormData({ ...formData, media: null })
+        setPreviewUrl(null)
+    }
+
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+        });
+    }
 
     const createMutation = useMutation({
         mutationFn: async (data: any) => {
-            // Transform frontend data to backend schema (keyword_rules table)
+            let mediaUrl = null;
+            if (data.media) {
+                mediaUrl = await fileToBase64(data.media);
+            }
+
             const backendData = {
                 bot_id: botId,
                 name: `Auto-reply: ${data.trigger}`,
                 keyword: data.trigger,
-                match_type: 'contains',  // Backend expects: equals, contains, regex
-                scope: 'global',         // Backend expects: global, group, contact
+                match_type: 'contains',
+                scope: 'global',
                 scope_target: null,
                 priority: 10,
                 actions: [{
-                    type: 'SEND_TEXT',   // ← Backend ActionEngine expects this!
+                    type: mediaUrl ? 'SEND_IMAGE' : 'SEND_TEXT',
                     config: {
-                        message: data.reply,
+                        message: data.reply, // This becomes caption if type is SEND_IMAGE
+                        url: mediaUrl,
                         variables: {}
                     }
                 }],
                 metadata: {},
-                is_active: data.is_active ? 1 : 0  // SQLite uses 1/0 for boolean
+                is_active: data.is_active ? 1 : 0
             }
-
-            console.log('=== CREATE RULE ===')
-            console.log('Frontend data:', data)
-            console.log('Backend data:', backendData)
-            console.log('==================')
 
             return await api.rules.create(backendData)
         },
@@ -56,8 +82,6 @@ export default function CreateRuleModal({ botId, onClose }: CreateRuleModalProps
             onClose()
         },
         onError: (error: any) => {
-            console.error('Create rule error:', error)
-            console.error('Error response:', error.response)
             const errorMessage = error.response?.data?.message ||
                 error.response?.data?.error ||
                 'Failed to create rule'
@@ -75,111 +99,190 @@ export default function CreateRuleModal({ botId, onClose }: CreateRuleModalProps
     }
 
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="glass rounded-2xl border border-white/10 max-w-6xl w-full max-h-[90vh] overflow-hidden">
-                {/* Header */}
-                <div className="p-6 border-b border-white/10">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-2xl font-bold text-white">Create Auto-Reply Rule</h2>
-                            <p className="text-sm text-gray-400 mt-1">Set up automatic responses for keywords</p>
-                        </div>
-                        <button
-                            onClick={onClose}
-                            className="w-8 h-8 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center text-gray-400 hover:text-white"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="bg-[#0e0e11] border border-zinc-800 rounded-xl w-full max-w-5xl h-[600px] shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200">
+
+                {/* Header (Mobile only) */}
+                <div className="md:hidden px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-white">New Rule</h2>
+                    <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white">
+                        <X className="w-5 h-5" />
+                    </button>
                 </div>
 
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="overflow-y-auto max-h-[calc(90vh-140px)]">
-                    <div className="p-6 space-y-6">
-                        {/* Keyword */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-2">
-                                Keyword / Trigger <span className="text-red-400">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                value={formData.trigger}
-                                onChange={(e) => setFormData({ ...formData, trigger: e.target.value })}
-                                placeholder="e.g., hello, hi, info, price"
-                                className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition-colors"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                                When someone sends this keyword, bot will auto-reply
-                            </p>
+                {/* Left Column: Form */}
+                <div className="flex-1 flex flex-col h-full bg-[#0e0e11]">
+                    <div className="p-6 md:p-8 flex-1 overflow-y-auto">
+                        <div className="mb-8 hidden md:block">
+                            <h2 className="text-xl font-bold text-white tracking-tight">Create Auto-Reply</h2>
+                            <p className="text-zinc-500 text-sm mt-1">Configure how the bot responds to specific triggers.</p>
                         </div>
 
-                        {/* Editor and Preview Side by Side */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Left: Editor */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">
-                                    Reply Message <span className="text-red-400">*</span>
+                        <div className="space-y-6">
+                            {/* Trigger Input */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                                    Keyword Trigger <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.trigger}
+                                    onChange={(e) => setFormData({ ...formData, trigger: e.target.value })}
+                                    placeholder="e.g. price, hello, help"
+                                    className="w-full bg-zinc-900/50 border border-zinc-800 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-zinc-700 placeholder:text-zinc-700 font-mono transition-shadow shadow-sm"
+                                    autoFocus
+                                />
+                                <p className="text-xs text-zinc-600">
+                                    Triggered when message contains this exact keyword.
+                                </p>
+                            </div>
+
+                            {/* Response Input */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                                    Response Message <span className="text-red-500">*</span>
                                 </label>
                                 <RichTextEditor
                                     value={formData.reply}
                                     onChange={(value) => setFormData({ ...formData, reply: value })}
-                                    placeholder="Enter your auto-reply message..."
-                                    maxLength={1000}
+                                    placeholder="Enter the reply text..."
+                                    maxLength={2000}
                                 />
                             </div>
 
-                            {/* Right: Preview */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">
-                                    Preview
+                            {/* Media Attachment */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex justify-between">
+                                    <span>Attachment (Optional)</span>
+                                    {formData.media && (
+                                        <button
+                                            onClick={removeImage}
+                                            className="text-red-400 hover:text-red-300 flex items-center gap-1 text-[10px]"
+                                            type="button"
+                                        >
+                                            <Trash2 className="w-3 h-3" /> Remove
+                                        </button>
+                                    )}
                                 </label>
-                                <WhatsAppPreview
-                                    message={formData.reply || 'Your message will appear here...'}
-                                    isOwn={false}
-                                />
+                                {!formData.media ? (
+                                    <div className="relative group">
+                                        <div className="border border-zinc-800 border-dashed rounded-lg p-4 bg-zinc-900/30 hover:bg-zinc-900/50 transition-colors flex flex-col items-center justify-center gap-2 cursor-pointer">
+                                            <ImageIcon className="w-5 h-5 text-zinc-500 group-hover:text-zinc-400" />
+                                            <span className="text-xs text-zinc-500">Click to upload image</span>
+                                        </div>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileChange}
+                                            className="absolute inset-0 opacity-0 cursor-pointer"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="border border-zinc-800 rounded-lg p-2 bg-zinc-900 flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded bg-zinc-800 overflow-hidden relative">
+                                            {previewUrl && <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs text-zinc-300 truncate font-medium">{formData.media.name}</p>
+                                            <p className="text-[10px] text-zinc-500">{(formData.media.size / 1024).toFixed(1)} KB</p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        </div>
 
-                        {/* Active Toggle */}
-                        <div className="flex items-center justify-between p-4 bg-black/20 rounded-lg border border-white/10">
-                            <div>
-                                <div className="font-medium text-white">Active</div>
-                                <div className="text-sm text-gray-400">Enable this rule immediately</div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
-                                className={`relative w-12 h-6 rounded-full transition-colors ${formData.is_active ? 'bg-cyan-500' : 'bg-gray-600'
-                                    }`}
-                            >
-                                <div
-                                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${formData.is_active ? 'translate-x-6' : 'translate-x-0'
+                            {/* Active Toggle */}
+                            <div className="flex items-center gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${formData.is_active ? 'bg-blue-600' : 'bg-zinc-800'
                                         }`}
-                                />
-                            </button>
+                                >
+                                    <span
+                                        className={`${formData.is_active ? 'translate-x-6' : 'translate-x-1'
+                                            } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                                    />
+                                </button>
+                                <span className="text-sm font-medium text-zinc-300">
+                                    {formData.is_active ? 'Rule is Active' : 'Rule is Paused'}
+                                </span>
+                            </div>
                         </div>
                     </div>
-                </form>
 
-                {/* Footer */}
-                <div className="p-6 border-t border-white/10 flex gap-3">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 text-gray-300 rounded-xl hover:bg-white/10 transition-all font-semibold"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSubmit}
-                        disabled={createMutation.isPending}
-                        className="flex-1 px-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl hover:shadow-lg hover:shadow-cyan-500/50 transition-all disabled:opacity-50 font-semibold"
-                    >
-                        {createMutation.isPending ? 'Creating...' : 'Create Rule'}
-                    </button>
+                    {/* Footer Actions */}
+                    <div className="px-6 md:px-8 py-4 border-t border-zinc-800 flex justify-between items-center bg-[#0e0e11]">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="text-sm font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleSubmit}
+                            disabled={createMutation.isPending}
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                            {createMutation.isPending ? (
+                                <span className="animate-pulse">Saving...</span>
+                            ) : (
+                                <>
+                                    Create Rule
+                                    <ChevronRight className="w-4 h-4" />
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
+
+                {/* Right Column: Preview */}
+                <div className="hidden md:flex w-[400px] bg-zinc-950 border-l border-zinc-800 relative flex-col">
+                    <div className="p-4 border-b border-zinc-900 bg-zinc-950">
+                        <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Live Preview</h3>
+                    </div>
+                    <div className="flex-1 p-6 flex flex-col items-center justify-center bg-[url('/whatsapp-bg-dark.png')] bg-cover bg-center opacity-80 backdrop-blur-sm grayscale-[0.8]">
+                        {/* Mock Phone Frame */}
+                        <div className="w-[300px] bg-[#0b141a] rounded-3xl border-[3px] border-zinc-800 shadow-2xl overflow-hidden flex flex-col h-[500px]">
+                            {/* WA Header */}
+                            <div className="h-14 bg-[#202c33] flex items-center px-4 gap-3 border-b border-zinc-800">
+                                <div className="w-8 h-8 rounded-full bg-zinc-600" />
+                                <div className="flex-1">
+                                    <div className="h-2 w-20 bg-zinc-700 rounded mb-1" />
+                                    <div className="h-1.5 w-12 bg-zinc-800 rounded" />
+                                </div>
+                            </div>
+
+                            {/* Chat Area */}
+                            <div className="flex-1 p-4 space-y-4 overflow-hidden relative">
+                                {/* Trigger Msg */}
+                                <div className="flex justify-end">
+                                    <div className="bg-[#005c4b] text-white text-xs p-2 rounded-lg rounded-tr-none max-w-[80%] shadow-sm">
+                                        {formData.trigger || '...'}
+                                        <div className="text-[9px] text-white/50 text-right mt-1">10:00</div>
+                                    </div>
+                                </div>
+
+                                {/* Reply Msg */}
+                                <div className="flex justify-start">
+                                    <div className="bg-[#202c33] text-zinc-100 text-xs p-2 rounded-lg rounded-tl-none max-w-[80%] shadow-sm">
+                                        {/* Image Preview in Message */}
+                                        {previewUrl && (
+                                            <div className="mb-2 rounded overflow-hidden">
+                                                <img src={previewUrl} alt="Sent Media" className="w-full h-auto object-cover max-h-40" />
+                                            </div>
+                                        )}
+                                        {formData.reply || '...'}
+                                        <div className="text-[9px] text-zinc-500 text-right mt-1 flex items-center justify-end gap-1">
+                                            10:00
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     )

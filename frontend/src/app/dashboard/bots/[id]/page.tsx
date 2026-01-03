@@ -8,9 +8,18 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import CreateRuleModal from '@/components/modals/CreateRuleModal'
 import CreateCampaignModal from '@/components/modals/CreateCampaignModal'
-import RulesTable from '@/components/tables/RulesTable'
 import CampaignsTable from '@/components/tables/CampaignsTable'
-import RemindersTable from '@/components/tables/RemindersTable'
+import {
+    ChevronLeft,
+    MessageSquare,
+    Zap,
+    Megaphone,
+    Circle,
+    Phone,
+    Pause,
+    Play,
+    ArrowRight
+} from 'lucide-react'
 
 export default function BotDetailPage() {
     const params = useParams()
@@ -29,6 +38,7 @@ export default function BotDetailPage() {
             const response = await api.bots.get(botId)
             return response.data.data || response.data
         },
+        refetchInterval: 3000,
     })
 
     // Fetch statistics
@@ -100,19 +110,19 @@ export default function BotDetailPage() {
     }
 
     const tabs = [
-        { id: 'overview', name: 'Overview', icon: '📊' },
-        { id: 'rules', name: 'Rules', icon: '📋' },
-        { id: 'campaigns', name: 'Campaigns', icon: '📢' },
-        { id: 'reminders', name: 'Reminders', icon: '⏰' },
-        { id: 'settings', name: 'Settings', icon: '⚙️' },
+        { id: 'overview', name: 'Overview' },
+        { id: 'rules', name: 'Rules' },
+        { id: 'campaigns', name: 'Campaigns' },
+        { id: 'reminders', name: 'Reminders' },
+        { id: 'settings', name: 'Settings' },
     ]
 
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="relative w-16 h-16">
-                    <div className="absolute inset-0 rounded-full border-4 border-cyan-500/20"></div>
-                    <div className="absolute inset-0 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin"></div>
+                <div className="relative w-12 h-12">
+                    <div className="absolute inset-0 rounded-full border-2 border-zinc-800"></div>
+                    <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
                 </div>
             </div>
         )
@@ -120,10 +130,10 @@ export default function BotDetailPage() {
 
     if (!bot) {
         return (
-            <div className="p-8">
+            <div className="p-6 md:p-8">
                 <div className="text-center">
-                    <h2 className="text-2xl font-bold text-white mb-4">Bot not found</h2>
-                    <Link href="/dashboard/bots" className="text-cyan-400 hover:text-cyan-300">
+                    <h2 className="text-2xl font-bold text-zinc-100 mb-4">Bot not found</h2>
+                    <Link href="/dashboard/bots" className="text-blue-500 hover:text-blue-400">
                         ← Back to Bots
                     </Link>
                 </div>
@@ -131,183 +141,482 @@ export default function BotDetailPage() {
         )
     }
 
-    const statusColors = {
-        connected: 'bg-green-500/20 text-green-400 border-green-500/30',
-        connecting: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-        disconnected: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-        error: 'bg-red-500/20 text-red-400 border-red-500/30',
-    }
+    const isConnected = bot.status === 'connected'
 
     return (
-        <div className="p-8">
+        <div className="p-6 md:p-8 animate-fade-in">
+            {/* Back Button */}
+            <Link
+                href="/dashboard/bots"
+                className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-100 mb-6 transition-colors text-sm"
+            >
+                <ChevronLeft className="w-4 h-4" />
+                Back to Bots
+            </Link>
+
             {/* Header */}
             <div className="mb-8">
-                <Link
-                    href="/dashboard/bots"
-                    className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-4 transition-colors"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Back to Bots
-                </Link>
-
-                <div className="flex items-start justify-between">
-                    <div>
-                        <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
-                            <span className="w-1.5 h-10 bg-gradient-to-b from-cyan-400 to-blue-600 rounded-full"></span>
-                            {bot.name}
-                        </h1>
-                        <div className="flex items-center gap-4 text-gray-400">
-                            <span className="flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                </svg>
-                                {bot.phone_number || 'Not connected'}
-                            </span>
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[bot.status as keyof typeof statusColors] || statusColors.disconnected}`}>
-                                {bot.status || 'disconnected'}
-                            </span>
+                <h1 className="text-3xl md:text-4xl font-bold text-zinc-100 mb-3 tracking-tight">
+                    {bot.name}
+                </h1>
+                <div className="flex flex-wrap items-center gap-3">
+                    {bot.phone_number && (
+                        <div className="flex items-center gap-2 text-zinc-400 text-sm">
+                            <Phone className="w-4 h-4 text-zinc-600" />
+                            <span className="font-mono">{bot.phone_number}</span>
                         </div>
+                    )}
+                    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${isConnected
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                        : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
+                        }`}>
+                        <Circle className="w-2 h-2 fill-current" />
+                        <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
                     </div>
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="glass rounded-2xl border border-white/10 overflow-hidden">
-                {/* Tab Navigation */}
-                <div className="flex border-b border-white/10 bg-black/20">
+            {/* Tabs - Horizontal Scrollable on Mobile */}
+            <div className="mb-8">
+                <div className="flex overflow-x-auto no-scrollbar border-b border-zinc-800/50 gap-1">
                     {tabs.map((tab) => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={`flex-1 px-6 py-4 text-sm font-medium transition-all relative ${activeTab === tab.id
-                                ? 'text-cyan-400 bg-cyan-500/10'
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-all relative ${activeTab === tab.id
+                                ? 'text-zinc-100'
+                                : 'text-zinc-500 hover:text-zinc-300'
                                 }`}
                         >
-                            <span className="flex items-center justify-center gap-2">
-                                <span className="text-lg">{tab.icon}</span>
-                                {tab.name}
-                            </span>
+                            <span>{tab.name}</span>
                             {activeTab === tab.id && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 to-blue-600"></div>
+                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
                             )}
                         </button>
                     ))}
                 </div>
+            </div>
 
-                {/* Tab Content */}
-                <div className="p-8">
-                    {activeTab === 'overview' && (
-                        <div className="space-y-8">
-                            <div>
-                                <h2 className="text-2xl font-bold text-white mb-6">Bot Overview</h2>
-
-                                {/* Connection Section - Only show if bot has never been connected */}
-                                {bot.status !== 'connected' && !bot.phone_number && (
-                                    <div className="glass rounded-2xl p-8 border-2 border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 mb-8">
-                                        <div className="flex items-start gap-6">
-                                            <div className="flex-shrink-0">
-                                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                                                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                                    </svg>
-                                                </div>
-                                            </div>
-                                            <div className="flex-1">
-                                                <h3 className="text-xl font-bold text-white mb-2">Connect WhatsApp</h3>
-                                                <p className="text-gray-400 mb-4">
-                                                    Scan QR code with your WhatsApp to connect this bot
-                                                </p>
-                                                <Link
-                                                    href={`/dashboard/bots/${botId}/connect`}
-                                                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-bold hover:shadow-2xl hover:shadow-cyan-500/50 transition-all"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                                    </svg>
-                                                    Connect Now
-                                                </Link>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Stats Grid */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="glass rounded-xl p-6 border border-white/10 hover-lift">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="text-gray-400 text-sm">Total Messages</div>
-                                            <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-                                                <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                                                </svg>
-                                            </div>
-                                        </div>
-                                        <div className="text-3xl font-bold text-white">{stats.totalMessages.toLocaleString()}</div>
-                                        <div className="text-xs text-gray-400 mt-2">
-                                            {bot?.status === 'connected' ? 'Bot is active' : 'Connect to start tracking'}
-                                        </div>
-                                    </div>
-
-                                    <div className="glass rounded-xl p-6 border border-white/10 hover-lift">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="text-gray-400 text-sm">Active Rules</div>
-                                            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                                                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                                </svg>
-                                            </div>
-                                        </div>
-                                        <div className="text-3xl font-bold text-white">{stats.activeRules}</div>
-                                        <div className="text-xs text-gray-400 mt-2">
-                                            {stats.totalRules} total rule{stats.totalRules !== 1 ? 's' : ''}
-                                        </div>
-                                    </div>
-
-                                    <div className="glass rounded-xl p-6 border border-white/10 hover-lift">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="text-gray-400 text-sm">Campaigns</div>
-                                            <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                                                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-                                                </svg>
-                                            </div>
-                                        </div>
-                                        <div className="text-3xl font-bold text-white">{stats.totalCampaigns}</div>
-                                        <div className="text-xs text-gray-400 mt-2">
-                                            {stats.activeCampaigns} active broadcast{stats.activeCampaigns !== 1 ? 's' : ''}
-                                        </div>
+            {/* Tab Content */}
+            <div>
+                {activeTab === 'overview' && (
+                    <div className="space-y-6">
+                        {/* Connection CTA - Only show if never connected */}
+                        {!isConnected && !bot.phone_number && (
+                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6 mb-6">
+                                <div className="flex flex-col sm:flex-row items-start gap-4">
+                                    <div className="flex-1">
+                                        <h3 className="text-lg font-semibold text-zinc-100 mb-2 tracking-tight">
+                                            Connect WhatsApp
+                                        </h3>
+                                        <p className="text-zinc-400 text-sm mb-4">
+                                            Scan QR code with your WhatsApp to connect this bot
+                                        </p>
+                                        <Link
+                                            href={`/dashboard/bots/${botId}/connect`}
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-all text-sm"
+                                        >
+                                            Connect Now
+                                        </Link>
                                     </div>
                                 </div>
+                            </div>
+                        )}
 
-                                {/* Bot Status & Additional Stats */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                                    {/* Real-time Status */}
-                                    <div className="glass rounded-xl p-6 border border-white/10">
-                                        <h3 className="text-lg font-semibold text-white mb-4">Bot Status</h3>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-gray-400 text-sm">Connection</span>
-                                                <div className="flex items-center gap-2">
-                                                    <div className={`w-2 h-2 rounded-full ${bot?.status === 'connected' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                                                    <span className={`text-sm font-medium ${bot?.status === 'connected' ? 'text-green-400' : 'text-red-400'}`}>
-                                                        {bot?.status === 'connected' ? 'Connected' : 'Disconnected'}
+                        {/* Top Row - EXACTLY 3 Cards (Grid Cols 3) */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {/* Card 1: Total Messages */}
+                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/80 transition-all">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                                        <MessageSquare className="w-5 h-5 text-blue-500" />
+                                    </div>
+                                </div>
+                                <div className="text-3xl font-bold text-zinc-100 mb-1 font-mono tracking-tight">
+                                    {stats.totalMessages.toLocaleString()}
+                                </div>
+                                <div className="text-sm text-zinc-500">
+                                    {isConnected ? 'Bot is active' : 'Connect to start tracking'}
+                                </div>
+                            </div>
+
+                            {/* Card 2: Active Rules */}
+                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/80 transition-all">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="w-10 h-10 bg-zinc-800/50 rounded-xl flex items-center justify-center">
+                                        <Zap className="w-5 h-5 text-zinc-400" />
+                                    </div>
+                                </div>
+                                <div className="text-3xl font-bold text-zinc-100 mb-1 font-mono tracking-tight">
+                                    {stats.activeRules}
+                                </div>
+                                <div className="text-sm text-zinc-500">
+                                    {stats.totalRules} total rule{stats.totalRules !== 1 ? 's' : ''}
+                                </div>
+                            </div>
+
+                            {/* Card 3: Campaigns */}
+                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/80 transition-all">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center">
+                                        <Megaphone className="w-5 h-5 text-purple-400" />
+                                    </div>
+                                </div>
+                                <div className="text-3xl font-bold text-zinc-100 mb-1 font-mono tracking-tight">
+                                    {stats.totalCampaigns}
+                                </div>
+                                <div className="text-sm text-zinc-500">
+                                    {stats.activeCampaigns} active broadcast{stats.activeCampaigns !== 1 ? 's' : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bottom Row - EXACTLY 2 Panels (Grid Cols 2) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Left Panel: Bot Status */}
+                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6">
+                                <h3 className="text-lg font-semibold text-zinc-100 mb-4 tracking-tight">
+                                    Bot Status
+                                </h3>
+                                <div className="space-y-3 mb-6">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-zinc-500 text-sm">Connection</span>
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                                                }`} />
+                                            <span className={`text-sm font-medium ${isConnected ? 'text-emerald-400' : 'text-red-400'
+                                                }`}>
+                                                {isConnected ? 'Connected' : 'Disconnected'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-zinc-500 text-sm">Session</span>
+                                        <span className="text-sm text-zinc-100">
+                                            {isConnected ? 'Active' : 'Inactive'}
+                                        </span>
+                                    </div>
+                                    {bot?.last_activity && (
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-zinc-500 text-sm">Last Activity</span>
+                                            <span className="text-sm text-zinc-100 font-mono">
+                                                {new Date(bot.last_activity).toLocaleString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Full-width Pause/Resume Button */}
+                                {bot?.phone_number && (
+                                    <div className="pt-4 border-t border-zinc-800/50">
+                                        {isConnected ? (
+                                            <button
+                                                onClick={() => pauseMutation.mutate()}
+                                                disabled={pauseMutation.isPending}
+                                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-yellow-600/10 border border-yellow-600/20 text-yellow-600 rounded-xl hover:bg-yellow-600/20 transition-all font-medium text-sm disabled:opacity-50"
+                                            >
+                                                <Pause className="w-4 h-4" />
+                                                {pauseMutation.isPending ? 'Pausing...' : 'Pause Bot'}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => resumeMutation.mutate()}
+                                                disabled={resumeMutation.isPending}
+                                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-500/20 transition-all font-medium text-sm disabled:opacity-50"
+                                            >
+                                                <Play className="w-4 h-4" />
+                                                {resumeMutation.isPending ? 'Resuming...' : 'Resume Bot'}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right Panel: Reminders */}
+                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6">
+                                <h3 className="text-lg font-semibold text-zinc-100 mb-4 tracking-tight">
+                                    Reminders
+                                </h3>
+                                <div className="space-y-4 mb-6">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-zinc-500 text-sm">Active</span>
+                                        <span className="text-2xl font-bold text-emerald-500 font-mono tracking-tight">
+                                            {stats.activeReminders}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-zinc-500 text-sm">Total</span>
+                                        <span className="text-lg font-semibold text-zinc-100 font-mono tracking-tight">
+                                            {stats.totalReminders}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="pt-4 border-t border-zinc-800/50">
+                                    <button
+                                        onClick={() => setActiveTab('reminders')}
+                                        className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 transition-colors"
+                                    >
+                                        <span>View all reminders</span>
+                                        <ArrowRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'rules' && (
+                    <div>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Auto-Reply Rules</h2>
+                            <button
+                                onClick={() => setShowCreateRuleModal(true)}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 text-zinc-100 rounded-lg font-medium transition-all text-sm"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span>New Rule</span>
+                            </button>
+                        </div>
+
+                        {/* Stacked List - Ghost Aesthetic */}
+                        {rulesData && rulesData.length > 0 ? (
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800 overflow-hidden">
+                                {rulesData.map((rule: any) => {
+                                    const isActive = rule.is_active === 1
+
+                                    return (
+                                        <div
+                                            key={rule.id}
+                                            className="group flex items-center gap-4 px-4 py-4 hover:bg-zinc-800/50 transition-colors"
+                                        >
+                                            {/* Icon Container */}
+                                            <div className="w-8 h-8 rounded bg-zinc-900/50 flex items-center justify-center flex-shrink-0">
+                                                <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                </svg>
+                                            </div>
+
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <h3 className="text-sm font-medium text-zinc-200 truncate">
+                                                        {rule.keyword}
+                                                    </h3>
+                                                    {/* Match Type Badge */}
+                                                    <span className="px-2 py-0.5 bg-zinc-900/50 border border-zinc-800/50 rounded text-xs text-zinc-500 font-mono">
+                                                        {rule.match_type || 'contains'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-xs">
+                                                    <span className="text-zinc-500 truncate max-w-[300px]">
+                                                        → {rule.reply_message || rule.actions?.[0]?.config?.message || 'No reply set'}
                                                     </span>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-gray-400 text-sm">Session</span>
-                                                <span className="text-sm text-white">
-                                                    {bot?.status === 'connected' ? 'Active' : 'Inactive'}
-                                                </span>
+
+                                            {/* Scope Badge (if not global) */}
+                                            {rule.scope && rule.scope !== 'global' && (
+                                                <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900/50 border border-zinc-800/50 rounded-md">
+                                                    <svg className="w-3 h-3 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                                    </svg>
+                                                    <span className="text-xs text-zinc-400 capitalize">{rule.scope}</span>
+                                                </div>
+                                            )}
+
+                                            {/* Priority Badge */}
+                                            {rule.priority && rule.priority > 0 && (
+                                                <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 bg-zinc-900/30 rounded">
+                                                    <svg className="w-3 h-3 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                                    </svg>
+                                                    <span className="text-xs text-zinc-600 font-mono">{rule.priority}</span>
+                                                </div>
+                                            )}
+
+                                            {/* Ultra-Minimal Toggle Switch */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    // Toggle rule
+                                                    api.rules.toggle(rule.id).then(() => {
+                                                        queryClient.invalidateQueries({ queryKey: ['rules', botId] })
+                                                        toast.success(isActive ? 'Rule disabled' : 'Rule enabled')
+                                                    }).catch(() => {
+                                                        toast.error('Failed to toggle rule')
+                                                    })
+                                                }}
+                                                className={`relative w-11 h-6 rounded-full transition-all flex-shrink-0 ${isActive
+                                                    ? 'bg-emerald-500/20'
+                                                    : 'bg-zinc-800'
+                                                    }`}
+                                            >
+                                                <div
+                                                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-all ${isActive
+                                                        ? 'translate-x-5 bg-emerald-500'
+                                                        : 'translate-x-0 bg-zinc-600'
+                                                        }`}
+                                                />
+                                            </button>
+
+                                            {/* Edit Button */}
+                                            <button
+                                                onClick={() => {
+                                                    // Navigate to edit or open modal
+                                                    toast.info('Edit functionality coming soon')
+                                                }}
+                                                className="w-8 h-8 rounded-lg bg-zinc-900/50 hover:bg-zinc-800/50 flex items-center justify-center transition-colors flex-shrink-0"
+                                            >
+                                                <svg className="w-4 h-4 text-zinc-500 group-hover:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                            </button>
+
+                                            {/* Delete Button */}
+                                            <button
+                                                onClick={() => {
+                                                    if (confirm('Are you sure you want to delete this rule?')) {
+                                                        api.rules.delete(rule.id).then(() => {
+                                                            queryClient.invalidateQueries({ queryKey: ['rules', botId] })
+                                                            toast.success('Rule deleted')
+                                                        }).catch(() => {
+                                                            toast.error('Failed to delete rule')
+                                                        })
+                                                    }
+                                                }}
+                                                className="w-8 h-8 rounded-lg bg-zinc-900/50 hover:bg-red-500/10 flex items-center justify-center transition-colors flex-shrink-0"
+                                            >
+                                                <svg className="w-4 h-4 text-zinc-600 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        ) : (
+                            <div className="border border-dashed border-zinc-800/50 rounded-xl p-12 text-center">
+                                <div className="w-12 h-12 mx-auto mb-4 bg-zinc-900/50 rounded-xl flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-zinc-400 font-medium mb-1">No rules yet</h3>
+                                <p className="text-zinc-600 text-sm">Create your first auto-reply rule</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'campaigns' && (
+                    <div>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Broadcast Campaigns</h2>
+                            <button
+                                onClick={() => setShowCreateCampaignModal(true)}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 text-zinc-100 rounded-lg font-medium transition-all text-sm"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span>New Campaign</span>
+                            </button>
+                        </div>
+                        <CampaignsTable botId={botId} />
+                    </div>
+                )}
+
+                {activeTab === 'reminders' && (
+                    <div>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Scheduled Reminders</h2>
+                            <button
+                                onClick={() => router.push(`/dashboard/reminders/create?botId=${botId}`)}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 text-zinc-100 rounded-lg font-medium transition-all text-sm"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span>New Reminder</span>
+                            </button>
+                        </div>
+
+                        {/* Stacked List - Ghost Aesthetic */}
+                        {remindersData && remindersData.length > 0 ? (
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800 overflow-hidden">
+                                {remindersData.map((reminder: any) => {
+                                    const isActive = reminder.is_active === 1
+
+                                    // Format schedule
+                                    const formatSchedule = (cron: string): string => {
+                                        if (cron === 'now') return 'One-time'
+                                        const parts = cron.split(' ')
+                                        if (parts.length !== 5) return cron
+                                        const [minute, hour, dom, month, dow] = parts
+
+                                        if (dow !== '*') {
+                                            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                                            return `Weekly · ${days[parseInt(dow)]} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+                                        }
+                                        if (dom === '*' && month === '*') {
+                                            return `Daily · ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+                                        }
+                                        if (dom !== '*' && month !== '*') {
+                                            return `Once · ${dom}/${month} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+                                        }
+                                        return cron
+                                    }
+
+                                    return (
+                                        <div
+                                            key={reminder.id}
+                                            className="group flex items-center gap-4 px-4 py-4 hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                                            onClick={() => router.push(`/dashboard/reminders/${reminder.id}/edit`)}
+                                        >
+                                            {/* Icon Container */}
+                                            <div className="w-8 h-8 rounded bg-zinc-900/50 flex items-center justify-center flex-shrink-0">
+                                                <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
                                             </div>
-                                            {bot?.last_activity && (
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-gray-400 text-sm">Last Activity</span>
-                                                    <span className="text-sm text-white">
-                                                        {new Date(bot.last_activity).toLocaleString('en-US', {
+
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <h3 className="text-sm font-medium text-zinc-200 truncate">
+                                                        {reminder.name}
+                                                    </h3>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-xs">
+                                                    <span className="text-zinc-500 font-mono">
+                                                        {formatSchedule(reminder.schedule)}
+                                                    </span>
+                                                    {reminder.group_name && (
+                                                        <>
+                                                            <span className="text-zinc-700">·</span>
+                                                            <span className="text-zinc-500 truncate max-w-[200px]">
+                                                                {reminder.group_name}
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Next Run Badge (if active) */}
+                                            {reminder.next_run_at && isActive && (
+                                                <div className="hidden md:flex items-center gap-2 px-2.5 py-1 bg-zinc-900/50 border border-zinc-800/50 rounded-md">
+                                                    <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                    <span className="text-xs text-zinc-400 font-mono">
+                                                        {new Date(reminder.next_run_at).toLocaleString('en-US', {
                                                             month: 'short',
                                                             day: 'numeric',
                                                             hour: '2-digit',
@@ -316,142 +625,96 @@ export default function BotDetailPage() {
                                                     </span>
                                                 </div>
                                             )}
+
+                                            {/* ID Badge */}
+                                            <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 bg-zinc-900/30 rounded">
+                                                <svg className="w-3 h-3 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                                                </svg>
+                                                <span className="text-xs text-zinc-600 font-mono">{reminder.id.slice(0, 8)}</span>
+                                            </div>
+
+                                            {/* Ultra-Minimal Toggle Switch */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    // Toggle reminder
+                                                    api.reminders.toggle(reminder.id).then(() => {
+                                                        queryClient.invalidateQueries({ queryKey: ['reminders', botId] })
+                                                        toast.success(isActive ? 'Reminder paused' : 'Reminder activated')
+                                                    }).catch(() => {
+                                                        toast.error('Failed to toggle reminder')
+                                                    })
+                                                }}
+                                                className={`relative w-11 h-6 rounded-full transition-all flex-shrink-0 ${isActive
+                                                    ? 'bg-emerald-500/20'
+                                                    : 'bg-zinc-800'
+                                                    }`}
+                                            >
+                                                <div
+                                                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-all ${isActive
+                                                        ? 'translate-x-5 bg-emerald-500'
+                                                        : 'translate-x-0 bg-zinc-600'
+                                                        }`}
+                                                />
+                                            </button>
+
+                                            {/* Arrow Icon (visible on hover) */}
+                                            <svg className="w-4 h-4 text-zinc-700 group-hover:text-zinc-500 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                            </svg>
                                         </div>
+                                    )
+                                })}
+                            </div>
+                        ) : (
+                            <div className="border border-dashed border-zinc-800/50 rounded-xl p-12 text-center">
+                                <div className="w-12 h-12 mx-auto mb-4 bg-zinc-900/50 rounded-xl flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-zinc-400 font-medium mb-1">No reminders yet</h3>
+                                <p className="text-zinc-600 text-sm">Create your first scheduled reminder</p>
+                            </div>
+                        )}
+                    </div>
+                )}
 
-                                        {/* Pause/Resume Button */}
-                                        {!isLoading && bot?.phone_number && (
-                                            <div className="mt-4 pt-4 border-t border-white/10">
-                                                {bot?.status === 'connected' ? (
-                                                    <button
-                                                        onClick={() => pauseMutation.mutate()}
-                                                        disabled={pauseMutation.isPending}
-                                                        className="w-full px-4 py-2.5 bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 rounded-xl hover:bg-yellow-500/30 transition-all text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                        </svg>
-                                                        {pauseMutation.isPending ? 'Pausing...' : 'Pause Bot'}
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => resumeMutation.mutate()}
-                                                        disabled={resumeMutation.isPending}
-                                                        className="w-full px-4 py-2.5 bg-green-500/20 border border-green-500/30 text-green-400 rounded-xl hover:bg-green-500/30 transition-all text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                        </svg>
-                                                        {resumeMutation.isPending ? 'Resuming...' : 'Resume Bot'}
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Reminders Stats */}
-                                    <div className="glass rounded-xl p-6 border border-white/10">
-                                        <h3 className="text-lg font-semibold text-white mb-4">Reminders</h3>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-gray-400 text-sm">Active</span>
-                                                <span className="text-2xl font-bold text-green-400">{stats.activeReminders}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-gray-400 text-sm">Total</span>
-                                                <span className="text-lg font-semibold text-white">{stats.totalReminders}</span>
-                                            </div>
-                                            <div className="pt-2 border-t border-white/10">
-                                                <button
-                                                    onClick={() => setActiveTab('reminders')}
-                                                    className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
-                                                >
-                                                    View all reminders →
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
+                {activeTab === 'settings' && (
+                    <div>
+                        <h2 className="text-2xl font-bold text-zinc-100 mb-6 tracking-tight">Bot Settings</h2>
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-sm font-medium text-zinc-400 mb-2">Bot Name</label>
+                                <input
+                                    type="text"
+                                    defaultValue={bot.name}
+                                    className="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700/50 rounded-xl text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-zinc-400 mb-2">Phone Number</label>
+                                <input
+                                    type="text"
+                                    defaultValue={bot.phone_number || ''}
+                                    disabled
+                                    className="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700/50 rounded-xl text-zinc-500 cursor-not-allowed"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-zinc-400 mb-2">Status</label>
+                                <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${isConnected
+                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                                    : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
+                                    }`}>
+                                    <Circle className="w-2 h-2 fill-current" />
+                                    <span>{bot.status || 'disconnected'}</span>
                                 </div>
                             </div>
                         </div>
-                    )}
-
-                    {activeTab === 'rules' && (
-                        <div>
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-2xl font-bold text-white">Auto-Reply Rules</h2>
-                                <button
-                                    onClick={() => setShowCreateRuleModal(true)}
-                                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
-                                >
-                                    + Create Rule
-                                </button>
-                            </div>
-                            <RulesTable botId={botId} />
-                        </div>
-                    )}
-
-                    {activeTab === 'campaigns' && (
-                        <div>
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-2xl font-bold text-white">Broadcast Campaigns</h2>
-                                <button
-                                    onClick={() => setShowCreateCampaignModal(true)}
-                                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
-                                >
-                                    + Create Campaign
-                                </button>
-                            </div>
-                            <CampaignsTable botId={botId} />
-                        </div>
-                    )}
-
-                    {activeTab === 'reminders' && (
-                        <div>
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-2xl font-bold text-white">Scheduled Reminders</h2>
-                                <button
-                                    onClick={() => router.push(`/dashboard/reminders/create?botId=${botId}`)}
-                                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
-                                >
-                                    + Create Reminder
-                                </button>
-                            </div>
-                            <RemindersTable botId={botId} />
-                        </div>
-                    )}
-
-                    {activeTab === 'settings' && (
-                        <div>
-                            <h2 className="text-2xl font-bold text-white mb-6">Bot Settings</h2>
-                            <div className="space-y-6">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">Bot Name</label>
-                                    <input
-                                        type="text"
-                                        defaultValue={bot.name}
-                                        className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">Phone Number</label>
-                                    <input
-                                        type="text"
-                                        defaultValue={bot.phone_number || ''}
-                                        disabled
-                                        className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-lg text-gray-500 cursor-not-allowed"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">Status</label>
-                                    <div className={`inline-block px-4 py-2 rounded-lg ${statusColors[bot.status as keyof typeof statusColors] || statusColors.disconnected}`}>
-                                        {bot.status || 'disconnected'}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
 
             {/* Modals */}
@@ -468,8 +731,6 @@ export default function BotDetailPage() {
                     onClose={() => setShowCreateCampaignModal(false)}
                 />
             )}
-
-
         </div>
     )
 }

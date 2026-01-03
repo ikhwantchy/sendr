@@ -1,664 +1,325 @@
-# 🧪 TESTING GUIDE - MULTI-USER ACCESS SYSTEM
+# 🧪 Testing Guide - Ghost Aesthetic UI/UX
 
-## 📋 TESTING CHECKLIST
+## Quick Start
 
-Ikuti steps ini secara berurutan untuk memastikan semua fungsi berjalan dengan baik.
-
----
-
-## 🚀 STEP 1: RUN MIGRATIONS (WAJIB!)
-
-**Lokasi:** Backend directory
-
-```bash
-cd backend
-npm run migrate
-```
-
-**Expected Output:**
-```
-✅ Running migration: 006_create_bot_permissions.sql
-✅ Running migration: 007_create_user_invitations.sql
-✅ Running migration: 008_add_user_role.sql
-✅ All migrations completed successfully
-```
-
-**Jika Error:**
-- Check database connection di `.env`
-- Pastikan PostgreSQL running
-- Check migration files ada di `backend/migrations/`
-
-**✅ PASS Criteria:**
-- Migrations run tanpa error
-- Tables `bot_permissions`, `user_invitations` created
-- Column `role` added to `users` table
-
----
-
-## 🔧 STEP 2: RESTART BACKEND
-
-```bash
-# Masih di folder backend
-npm run dev
-```
-
-**Expected Output:**
-```
-🚀 Server running on port 3001
-📡 API: http://localhost:3001/api
-🏥 Health: http://localhost:3001/health
-✅ Group integration initialized
-```
-
-**Check Console:**
-- ✅ No errors
-- ✅ Port 3001 active
-- ✅ Database connected
-
-**✅ PASS Criteria:**
-- Backend starts successfully
-- No error messages
-- API accessible
-
----
-
-## 🌐 STEP 3: TEST BACKEND API
-
-### 3.1 Health Check
-
-```bash
-curl http://localhost:3001/health
-```
-
-**Expected Response:**
-```json
-{
-  "status": "healthy",
-  "timestamp": "2025-12-23T...",
-  "uptime": 123.456
-}
-```
-
-**✅ PASS:** Status = "healthy"
-
----
-
-### 3.2 Login & Get Token
-
-```bash
-curl -X POST http://localhost:3001/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"YOUR_EMAIL","password":"YOUR_PASSWORD"}'
-```
-
-**Expected Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "user": {
-      "id": "...",
-      "email": "...",
-      "role": "owner"
-    }
-  }
-}
-```
-
-**✅ PASS:** 
-- Success = true
-- Token received
-- User role = "owner"
-
-**⚠️ IMPORTANT:** Copy token untuk testing selanjutnya!
-
----
-
-### 3.3 Test User Stats (Owner Only)
-
-**Replace `YOUR_TOKEN` dengan token dari step 3.2**
-
-```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:3001/api/users/stats
-```
-
-**Expected Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "total_users": 0,
-    "admin_count": 0,
-    "user_count": 0
-  }
-}
-```
-
-**✅ PASS:**
-- Success = true
-- Stats returned (even if 0)
-
-**❌ FAIL (403):**
-- User bukan owner
-- Check user role di database
-
----
-
-### 3.4 Test List Users (Owner Only)
-
-```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:3001/api/users
-```
-
-**Expected Response:**
-```json
-{
-  "success": true,
-  "data": []
-}
-```
-
-**✅ PASS:**
-- Success = true
-- Data is array (empty atau ada users)
-
----
-
-### 3.5 Test Invite User (Owner Only)
-
-```bash
-curl -X POST http://localhost:3001/api/users/invite \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "testuser@example.com",
-    "role": "admin",
-    "bot_ids": [],
-    "permissions": {
-      "can_view": true,
-      "can_edit": false,
-      "can_create_campaigns": true
-    }
-  }'
-```
-
-**Expected Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "invitation": {
-      "id": "...",
-      "email": "testuser@example.com",
-      "role": "admin",
-      "token": "...",
-      "expires_at": "..."
-    },
-    "invitation_link": "http://localhost:3000/accept-invitation?token=..."
-  }
-}
-```
-
-**✅ PASS:**
-- Success = true
-- Invitation created
-- Token generated
-- Link returned
-
----
-
-### 3.6 Test Get User Permissions
-
-**Replace `USER_ID` dengan ID user dari database**
-
-```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:3001/api/permissions/user/USER_ID
-```
-
-**Expected Response:**
-```json
-{
-  "success": true,
-  "data": []
-}
-```
-
-**✅ PASS:**
-- Success = true
-- Data is array
-
----
-
-### 3.7 Test Grant Permission (Owner Only)
-
-**Replace `BOT_ID` dan `USER_ID`**
-
-```bash
-curl -X POST http://localhost:3001/api/permissions \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "bot_id": "BOT_ID",
-    "user_id": "USER_ID",
-    "can_view": true,
-    "can_edit": false,
-    "can_delete": false,
-    "can_create_campaigns": true,
-    "can_create_rules": false,
-    "can_view_analytics": true
-  }'
-```
-
-**Expected Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "...",
-    "bot_id": "...",
-    "user_id": "...",
-    "can_view": true,
-    "can_create_campaigns": true,
-    ...
-  }
-}
-```
-
-**✅ PASS:**
-- Success = true
-- Permission created
-
----
-
-### 3.8 Test Check Access
-
-```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:3001/api/permissions/check/BOT_ID/USER_ID
-```
-
-**Expected Response (Owner):**
-```json
-{
-  "success": true,
-  "data": {
-    "has_access": true,
-    "is_owner": true,
-    "permissions": {
-      "can_view": true,
-      "can_edit": true,
-      "can_delete": true,
-      ...
-    }
-  }
-}
-```
-
-**Expected Response (Non-Owner with Permission):**
-```json
-{
-  "success": true,
-  "data": {
-    "has_access": true,
-    "is_owner": false,
-    "permissions": {
-      "can_view": true,
-      "can_edit": false,
-      ...
-    }
-  }
-}
-```
-
-**✅ PASS:**
-- Success = true
-- Access status correct
-
----
-
-## 🎨 STEP 4: TEST FRONTEND
-
-### 4.1 Start Frontend
-
+### 1. Install Dependencies (if needed)
 ```bash
 cd frontend
+npm install
+```
+
+### 2. Start Development Server
+```bash
 npm run dev
 ```
 
-**Expected:**
-- Frontend runs on http://localhost:3000
-- No errors in console
+### 3. Open Browser
+Navigate to: `http://localhost:3000`
 
 ---
 
-### 4.2 Login Test
+## Testing Checklist
 
-1. **Open:** http://localhost:3000/login
-2. **Login** dengan credentials owner
-3. **Check:** Redirect ke /dashboard
+### ✅ Sidebar (Desktop)
+- [ ] Sidebar appears on left side with Zinc-950 background
+- [ ] Logo shows blue Bot icon with "BroBot" text
+- [ ] Navigation items have Lucide icons (LayoutDashboard, Bot, Database, BarChart3)
+- [ ] Active page has zinc-800/50 background and blue icon
+- [ ] Hover states work (zinc-900/50 background)
+- [ ] Toggle button appears (ChevronLeft icon)
+- [ ] Clicking toggle collapses sidebar to w-20 (icons only)
+- [ ] Collapsed sidebar shows tooltips on hover
+- [ ] User profile section shows at bottom
+- [ ] Logout button has red hover state
 
-**✅ PASS:**
-- Login successful
-- Redirected to dashboard
-- Token saved in localStorage
+### ✅ Sidebar (Mobile - < 768px)
+- [ ] Sidebar is hidden by default
+- [ ] Mobile header appears at top (sticky, h-16)
+- [ ] Mobile header shows logo and hamburger menu
+- [ ] Clicking hamburger opens sidebar with slide-in animation
+- [ ] Black backdrop overlay appears (bg-black/80)
+- [ ] Clicking backdrop closes sidebar
+- [ ] Close button (X) appears in sidebar header
+- [ ] Clicking X closes sidebar
+- [ ] Sidebar slides out smoothly
+
+### ✅ Dashboard Page
+- [ ] Page background is Zinc-950
+- [ ] Welcome message shows user name
+- [ ] Stats grid shows 4 cards on desktop
+- [ ] Stats grid shows 2 columns on tablet (768-1024px)
+- [ ] Stats grid shows 1 column on mobile (< 768px)
+- [ ] Each stat card has:
+  - [ ] Zinc-900/50 background
+  - [ ] Lucide icon in zinc-800/50 box
+  - [ ] Font-mono number
+  - [ ] Emerald trend badge (+%)
+  - [ ] Hover lift effect (2px)
+- [ ] Quick Actions section shows 3 buttons
+- [ ] Quick Actions stack vertically on mobile
+- [ ] Arrow icons appear on action buttons
+- [ ] Clicking actions navigates to correct pages
+
+### ✅ Bots Page
+- [ ] Header shows "WhatsApp Bots" with tracking-tight
+- [ ] "Create Bot" button appears (blue-500)
+- [ ] Bot cards grid: 3 cols desktop, 2 cols tablet, 1 col mobile
+- [ ] Each bot card has:
+  - [ ] Zinc-900/50 background
+  - [ ] Bot name with truncate
+  - [ ] Status badge with Circle icon
+  - [ ] Phone number with Phone icon (if connected)
+  - [ ] Created date with Calendar icon
+  - [ ] "Manage" button (blue-500)
+  - [ ] "Delete" button (red/10 with Trash2 icon)
+  - [ ] Hover lift effect
+- [ ] Empty state shows when no bots
+- [ ] Empty state has zinc-800/50 Bot icon
+- [ ] "Create Bot" modal opens on button click
+
+### ✅ Create Bot Modal
+- [ ] Modal appears with fade-in animation
+- [ ] Modal slides in from bottom
+- [ ] Background is zinc-900
+- [ ] Border is zinc-800/50
+- [ ] Header shows "Create New Bot"
+- [ ] Input has zinc-800/50 background
+- [ ] Input has zinc-700/50 border
+- [ ] Focus ring is blue-500
+- [ ] "Cancel" button is zinc-800/50
+- [ ] "Create" button is blue-500
+- [ ] Clicking outside closes modal
+- [ ] Escape key closes modal
+- [ ] Enter key submits form
+
+### ✅ Create Rule Modal
+- [ ] Modal opens with fade-in + slide-in
+- [ ] Header has Zap icon in blue/10 box
+- [ ] Desktop: Split view (form left, preview right)
+- [ ] Mobile: Full-width form, preview hidden
+- [ ] Keyword input has zinc-800/50 background
+- [ ] RichTextEditor appears for reply
+- [ ] WhatsAppPreview shows on desktop (lg:flex)
+- [ ] WhatsAppPreview hidden on mobile (hidden lg:flex)
+- [ ] Toggle switch works (blue-500 when active)
+- [ ] Footer buttons are responsive
+- [ ] Modal fits within viewport on mobile
+
+### ✅ Responsive Behavior
+
+#### Desktop (≥ 1024px)
+- [ ] Sidebar is 256px wide (expanded)
+- [ ] Main content has ml-64 margin
+- [ ] Stats grid shows 4 columns
+- [ ] Bot cards show 3 columns
+- [ ] Modals show split view (form + preview)
+- [ ] All hover effects work
+
+#### Tablet (768-1024px)
+- [ ] Sidebar is visible
+- [ ] Stats grid shows 2 columns
+- [ ] Bot cards show 2 columns
+- [ ] Modals show split view
+- [ ] Touch targets are adequate
+
+#### Mobile (< 768px)
+- [ ] Sidebar is hidden
+- [ ] Mobile header is visible and sticky
+- [ ] Hamburger menu works
+- [ ] Stats grid shows 1 column
+- [ ] Bot cards show 1 column
+- [ ] Modals show full-width form
+- [ ] Preview panels are hidden
+- [ ] Text doesn't overflow
+- [ ] Buttons are touch-friendly (min 44x44px)
+- [ ] No horizontal scroll
+
+### ✅ Color Accuracy
+- [ ] Page background is #09090b (Zinc-950)
+- [ ] Cards are Zinc-900/50
+- [ ] Borders are Zinc-800/50
+- [ ] Headings are Zinc-100
+- [ ] Body text is Zinc-400
+- [ ] Meta text is Zinc-500
+- [ ] Primary buttons are Blue-500
+- [ ] Success badges are Emerald-500
+- [ ] Error badges are Red-500
+- [ ] No vibrant gradients (cyan/purple/pink)
+
+### ✅ Typography
+- [ ] All text uses Inter font
+- [ ] Headings have tracking-tight
+- [ ] Numbers use font-mono
+- [ ] Text hierarchy is clear
+- [ ] No text is cut off
+- [ ] Truncate works on long names
+
+### ✅ Icons
+- [ ] All icons are from Lucide React
+- [ ] No emoji icons (🤖, 📊, etc.)
+- [ ] Icon sizes are consistent (w-4 h-4 or w-5 h-5)
+- [ ] Icons have proper colors (zinc-400, blue-500, etc.)
+- [ ] Circle icons appear in status badges
+
+### ✅ Animations
+- [ ] Page transitions have fade-in
+- [ ] Cards have slide-in-from-bottom-2
+- [ ] Sidebar has slide-in-from-left (mobile)
+- [ ] Hover lift is 2px (not 4px)
+- [ ] Transitions are 200ms (not 300ms)
+- [ ] No shimmer effects
+- [ ] No gradient animations
+- [ ] Loading spinner is blue-500 with zinc-800 track
+
+### ✅ Interactions
+- [ ] Hover states work on all interactive elements
+- [ ] Focus states show blue-500 ring
+- [ ] Buttons have cursor-pointer
+- [ ] Disabled states have opacity-50
+- [ ] Loading states show spinner
+- [ ] Error states show red text
+- [ ] Success toasts appear (if Sonner is configured)
 
 ---
 
-### 4.3 Sidebar Test (Owner Only)
+## Browser Testing
 
-**Di Dashboard:**
+### Desktop Browsers
+- [ ] Chrome (latest)
+- [ ] Firefox (latest)
+- [ ] Safari (latest)
+- [ ] Edge (latest)
 
-1. **Check Sidebar** - Harus ada menu "Users" 👥
-2. **Check Position** - Menu "Users" di bawah "Analytics"
-3. **Check Visibility** - Menu "Users" HANYA muncul untuk owner
+### Mobile Browsers
+- [ ] Chrome Mobile (Android)
+- [ ] Safari Mobile (iOS)
+- [ ] Firefox Mobile
 
-**✅ PASS:**
-- "Users" menu visible (owner)
-- Menu styled correctly
-- Icon displayed
-
-**❌ FAIL:**
-- Menu tidak muncul → Check user role
-- Menu muncul untuk non-owner → Check conditional rendering
-
----
-
-### 4.4 Users Page Test
-
-**Click "Users" menu:**
-
-1. **URL:** Should navigate to `/dashboard/users`
-2. **Page Load:** Users page loads successfully
-3. **Stats Cards:** 3 cards displayed:
-   - Total Users
-   - Admins
-   - Users
-4. **User List:** Table or empty state displayed
-5. **Invite Button:** "Invite User" button visible
-
-**✅ PASS:**
-- Page loads without errors
-- Stats display correctly
-- UI renders properly
-
-**Check Console:**
-- No errors
-- API calls successful
+### Screen Sizes to Test
+- [ ] 320px (iPhone SE)
+- [ ] 375px (iPhone 12/13)
+- [ ] 768px (iPad Portrait)
+- [ ] 1024px (iPad Landscape)
+- [ ] 1280px (Laptop)
+- [ ] 1920px (Desktop)
 
 ---
 
-### 4.5 Users Page - API Integration Test
+## Common Issues & Fixes
 
-**Open Browser DevTools (F12) → Network Tab:**
+### Issue: Sidebar not collapsing
+**Fix**: Check if `isExpanded` state is working in Sidebar.tsx
 
-1. **Refresh** users page
-2. **Check Network Requests:**
-   - `GET /api/users` - Should return 200
-   - `GET /api/users/stats` - Should return 200
+### Issue: Mobile menu not appearing
+**Fix**: Verify `isMobileOpen` state and `translate-x-0` class
 
-**✅ PASS:**
-- Both API calls successful (200)
-- Data displayed correctly
-- No 401/403 errors
+### Issue: Colors look wrong
+**Fix**: Check if Tailwind is processing the new Zinc colors in globals.css
 
-**❌ FAIL (401):**
-- Token expired → Re-login
-- Token missing → Check localStorage
+### Issue: Icons not showing
+**Fix**: Ensure `lucide-react` is installed: `npm install lucide-react`
 
-**❌ FAIL (403):**
-- User bukan owner → Check role in database
+### Issue: Animations not working
+**Fix**: Verify `tailwindcss-animate` is installed and Tailwind config includes animations
 
----
+### Issue: Modal preview not hiding on mobile
+**Fix**: Check `hidden lg:flex` class on preview div
 
-### 4.6 Invite Modal Test (Placeholder)
-
-1. **Click** "Invite User" button
-2. **Check:** Modal opens
-3. **Check:** Shows "Feature coming soon" message
-4. **Click** "Close" button
-5. **Check:** Modal closes
-
-**✅ PASS:**
-- Modal opens/closes correctly
-- No errors
+### Issue: Horizontal scroll on mobile
+**Fix**: Add `overflow-x-hidden` to body or check for elements with fixed widths
 
 ---
 
-## 🔒 STEP 5: SECURITY TESTS
+## Performance Testing
 
-### 5.1 Test Owner-Only Access
+### Lighthouse Scores (Target)
+- [ ] Performance: > 90
+- [ ] Accessibility: > 95
+- [ ] Best Practices: > 95
+- [ ] SEO: > 90
 
-**Test dengan non-owner user:**
-
-1. **Login** sebagai non-owner (admin/user)
-2. **Check Sidebar:** Menu "Users" TIDAK muncul
-3. **Try Direct Access:** http://localhost:3000/dashboard/users
-4. **Check:** Page should load but API calls fail with 403
-
-**✅ PASS:**
-- Menu hidden for non-owner
-- API returns 403 for non-owner
+### Load Times (Target)
+- [ ] First Contentful Paint: < 1.5s
+- [ ] Time to Interactive: < 3s
+- [ ] Largest Contentful Paint: < 2.5s
 
 ---
 
-### 5.2 Test Unauthenticated Access
+## Accessibility Testing
 
-**Logout dan test:**
+### Keyboard Navigation
+- [ ] Tab key navigates through interactive elements
+- [ ] Enter key activates buttons
+- [ ] Escape key closes modals
+- [ ] Arrow keys work in dropdowns (if applicable)
+
+### Screen Reader
+- [ ] All images have alt text
+- [ ] Buttons have descriptive labels
+- [ ] Form inputs have labels
+- [ ] Status messages are announced
+
+### Color Contrast
+- [ ] Headings (Zinc-100 on Zinc-950): Pass AAA
+- [ ] Body text (Zinc-400 on Zinc-950): Pass AA
+- [ ] Buttons (White on Blue-500): Pass AAA
+- [ ] Links (Blue-500 on Zinc-950): Pass AA
+
+---
+
+## Final Checklist
+
+- [ ] All pages load without errors
+- [ ] Console shows no errors or warnings
+- [ ] All API calls work (if backend is running)
+- [ ] Responsive behavior works on all breakpoints
+- [ ] Colors match Ghost aesthetic (Zinc palette)
+- [ ] Icons are from Lucide React
+- [ ] Typography uses tracking-tight and font-mono
+- [ ] Animations are subtle (2px lift, no glows)
+- [ ] Mobile menu works perfectly
+- [ ] Modals are responsive (split view → full width)
+- [ ] No horizontal scroll on any screen size
+- [ ] Touch targets are adequate (min 44x44px)
+- [ ] Loading states work
+- [ ] Empty states look good
+- [ ] Error states are clear
+
+---
+
+## Next Steps After Testing
+
+1. **Fix any issues** found during testing
+2. **Update remaining pages** (Bot Detail, Tables, etc.) using the patterns guide
+3. **Test again** after updates
+4. **Deploy to staging** for user testing
+5. **Gather feedback** and iterate
+
+---
+
+## Quick Test Commands
 
 ```bash
-# Without token
-curl http://localhost:3001/api/users/stats
-```
+# Start frontend
+cd frontend
+npm run dev
 
-**Expected Response:**
-```json
-{
-  "error": "No token provided"
-}
-```
-
-**Status Code:** 401
-
-**✅ PASS:**
-- 401 Unauthorized
-- No data leaked
-
----
-
-### 5.3 Test Permission Enforcement
-
-**Create user tanpa permission:**
-
-1. **Grant** permission dengan `can_view: false`
-2. **Try** access bot
-3. **Check:** Should be denied
-
-**✅ PASS:**
-- Permission enforced
-- Access denied correctly
-
----
-
-## 📊 STEP 6: DATABASE VERIFICATION
-
-### 6.1 Check Tables Created
-
-**Connect to PostgreSQL:**
-
-```sql
--- Check bot_permissions table
-SELECT * FROM bot_permissions;
-
--- Check user_invitations table
-SELECT * FROM user_invitations;
-
--- Check users role column
-SELECT id, email, role FROM users;
-```
-
-**✅ PASS:**
-- Tables exist
-- Columns correct
-- Data structure valid
-
----
-
-### 6.2 Check Indexes
-
-```sql
--- Check indexes
-SELECT tablename, indexname 
-FROM pg_indexes 
-WHERE tablename IN ('bot_permissions', 'user_invitations');
-```
-
-**Expected Indexes:**
-- `idx_bot_permissions_user`
-- `idx_bot_permissions_bot`
-- `idx_invitations_token`
-- `idx_invitations_email`
-
-**✅ PASS:**
-- All indexes created
-
----
-
-## ✅ FINAL CHECKLIST
-
-### Backend ✅
-- [ ] Migrations run successfully
-- [ ] Backend starts without errors
-- [ ] Health check passes
-- [ ] Login works
-- [ ] User stats API works
-- [ ] List users API works
-- [ ] Invite user API works
-- [ ] Permissions API works
-- [ ] Owner-only routes protected
-- [ ] Unauthenticated requests blocked
-
-### Frontend ✅
-- [ ] Frontend starts successfully
-- [ ] Login works
-- [ ] Sidebar shows "Users" (owner only)
-- [ ] Users page loads
-- [ ] Stats display correctly
-- [ ] User list renders
-- [ ] API integration works
-- [ ] Invite modal opens/closes
-- [ ] Non-owner cannot see Users menu
-- [ ] No console errors
-
-### Database ✅
-- [ ] bot_permissions table created
-- [ ] user_invitations table created
-- [ ] users.role column added
-- [ ] Indexes created
-- [ ] Data structure correct
-
----
-
-## 🐛 TROUBLESHOOTING
-
-### Issue: Migrations Fail
-**Solution:**
-```bash
-# Check database connection
-psql -U postgres -d your_database
-
-# Re-run migrations
+# Start backend (in separate terminal)
 cd backend
-npm run migrate
-```
-
-### Issue: 401 Unauthorized
-**Solution:**
-- Check token in localStorage
-- Re-login to get fresh token
-- Check token expiration
-
-### Issue: 403 Forbidden
-**Solution:**
-- Check user role in database
-- Ensure user is owner
-- Update role if needed:
-  ```sql
-  UPDATE users SET role = 'owner' WHERE email = 'your@email.com';
-  ```
-
-### Issue: Users Menu Not Showing
-**Solution:**
-- Check user role in localStorage
-- Clear cache and reload
-- Check Sidebar.tsx conditional rendering
-
-### Issue: API Calls Fail
-**Solution:**
-- Check backend is running
-- Check CORS settings
-- Check API_URL in frontend .env
-
----
-
-## 📝 TESTING SUMMARY
-
-**Total Tests:** 25+
-
-**Categories:**
-- ✅ Database (5 tests)
-- ✅ Backend API (8 tests)
-- ✅ Frontend UI (6 tests)
-- ✅ Security (3 tests)
-- ✅ Integration (3 tests)
-
-**Time Required:** 15-20 minutes
-
-**Priority:**
-1. **Critical:** Steps 1-3 (Database, Backend, API)
-2. **Important:** Step 4 (Frontend)
-3. **Optional:** Steps 5-6 (Security, Database verification)
-
----
-
-## 🎯 QUICK TEST (5 minutes)
-
-**Minimal testing untuk verify basic functionality:**
-
-```bash
-# 1. Run migrations
-cd backend && npm run migrate
-
-# 2. Start backend
 npm run dev
 
-# 3. Test health
-curl http://localhost:3001/health
+# Build for production (to test build)
+cd frontend
+npm run build
+npm start
 
-# 4. Login & get token
-curl -X POST http://localhost:3001/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"YOUR_EMAIL","password":"YOUR_PASSWORD"}'
+# Type check
+npm run type-check
 
-# 5. Test user stats (replace TOKEN)
-curl -H "Authorization: Bearer TOKEN" \
-  http://localhost:3001/api/users/stats
-
-# 6. Start frontend
-cd frontend && npm run dev
-
-# 7. Open browser
-# - Login
-# - Check sidebar for "Users" menu
-# - Click "Users"
-# - Verify page loads
+# Lint
+npm run lint
 ```
-
-**✅ If all pass → System working!**
 
 ---
 
-**Happy Testing!** 🚀
+**Happy Testing! 🚀**

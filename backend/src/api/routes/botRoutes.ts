@@ -12,6 +12,7 @@ import { authenticate, requireRole } from '../middleware/auth';
 import { eventBus } from '../../core/events/eventBus';
 import { EventType } from '../../core/events/types';
 import { logger } from '../../utils/logger';
+import { logActivity } from '../../database/connection-sqlite';
 
 const router = Router();
 
@@ -219,6 +220,9 @@ router.post('/:id/disconnect', requireRole(['OWNER', 'OPERATOR']), async (req, r
 
         await whatsappAdapter.disconnect(id);
 
+        // Log activity
+        await logActivity('bot', `${bot.name} disconnected`, { bot_id: id });
+
         res.json({
             success: true,
             message: 'Bot disconnected successfully',
@@ -265,6 +269,9 @@ router.post('/:id/pause', requireRole(['OWNER', 'OPERATOR']), async (req, res) =
             status: 'disconnected', // We use disconnected status for paused state
         });
 
+        // Log activity
+        await logActivity('bot', `${bot.name} paused`, { bot_id: id });
+
         logger.info('Bot paused successfully', { bot_id: id });
 
         res.json({
@@ -308,6 +315,9 @@ router.post('/:id/resume', requireRole(['OWNER', 'OPERATOR']), async (req, res) 
 
         // Resume bot (re-initialize with saved session)
         await whatsappAdapter.initializeBot(id);
+
+        // Log activity
+        await logActivity('bot', `${bot.name} resumed`, { bot_id: id });
 
         logger.info('Bot resume initiated', { bot_id: id });
 

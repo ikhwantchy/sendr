@@ -1,39 +1,41 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { usePermissions } from '@/hooks/usePermissions'
+import { Bot, Plus, Trash2, Settings, Phone, Calendar, Circle, Search, ArrowRight, MoreHorizontal } from 'lucide-react'
 
 export default function BotsPage() {
     const queryClient = useQueryClient()
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [newBotName, setNewBotName] = useState('')
+    const [mounted, setMounted] = useState(false)
 
-    // Get permissions
-    const { filterBots, isOwner, can } = usePermissions()
+    useEffect(() => {
+        setMounted(true)
+    }, [])
 
-    // Fetch bots
+    const { filterBots, isOwner } = usePermissions()
+
     const { data: allBots, isLoading } = useQuery({
         queryKey: ['bots'],
         queryFn: async () => {
             const response = await api.bots.list()
-            // Backend returns { success: true, data: [...] }
             return response.data.data || response.data || []
         },
     })
 
-    // Filter bots based on permissions
     const bots = useMemo(() => {
         if (!allBots) return []
         return filterBots(allBots)
     }, [allBots, filterBots])
 
-    // Create bot mutation
     const createMutation = useMutation({
         mutationFn: async (name: string) => {
+            // Placeholder: Replace with actual creation API
             return await api.bots.create({ name })
         },
         onSuccess: () => {
@@ -47,7 +49,6 @@ export default function BotsPage() {
         },
     })
 
-    // Delete bot mutation
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => {
             return await api.bots.delete(id)
@@ -76,175 +77,152 @@ export default function BotsPage() {
     }
 
     return (
-        <div className="p-8">
+        <div className="p-8 min-h-screen bg-[#09090b] text-zinc-100">
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
-                        <span className="w-1.5 h-10 bg-gradient-to-b from-cyan-400 to-blue-600 rounded-full"></span>
-                        WhatsApp Bots
-                    </h1>
-                    <p className="text-gray-400 text-lg">Manage your WhatsApp bot instances</p>
+                    <h1 className="text-2xl font-semibold text-white tracking-tight">Bots</h1>
+                    <p className="text-zinc-500 text-sm mt-1">Manage your automation instances</p>
                 </div>
-                {isOwner && (
+                {mounted && isOwner && (
                     <button
                         onClick={() => setShowCreateModal(true)}
-                        className="group px-6 py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-bold hover:shadow-2xl hover:shadow-cyan-500/50 transition-all flex items-center gap-2 hover-lift relative overflow-hidden"
+                        className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
                     >
-                        <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100"></div>
-                        <svg className="w-5 h-5 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        <span className="relative z-10">Create Bot</span>
+                        <Plus className="w-4 h-4" />
+                        Create Bot
                     </button>
                 )}
             </div>
 
-            {/* Bots Grid */}
-            {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                    <div className="relative w-16 h-16">
-                        <div className="absolute inset-0 rounded-full border-4 border-cyan-500/20"></div>
-                        <div className="absolute inset-0 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin"></div>
+            {/* List/Grid */}
+            {
+                isLoading ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {[1, 2, 3].map(i => (
+                            <div key={i} className="h-48 rounded-xl bg-zinc-900/50 border border-zinc-800/50 animate-pulse" />
+                        ))}
                     </div>
-                </div>
-            ) : bots && bots.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {bots.map((bot: any) => (
-                        <BotCard
-                            key={bot.id}
-                            bot={bot}
-                            onDelete={() => handleDelete(bot.id, bot.name)}
-                        />
-                    ))}
-                </div>
-            ) : (
-                <div className="text-center py-16 glass rounded-2xl border-2 border-dashed border-white/10">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-2xl mb-6">
-                        <svg className="w-10 h-10 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                        </svg>
+                ) : bots.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+                        {bots.map((bot: any) => (
+                            <Link
+                                key={bot.id}
+                                href={`/dashboard/bots/${bot.id}`}
+                                className="group relative flex flex-col p-6 rounded-xl bg-[#0e0e11] border border-zinc-800/50 hover:border-zinc-700 transition-all hover:shadow-[0_0_20px_rgba(0,0,0,0.4)]"
+                            >
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:text-white transition-colors">
+                                        <Bot className="w-6 h-6" />
+                                    </div>
+                                    <StatusBadge status={bot.status} />
+                                </div>
+
+                                <div className="mb-4">
+                                    <h3 className="text-lg font-semibold text-white tracking-tight mb-1 group-hover:text-blue-400 transition-colors">
+                                        {bot.name}
+                                    </h3>
+                                    <p className="text-zinc-500 text-sm font-mono truncate">
+                                        {bot.phone_number ? `+${bot.phone_number}` : 'No number connected'}
+                                    </p>
+                                </div>
+
+                                <div className="mt-auto pt-4 border-t border-zinc-800/50 flex items-center justify-between text-xs text-zinc-500">
+                                    <span className="flex items-center gap-1.5">
+                                        <Calendar className="w-3.5 h-3.5" />
+                                        {new Date(bot.created_at).toLocaleDateString()}
+                                    </span>
+                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <span className="text-zinc-400 font-medium">Configure</span>
+                                        <ArrowRight className="w-3.5 h-3.5" />
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
                     </div>
-                    <h3 className="text-xl font-bold text-white mb-2">No bots yet</h3>
-                    <p className="text-gray-400 mb-6">Create your first WhatsApp bot to get started</p>
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/50 transition-all hover-lift"
-                    >
-                        Create Bot
-                    </button>
-                </div>
-            )}
+                ) : (
+                    <div className="flex flex-col items-center justify-center py-24 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20">
+                        <div className="p-4 rounded-full bg-zinc-900/50 mb-4">
+                            <Bot className="w-8 h-8 text-zinc-500" />
+                        </div>
+                        <h3 className="text-lg font-medium text-white mb-2">No bots found</h3>
+                        <p className="text-zinc-500 max-w-sm mb-6">
+                            Get started by creating your first WhatsApp bot instance to handle automation.
+                        </p>
+                        {mounted && isOwner && (
+                            <button
+                                onClick={() => setShowCreateModal(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Create Bot
+                            </button>
+                        )
+                        }
+                    </div >
+                )
+            }
 
             {/* Create Modal */}
-            {showCreateModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="glass-strong rounded-3xl max-w-md w-full p-8 border border-white/20 shadow-2xl">
-                        <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-3">
-                            <span className="w-1.5 h-8 bg-gradient-to-b from-cyan-400 to-blue-600 rounded-full"></span>
-                            Create New Bot
-                        </h2>
-                        <div className="mb-6">
-                            <label className="block text-sm font-semibold text-gray-300 mb-2">
-                                Bot Name
-                            </label>
-                            <input
-                                type="text"
-                                value={newBotName}
-                                onChange={(e) => setNewBotName(e.target.value)}
-                                placeholder="e.g., Customer Service Bot"
-                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300 hover:bg-white/10"
-                                onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
-                            />
-                        </div>
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => {
-                                    setShowCreateModal(false)
-                                    setNewBotName('')
-                                }}
-                                className="flex-1 px-4 py-3 bg-white/5 border border-white/10 text-gray-300 rounded-xl hover:bg-white/10 transition-all font-semibold"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleCreate}
-                                disabled={createMutation.isPending}
-                                className="flex-1 px-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl hover:shadow-lg hover:shadow-cyan-500/50 transition-all disabled:opacity-50 font-semibold"
-                            >
-                                {createMutation.isPending ? 'Creating...' : 'Create'}
-                            </button>
+            {
+                showCreateModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="w-full max-w-md bg-[#0e0e11] border border-zinc-800 rounded-xl shadow-2xl overflow-hidden p-6 space-y-6 animate-in zoom-in-95 duration-200">
+                            <div>
+                                <h3 className="text-lg font-semibold text-white">Create New Bot</h3>
+                                <p className="text-sm text-zinc-500 mt-1">Give your bot a friendly name to identify it.</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                                        Bot Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newBotName}
+                                        onChange={(e) => setNewBotName(e.target.value)}
+                                        placeholder="e.g. Sales Assistant"
+                                        className="w-full bg-zinc-900/50 border border-zinc-800 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-zinc-700 placeholder:text-zinc-600"
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 pt-2">
+                                <button
+                                    onClick={() => setShowCreateModal(false)}
+                                    className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreate}
+                                    disabled={createMutation.isPending}
+                                    className="px-4 py-2 text-sm font-medium bg-white text-black hover:bg-zinc-200 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    {createMutation.isPending ? 'Creating...' : 'Create Bot'}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     )
 }
 
-function BotCard({ bot, onDelete }: any) {
-    const statusColors = {
-        disconnected: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-        connecting: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-        connected: 'bg-green-500/20 text-green-400 border-green-500/30',
-        error: 'bg-red-500/20 text-red-400 border-red-500/30',
-    }
-
-    const statusIcons = {
-        disconnected: '⚪',
-        connecting: '🟡',
-        connected: '🟢',
-        error: '🔴',
+function StatusBadge({ status }: { status: string }) {
+    const styles: any = {
+        connected: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+        disconnected: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20',
+        connecting: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+        error: 'bg-red-500/10 text-red-500 border-red-500/20'
     }
 
     return (
-        <div className="glass rounded-2xl border border-white/10 p-6 hover-lift group relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative">
-                <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                        <h3 className="text-lg font-bold text-white mb-2">{bot.name}</h3>
-                        <div className="flex flex-col gap-2">
-                            <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border ${statusColors[bot.status] || statusColors.disconnected}`}>
-                                <span className="mr-1.5">{statusIcons[bot.status] || statusIcons.disconnected}</span>
-                                {bot.status || 'disconnected'}
-                            </span>
-                            {bot.phone_number && (
-                                <div className="flex items-center gap-2 text-sm text-gray-400">
-                                    <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                    </svg>
-                                    <span>{bot.phone_number}</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="space-y-2 mb-4 text-sm text-gray-400">
-                    <div className="flex items-center">
-                        <svg className="w-4 h-4 mr-2 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Created {new Date(bot.created_at).toLocaleDateString()}
-                    </div>
-                </div>
-
-                <div className="flex gap-2">
-                    <Link
-                        href={`/dashboard/bots/${bot.id}`}
-                        className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-center rounded-xl hover:shadow-lg hover:shadow-cyan-500/50 transition-all text-sm font-semibold"
-                    >
-                        Manage
-                    </Link>
-                    <button
-                        onClick={onDelete}
-                        className="px-4 py-2.5 bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl hover:bg-red-500/30 transition-all text-sm font-semibold"
-                    >
-                        Delete
-                    </button>
-                </div>
-            </div>
-        </div>
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border uppercase tracking-wide ${styles[status] || styles.disconnected}`}>
+            {status}
+        </span>
     )
 }

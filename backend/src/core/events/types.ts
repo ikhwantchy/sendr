@@ -61,6 +61,7 @@ export interface EventContext {
     message: string | null;
     timestamp: string; // ISO-8601
     metadata?: Record<string, any>;
+    source?: string; // e.g. 'auto_reply', 'reminder'
 }
 
 /**

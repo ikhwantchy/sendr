@@ -17,6 +17,8 @@ import { eventBus } from '../../core/events/eventBus';
 import { EventType, MessageReceivedPayload } from '../../core/events/types';
 import { logger } from '../../utils/logger';
 import { botRepository } from '../../database/repositories/botRepository';
+import { query } from '../../database/connection-sqlite';
+import { v4 as uuidv4 } from 'uuid';
 
 class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
     private sockets: Map<string, WASocket> = new Map();
@@ -355,6 +357,26 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 content: incomingMessage.content,
                 message_type: Object.keys(msg.message || {})[0],
             });
+
+            // Log INBOUND message to database
+            try {
+                await query(`
+                    INSERT INTO messages (
+                        id, bot_id, wa_message_id, direction, source,
+                        message_type, content, created_at
+                    ) VALUES (?, ?, ?, 'inbound', 'inbound', ?, ?, ?)
+                `, [
+                    uuidv4(),
+                    bot.id,
+                    incomingMessage.wa_message_id,
+                    'text', // Simplified, or use incomingMessage.message_type
+                    incomingMessage.content,
+                    // Convert ISO to SQLite format if needed, but ISO is standard text
+                    incomingMessage.timestamp || new Date().toISOString()
+                ]);
+            } catch (logError) {
+                logger.error('Failed to log inbound message', { error: logError });
+            }
 
             await eventBus.emit(
                 EventType.MESSAGE_RECEIVED,
