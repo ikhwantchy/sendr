@@ -14,5 +14,6 @@ const router = express.Router();
  * Query params: url (Google Sheets URL)
  */
 router.get('/tabs', getSheetTabs);
+router.post('/preview-digest', require('../controllers/sheetsController').previewDigest);
 
 export default router;

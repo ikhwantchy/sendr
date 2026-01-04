@@ -103,3 +103,75 @@ export const getSheetTabs = async (req: Request, res: Response) => {
         });
     }
 };
+
+/**
+ * POST /api/sheets/preview-digest
+ * Generates a preview of the digest message using real data from the sheet
+ * 
+ * Body:
+ *   - url: string
+ *   - selectedSheets: string[]
+ *   - template: string
+ *   - timezone: string (optional)
+ */
+import googleSheetsService from '../../services/googleSheetsService';
+import templateEngineService from '../../services/templateEngineService';
+
+export const previewDigest = async (req: Request, res: Response) => {
+    try {
+        const { url, selectedSheets, template, timezone = 'Asia/Jakarta' } = req.body;
+
+        if (!url || !selectedSheets || !Array.isArray(selectedSheets) || !template) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: url, selectedSheets, template'
+            });
+        }
+
+        const spreadsheetId = googleSheetsService.extractSpreadsheetId(url);
+        if (!spreadsheetId) {
+            return res.status(400).json({ success: false, message: 'Invalid Google Sheets URL' });
+        }
+
+        // Fetch needed sheets
+        const sheetsData = await googleSheetsService.fetchMultipleSheets(spreadsheetId, selectedSheets);
+
+        // Convert to objects
+        const dataObjects = sheetsData.map(sheet => ({
+            name: sheet.sheetName,
+            data: googleSheetsService.convertToObjects(sheet),
+        }));
+
+        // Find schedule and tasks sheets
+        const scheduleSheet = dataObjects.find(s =>
+            s.name.toLowerCase().includes('jadwal') || s.name.toLowerCase().includes('schedule')
+        );
+        const tasksSheet = dataObjects.find(s =>
+            s.name.toLowerCase().includes('tugas') || s.name.toLowerCase().includes('task')
+        );
+
+        // Generate variables
+        const variables = templateEngineService.generateAcademicDigestVariables(
+            scheduleSheet?.data || [],
+            tasksSheet?.data || [],
+            timezone
+        );
+
+        // Process template
+        const preview = templateEngineService.processTemplate(template, variables);
+
+        res.json({
+            success: true,
+            preview,
+            variables // Return raw variables too if needed for debugging
+        });
+
+    } catch (error: any) {
+        console.error('[Sheets] Preview error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to generate preview',
+            error: error.message
+        });
+    }
+};

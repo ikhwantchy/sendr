@@ -54,13 +54,14 @@ interface FormData {
 interface CreateReminderWizardProps {
     botId: string
     onClose: () => void
+    reminderId?: string // Optional: if provided, component will load and edit existing reminder
 }
 
 // --- Constants ---
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const EMOJIS = ['😊', '😂', '🥺', '🔥', '❤️', '👍', '🙏', '🎉', '👋', '✅']
 
-export default function CreateReminderWizard({ botId, onClose }: CreateReminderWizardProps) {
+export default function CreateReminderWizard({ botId, onClose, reminderId }: CreateReminderWizardProps) {
     const queryClient = useQueryClient()
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -103,15 +104,103 @@ export default function CreateReminderWizard({ botId, onClose }: CreateReminderW
         imagePreview: null
     })
 
-    // Fetch Groups
+    // Search Params & State
+    const [previewText, setPreviewText] = useState<string>('')
+    const [isPreviewLoading, setIsPreviewLoading] = useState(false)
+
+    // Store botId from loaded reminder (for edit mode)
+    const [loadedBotId, setLoadedBotId] = useState<string>(botId)
+
+    // Fetch Groups (use loadedBotId for edit mode, botId for create mode)
+    const effectiveBotId = loadedBotId || botId
     const { data: groupsData } = useQuery<Group[]>({
-        queryKey: ['bot-groups', botId],
+        queryKey: ['bot-groups', effectiveBotId],
         queryFn: async () => {
-            const res = await api.bots.getGroups(botId)
+            if (!effectiveBotId) return []
+            const res = await api.bots.getGroups(effectiveBotId)
             const list = res.data.data
             return Array.isArray(list) ? list : []
-        }
+        },
+        enabled: !!effectiveBotId
     })
+
+    // Load existing reminder data if reminderId is provided (Edit Mode)
+    useEffect(() => {
+        if (!reminderId) return
+
+        const loadReminderData = async () => {
+            try {
+                const token = localStorage.getItem('token')
+                const response = await fetch(`http://localhost:3001/api/reminders/${reminderId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                const data = await response.json()
+
+                if (data.success) {
+                    const r = data.data
+                    const templateConfig = JSON.parse(r.template_config || '{}')
+
+                    // Parse schedule to extract frequency, date, time
+                    let frequency: Frequency = 'once'
+                    let time = '09:00'
+                    let startDate = today
+
+                    if (r.schedule && r.schedule !== 'now') {
+                        const parts = r.schedule.split(' ')
+                        if (parts.length === 5) {
+                            const [minute, hour, dom, month, dow] = parts
+                            time = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+
+                            if (dow !== '*') {
+                                frequency = 'weekly'
+                            } else if (dom === '*' && month === '*') {
+                                frequency = 'daily'
+                            } else {
+                                frequency = 'once'
+                            }
+                        }
+                    }
+
+                    setFormData({
+                        name: r.name || '',
+                        targetType: r.target_type || 'group',
+                        contactMethod: 'manual',
+                        selectedGroups: r.target_id ? r.target_id.split(',') : [],
+                        manualContacts: '',
+                        contactSheetUrl: templateConfig.googleSheetsUrl || '',
+                        sheetName: templateConfig.sheetName || '',
+                        csvFile: null,
+                        csvPreview: [],
+                        csvCount: 0,
+                        sheetContactCount: 0,
+                        triggerColumn: templateConfig.triggerColumn || '',
+                        triggerValue: templateConfig.triggerValue || '',
+                        isDigestMode: templateConfig.isDigestMode || false,
+                        frequency: frequency,
+                        startDate: startDate,
+                        hasEndDate: false,
+                        endDate: '',
+                        time: time,
+                        days: [],
+                        dataSource: templateConfig.googleSheetsUrl ? 'google_sheets' : 'static',
+                        message: templateConfig.body || '',
+                        imageFile: null,
+                        imagePreview: null,
+                    })
+
+                    // Set botId for fetching groups
+                    setLoadedBotId(r.bot_id)
+
+                    toast.success('Reminder loaded for editing')
+                }
+            } catch (error) {
+                console.error('Failed to load reminder:', error)
+                toast.error('Failed to load reminder data')
+            }
+        }
+
+        loadReminderData()
+    }, [reminderId])
 
     // Auto-detect tabs when Sheet URL changes
     useEffect(() => {
@@ -162,6 +251,41 @@ export default function CreateReminderWizard({ botId, onClose }: CreateReminderW
     }, [formData.contactSheetUrl, formData.dataSource])
 
 
+    // Live Preview Fetcher
+    useEffect(() => {
+        const fetchPreview = async () => {
+            if (!formData.isDigestMode || !formData.contactSheetUrl || !formData.sheetName || !formData.message) {
+                setPreviewText('')
+                return
+            }
+
+            setIsPreviewLoading(true)
+            try {
+                const response = await fetch('http://localhost:3001/api/sheets/preview-digest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: formData.contactSheetUrl,
+                        selectedSheets: [formData.sheetName],
+                        template: formData.message,
+                        timezone: 'Asia/Jakarta'
+                    })
+                })
+                const data = await response.json()
+                if (data.success) {
+                    setPreviewText(data.preview)
+                }
+            } catch (error) {
+                console.error('Preview fetch error:', error)
+            } finally {
+                setIsPreviewLoading(false)
+            }
+        }
+
+        const timeoutId = setTimeout(fetchPreview, 1000)
+        return () => clearTimeout(timeoutId)
+    }, [formData.isDigestMode, formData.contactSheetUrl, formData.sheetName, formData.message])
+
     // Create Mutation
     const createMutation = useMutation({
         mutationFn: async () => {
@@ -200,7 +324,7 @@ export default function CreateReminderWizard({ botId, onClose }: CreateReminderW
 
             // 4. Prepare Payload (match backend API)
             const payload = {
-                botId: botId,
+                botId: effectiveBotId,
                 name: formData.name,
                 description: '',
                 targetType: formData.targetType,
@@ -211,11 +335,25 @@ export default function CreateReminderWizard({ botId, onClose }: CreateReminderW
                 templateConfig: templateConfig,
             };
 
-            return await api.reminders.create(payload);
+            // Use PUT for edit mode, POST for create mode
+            if (reminderId) {
+                const token = localStorage.getItem('token')
+                const response = await fetch(`http://localhost:3001/api/reminders/${reminderId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                })
+                return await response.json()
+            } else {
+                return await api.reminders.create(payload);
+            }
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['reminders', botId] })
-            toast.success('Reminder scheduled successfully')
+            queryClient.invalidateQueries({ queryKey: ['reminders', effectiveBotId] })
+            toast.success(reminderId ? 'Reminder updated successfully' : 'Reminder created successfully')
             onClose()
         },
         onError: (err: any) => {
@@ -816,10 +954,10 @@ export default function CreateReminderWizard({ botId, onClose }: CreateReminderW
                                             <>
                                                 <div className="w-[1px] h-4 bg-zinc-700 mx-1" />
                                                 <button
-                                                    onClick={() => insertText('\n{{#LOOP}}\n - {ColumnName} \n{{/LOOP}}\n')}
+                                                    onClick={() => insertText('📬 *DAILY DIGEST ({TODAY_DATE})*\n\n🗓️ *Jadwal Hari Ini ({TODAY_NAME})*\n{SCHEDULE_TODAY}\n\n🧾 *Deadline ≤ 3 Hari*\n{TASKS_URGENT}\n\nSemangat! 💪')}
                                                     className="flex items-center gap-1 px-2 py-1 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 text-xs font-medium rounded transition-colors border border-purple-500/20"
                                                 >
-                                                    <RefreshCw size={12} /> Add Loop Block
+                                                    <RefreshCw size={12} /> Insert Academic Template
                                                 </button>
                                             </>
                                         )}
@@ -841,7 +979,7 @@ export default function CreateReminderWizard({ botId, onClose }: CreateReminderW
                                     onChange={e => setFormData({ ...formData, message: e.target.value })}
                                     className="w-full bg-transparent p-4 min-h-[200px] text-zinc-200 placeholder-zinc-600 resize-y focus:outline-none font-mono text-sm leading-relaxed"
                                     placeholder={formData.isDigestMode
-                                        ? "Start typing... Use the Loop Block to list multiple items.\nExample:\nHere is your daily report:\n{{#LOOP}}\n - {TaskName} due on {Date}\n{{/LOOP}}\nBest regards."
+                                        ? "Use the 'Insert Academic Template' button above to generate a daily digest format.\nAvailable variables: {SCHEDULE_TODAY}, {TASKS_URGENT}, {TODAY_DATE}, {TODAY_NAME}"
                                         : "Type your message here... Use {{ColumnName}} to insert sheet data."}
                                 />
 
@@ -892,6 +1030,22 @@ export default function CreateReminderWizard({ botId, onClose }: CreateReminderW
                                     <div className="px-2 pt-1 pb-6 whitespace-pre-wrap leading-relaxed">
                                         {/* Dynamic Preview Logic */}
                                         {(() => {
+                                            // Handle Digest Preview (Real Data)
+                                            if (formData.isDigestMode) {
+                                                if (isPreviewLoading) {
+                                                    return (
+                                                        <div className="flex items-center gap-2 text-zinc-500 italic py-2">
+                                                            <RefreshCw className="animate-spin w-3 h-3" /> Generating preview from Sheet...
+                                                        </div>
+                                                    )
+                                                }
+                                                // Only show if we truly have fetched content
+                                                if (previewText) {
+                                                    return previewText;
+                                                }
+                                            }
+
+                                            // Fallback: Legacy / Local Simulation
                                             let finalMsg = formData.message || '';
 
                                             // 1. Basic Variables
@@ -899,34 +1053,25 @@ export default function CreateReminderWizard({ botId, onClose }: CreateReminderW
                                                 .replace(/{TODAY}/g, new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }))
                                                 .replace(/{NAME}/g, 'John Doe');
 
-                                            // 2. Digest Loop Simulation
+                                            // 2. Digest Loop Simulation (Legacy)
                                             if (formData.isDigestMode) {
                                                 const loopRegex = /{{#LOOP}}([\s\S]*?){{\/LOOP}}/g;
                                                 finalMsg = finalMsg.replace(loopRegex, (_, template) => {
-                                                    // Simulate 3 items from csvPreview logic or fake data if empty
-                                                    const mockData = formData.csvPreview.length > 0 ? formData.csvPreview.slice(0, 3) : ['Item 1', 'Item 2', 'Item 3'];
+                                                    // Simulate 3 items
+                                                    const mockData = formData.csvPreview.length > 0 ? formData.csvPreview.slice(0, 3) : ['Item A', 'Item B', 'Item C'];
 
                                                     return mockData.map((row, i) => {
-                                                        // Fallback parser: Split CSV by comma to find "Columns"
-                                                        // Ideally we map {ColumnName} to actual Index.
-                                                        // For simulation, we just return the template replaced with whole row or mock.
-
-                                                        // If raw row is "Matkul, Deadline", and template is "{Matkul} - {Deadline}"
-                                                        // We can't map accurately without headers.
-                                                        // Simplification: Just replace {any} with random parts of the row.
-
                                                         let itemText = template;
-                                                        const cols = row.split(',');
-                                                        itemText = itemText.replace(/{.*?}/g, (match: string) => {
-                                                            // Pick random column or just cleaned text
-                                                            return cols[Math.floor(Math.random() * cols.length)]?.replace(/['"]/g, '').trim() || match
+                                                        // Naive replacement
+                                                        itemText = itemText.replace(/{.*?}/g, (match) => {
+                                                            return typeof row === 'string' ? row : match;
                                                         });
                                                         return itemText;
                                                     }).join('\n');
                                                 });
                                             }
 
-                                            return finalMsg || <span className="text-white/30 italic">This is a preview of your message...</span>
+                                            return finalMsg || <span className="text-white/30 italic">Start typing to preview...</span>
                                         })()}
                                     </div>
                                     <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">{formData.time}</div>

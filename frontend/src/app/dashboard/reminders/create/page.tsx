@@ -7,6 +7,7 @@ export default function CreateReminderPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const botId = searchParams.get('botId')
+    const editId = searchParams.get('edit') // Edit mode if this exists
 
     const handleClose = () => {
         // Navigate back to reminders list
@@ -17,14 +18,14 @@ export default function CreateReminderPage() {
         }
     }
 
-    if (!botId) {
+    if (!botId && !editId) {
         return (
-            <div className="flex items-center justify-center min-h-screen text-gray-400">
+            <div className="flex items-center justify-center min-h-screen bg-[#09090b] text-zinc-400">
                 <div className="flex flex-col items-center gap-4">
                     <p>Bot ID is missing.</p>
                     <button
                         onClick={() => router.push('/dashboard/bots')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500"
+                        className="px-4 py-2 bg-white text-black rounded-lg hover:bg-zinc-200 font-medium transition-colors"
                     >
                         Select a Bot
                     </button>
@@ -35,7 +36,8 @@ export default function CreateReminderPage() {
 
     return (
         <CreateReminderWizard
-            botId={botId}
+            botId={botId || ''}
+            reminderId={editId || undefined}
             onClose={handleClose}
         />
     )

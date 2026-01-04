@@ -82,17 +82,52 @@ class TemplateEngineService {
     }
 
     /**
+     * Get value from row with fuzzy column matching
+     */
+    private getValue(item: any, possibleColumns: string[]): string {
+        // Try exact match first
+        for (const col of possibleColumns) {
+            if (item[col] !== undefined && item[col] !== '') return String(item[col]);
+        }
+
+        // Try case-insensitive match
+        const keys = Object.keys(item);
+        for (const col of possibleColumns) {
+            const match = keys.find(k => k.toLowerCase().trim() === col.toLowerCase().trim());
+            if (match && item[match]) return String(item[match]);
+        }
+
+        // Try partial match (e.g. "Nama Dosen" matches "Dosen")
+        for (const col of possibleColumns) {
+            const match = keys.find(k => k.toLowerCase().includes(col.toLowerCase()) || col.toLowerCase().includes(k.toLowerCase()));
+            if (match && item[match]) return String(item[match]);
+        }
+
+        return '';
+    }
+
+    /**
      * Format schedule data into readable text
+     * Format:
+     * 1. {Mata Kuliah}
+     * {Waktu}
+     * {Dosen}
      */
     private formatSchedule(scheduleData: any[]): string {
         if (scheduleData.length === 0) return '';
 
         return scheduleData.map((item, index) => {
-            const mataKuliah = item['Mata Kuliah'] || item['Subject'] || 'Unknown';
-            const waktu = item['Waktu'] || item['Time'] || '';
-            const dosen = item['Dosen'] || item['Lecturer'] || '';
+            const mataKuliah = this.getValue(item, ['Mata Kuliah', 'Matkul', 'Subject', 'Mapel', 'MK']);
+            const waktu = this.getValue(item, ['Waktu', 'Jam', 'Time', 'Pukul', 'Sesi']);
+            const dosen = this.getValue(item, ['Dosen', 'Pengajar', 'Lecturer', 'Guru']);
+            const ruang = this.getValue(item, ['Ruang', 'Room', 'Kelas', 'Lokasi']);
 
-            return `${index + 1}. ${mataKuliah}\n   ${waktu}\n   ${dosen}`;
+            let text = `${index + 1}. ${mataKuliah}`;
+            if (waktu) text += `\n${waktu}`;
+            if (ruang) text += ` (${ruang})`; // Optional: Add room if available
+            if (dosen) text += `\n${dosen}`;
+
+            return text;
         }).join('\n\n');
     }
 
@@ -104,15 +139,26 @@ class TemplateEngineService {
         threeDaysLater.setDate(threeDaysLater.getDate() + 3);
 
         return tasksData.filter(item => {
-            const deadlineStr = item['Deadline'] || item['Due Date'] || '';
+            const deadlineStr = this.getValue(item, ['Deadline', 'Tenggat', 'Due Date', 'Tanggal']); // Format: DD/MM/YYYY
             if (!deadlineStr) return false;
 
             try {
                 // Parse deadline (assuming format: DD/MM/YYYY)
-                const [day, month, year] = deadlineStr.split('/').map(Number);
-                const deadline = new Date(year, month - 1, day);
+                const parts = deadlineStr.split(/[\/\-]/); // Split by / or -
+                if (parts.length !== 3) return false;
 
-                return deadline >= currentDate && deadline <= threeDaysLater;
+                const day = parseInt(parts[0]);
+                const month = parseInt(parts[1]) - 1; // Month is 0-indexed
+                const year = parseInt(parts[2]);
+
+                const deadline = new Date(year, month, day);
+
+                // Use simple date comparison (ignoring time)
+                const d1 = new Date(deadline.toDateString());
+                const d2 = new Date(currentDate.toDateString());
+                const d3 = new Date(threeDaysLater.toDateString());
+
+                return d1 >= d2 && d1 <= d3;
             } catch (error) {
                 return false;
             }
@@ -121,20 +167,44 @@ class TemplateEngineService {
 
     /**
      * Format tasks data into readable text
+     * Format:
+     * 1. {Mata Kuliah} — {Jenis Tugas}
+     * {Hari}, {Tanggal}
+     * {Deskripsi/Kelompok/Materi}
      */
     private formatTasks(tasksData: any[]): string {
         if (tasksData.length === 0) return '';
 
         return tasksData.map((item, index) => {
-            const tugas = item['Tugas'] || item['Task'] || 'Unknown';
-            const deadline = item['Deadline'] || item['Due Date'] || '';
-            const kelompok = item['Kelompok'] || item['Group'] || '';
-            const materi = item['Materi'] || item['Material'] || '';
+            const mataKuliah = this.getValue(item, ['Mata Kuliah', 'Matkul', 'Subject', 'MK']);
+            const tugas = this.getValue(item, ['Tugas', 'Task', 'Jenis Tugas', 'Type', 'Judul']);
+            const deadline = this.getValue(item, ['Deadline', 'Tenggat', 'Due Date', 'Tanggal']); // Format: DD/MM/YYYY
+            const hari = this.getValue(item, ['Hari', 'Day']);
+            const deskripsi = this.getValue(item, ['Deskripsi', 'Keterangan', 'Detail', 'Note', 'Catatan']);
+            const kelompok = this.getValue(item, ['Kelompok', 'Group', 'Tim']);
+            const materi = this.getValue(item, ['Materi', 'Material', 'Bab']);
 
-            let text = `${index + 1}. ${tugas}`;
-            if (deadline) text += `\n   ${deadline}`;
-            if (kelompok) text += `\n   ${kelompok}`;
-            if (materi) text += ` - ${materi}`;
+            // Construct title line: "1. Matkul — Tugas" or just "1. Tugas"
+            let title = `${index + 1}. ${mataKuliah}`;
+            if (tugas && tugas !== mataKuliah) title += ` — ${tugas}`;
+
+            let text = title;
+
+            // Date line: "Rabu, 12/10/2025"
+            let dateLine = '';
+            if (hari) dateLine += `${hari}, `;
+            if (deadline) dateLine += deadline;
+            if (dateLine) text += `\n${dateLine}`;
+
+            // Details line: "Kelompok 10 - Materi 11" or Description
+            let details = [];
+            if (kelompok) details.push(kelompok);
+            if (materi) details.push(materi);
+            if (deskripsi) details.push(deskripsi);
+
+            if (details.length > 0) {
+                text += `\n${details.join(' - ')}`;
+            }
 
             return text;
         }).join('\n\n');
