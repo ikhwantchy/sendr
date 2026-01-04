@@ -3,12 +3,14 @@
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import CreateRuleModal from '@/components/modals/CreateRuleModal'
 import CreateCampaignModal from '@/components/modals/CreateCampaignModal'
 import CampaignsTable from '@/components/tables/CampaignsTable'
+import ActivityChart from '@/components/ActivityChart'
+import RecentActivityList from '@/components/RecentActivityList'
 import {
     ChevronLeft,
     MessageSquare,
@@ -68,6 +70,133 @@ export default function BotDetailPage() {
         },
         enabled: !!botId,
     })
+
+    // Real-time Activity Logs (Auto-Refresh)
+    const { data: activityLogs = [] } = useQuery({
+        queryKey: ['activity', botId],
+        queryFn: async () => {
+            // Fetch more logs (500) to support dense 1-hour view
+            const response = await api.analytics.getActivityLogs(500, botId)
+            return response.data.data || []
+        },
+        enabled: !!botId,
+        refetchInterval: 3000,
+    })
+
+    const [chartTimeRange, setChartTimeRange] = useState('24h') // Default: 24 hours, Zoom levels: 30m → 24h → 7d → 30d
+
+
+    // Compute Chart Data
+    const chartData = useMemo(() => {
+        if (!activityLogs.length) return []
+
+        const buckets = new Map<string, any>()
+        const now = new Date()
+
+        if (chartTimeRange === '30m') {
+            // 30 Minutes View: Minute-by-minute for last 30 mins
+            for (let i = 0; i <= 30; i++) {
+                const d = new Date(now.getTime() - (30 - i) * 60 * 1000)
+                const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+                buckets.set(timeStr, { time: timeStr, received: 0, auto_reply: 0, campaign: 0, reminder: 0 })
+            }
+        } else if (chartTimeRange === '24h') {
+            // 24h View: Hourly buckets
+            for (let i = 0; i < 24; i++) {
+                const d = new Date(now.getTime() - i * 60 * 60 * 1000)
+                const hour = d.getHours().toString().padStart(2, '0')
+                const timeStr = `${hour}:00`
+                buckets.set(timeStr, { time: timeStr, received: 0, auto_reply: 0, campaign: 0, reminder: 0 })
+            }
+        } else if (chartTimeRange === '7d') {
+            // 7 Days View: Daily buckets
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
+                const timeStr = `${d.getMonth() + 1}/${d.getDate()}`
+                buckets.set(timeStr, { time: timeStr, received: 0, auto_reply: 0, campaign: 0, reminder: 0 })
+            }
+        } else if (chartTimeRange === '30d') {
+            // 30 Days View: Daily buckets
+            for (let i = 0; i < 30; i++) {
+                const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
+                const timeStr = `${d.getMonth() + 1}/${d.getDate()}`
+                buckets.set(timeStr, { time: timeStr, received: 0, auto_reply: 0, campaign: 0, reminder: 0 })
+            }
+        }
+
+        activityLogs.forEach((log: any) => {
+            // Fix: Append Z to ensure UTC parsing if missing
+            const timeString = log.timestamp.endsWith('Z') ? log.timestamp : `${log.timestamp}Z`
+            const date = new Date(timeString)
+            let timeKey = ''
+
+            if (chartTimeRange === '30m') {
+                if (now.getTime() - date.getTime() < 30 * 60 * 1000) {
+                    timeKey = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+                }
+            } else if (chartTimeRange === '24h') {
+                if (now.getTime() - date.getTime() < 24 * 60 * 60 * 1000) {
+                    timeKey = `${date.getHours().toString().padStart(2, '0')}:00`
+                }
+            } else if (chartTimeRange === '7d') {
+                if (now.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
+                    timeKey = `${date.getMonth() + 1}/${date.getDate()}`
+                }
+            } else if (chartTimeRange === '30d') {
+                if (now.getTime() - date.getTime() < 30 * 24 * 60 * 60 * 1000) {
+                    timeKey = `${date.getMonth() + 1}/${date.getDate()}`
+                }
+            }
+
+            if (timeKey && buckets.has(timeKey)) {
+                const bucket = buckets.get(timeKey)
+
+                // Categorize
+                if (log.type === 'message') {
+                    if (log.direction === 'inbound' || log.message?.startsWith('Received')) {
+                        bucket.received += 1
+                    } else if (log.direction === 'outbound' || log.message?.startsWith('Sent')) {
+                        bucket.auto_reply += 1
+                    }
+                } else if (log.type === 'campaign') {
+                    bucket.campaign += 1
+                } else if (log.type === 'reminder') {
+                    bucket.reminder += 1
+                } else if (log.type === 'rule') {
+                    bucket.auto_reply += 1
+                }
+            }
+        })
+
+        // Output array - reverse for chronological order (oldest to newest)
+        const results = Array.from(buckets.values())
+        return chartTimeRange === '30m' ? results : results.reverse()
+    }, [activityLogs, chartTimeRange])
+
+    // Compute "Live Load" (Messages in last minute)
+    const [rateLimit, setRateLimit] = useState('Unlimited')
+
+    const currentLoad = useMemo(() => {
+        if (!activityLogs.length) return 0
+        const now = new Date().getTime()
+        const oneMinuteAgo = now - 60 * 1000
+
+        // Count messages in last minute
+        const recentCount = activityLogs.filter((log: any) =>
+            (log.type === 'message' || log.type === 'campaign') &&
+            new Date(log.timestamp).getTime() > oneMinuteAgo
+        ).length
+
+        // Calculate usage based on "limit" (Simulated capacity)
+        // If "Unlimited", base it on a theoretical max of 60 msg/min for visualization
+        // If limit is set (e.g. 50 msg/s = 3000 msg/min), use that.
+
+        let maxCapacity = 60 // Default 'visual' capacity per minute
+        if (rateLimit === '50 msg/s') maxCapacity = 3000
+        if (rateLimit === '20 msg/s') maxCapacity = 1200
+
+        return Math.min(100, Math.round((recentCount / maxCapacity) * 100))
+    }, [activityLogs, rateLimit])
 
     // Pause/Resume mutations
     const queryClient = useQueryClient()
@@ -144,7 +273,7 @@ export default function BotDetailPage() {
     const isConnected = bot.status === 'connected'
 
     return (
-        <div className="p-6 md:p-8 animate-fade-in">
+        <div className="p-6 md:p-8 min-h-screen bg-black animate-fade-in">
             {/* Back Button */}
             <Link
                 href="/dashboard/bots"
@@ -267,6 +396,76 @@ export default function BotDetailPage() {
                                 </div>
                                 <div className="text-sm text-zinc-500">
                                     {stats.activeCampaigns} active broadcast{stats.activeCampaigns !== 1 ? 's' : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Traffic Control & Live Activity */}
+                        <div className="mt-8 mb-8 space-y-6">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center gap-2">
+                                    Traffic Control
+                                </h2>
+                            </div>
+
+                            {/* Controls */}
+                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                    <div className="flex-1 space-y-2">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-zinc-400 font-medium">Throttle Status</span>
+                                            <span className={`${currentLoad > 80 ? 'text-red-500' : 'text-emerald-500'} font-mono`}>
+                                                {currentLoad}% Capacity
+                                            </span>
+                                        </div>
+                                        <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-500 ${currentLoad > 80 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                                style={{ width: `${currentLoad}%` }}
+                                            ></div>
+                                        </div>
+                                        <p className="text-xs text-zinc-500">
+                                            {currentLoad > 0
+                                                ? `Currently processing traffic. Load is ${currentLoad > 80 ? 'heavy' : 'stable'}.`
+                                                : 'No active traffic detected. System is idle.'}
+                                        </p>
+                                    </div>
+
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex flex-col gap-1.5 min-w-[200px]">
+                                            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Rate Limit</label>
+                                            <select
+                                                value={rateLimit}
+                                                onChange={(e) => setRateLimit(e.target.value)}
+                                                className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm rounded-lg px-3 py-2 outline-none focus:border-blue-500 transition-all"
+                                            >
+                                                <option value="Unlimited">Unlimited</option>
+                                                <option value="50 msg/s">50 msg/s</option>
+                                                <option value="20 msg/s">20 msg/s</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Charts & Logs Grid */}
+                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                                <div className="xl:col-span-2">
+
+                                    <ActivityChart
+                                        title="Bot Traffic & Load"
+                                        data={chartData}
+                                        timeRange={chartTimeRange}
+                                        onTimeRangeChange={setChartTimeRange}
+                                    />
+                                </div>
+                                <div className="xl:col-span-1">
+                                    <RecentActivityList
+                                        title="Bot Live Logs"
+                                        botId={botId}
+                                        logs={activityLogs}
+                                        className="h-[400px]"
+                                    />
                                 </div>
                             </div>
                         </div>

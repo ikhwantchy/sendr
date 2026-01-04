@@ -13,7 +13,7 @@ import {
 import { format, parseISO } from 'date-fns'
 
 // Types
-type TimeRange = '24h' | '7d' | '30d'
+type TimeRange = '30m' | '24h' | '7d' | '30d'
 
 interface KPICardProps {
     title: string
@@ -111,7 +111,7 @@ export default function AnalyticsDashboard() {
             const date = new Date(tickItem)
             if (isNaN(date.getTime())) return tickItem // Fallback if string is weird
 
-            if (timeRange === '24h') {
+            if (timeRange === '30m' || timeRange === '24h') {
                 return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             } else if (timeRange === '7d') {
                 return date.toLocaleDateString([], { day: 'numeric', month: 'short' })
@@ -138,19 +138,59 @@ export default function AnalyticsDashboard() {
 
                 <div className="flex items-center gap-3">
                     {/* Time Range Filter */}
-                    <div className="bg-zinc-900 p-1 rounded-lg border border-zinc-800/50 flex items-center">
-                        {(['24h', '7d', '30d'] as TimeRange[]).map((range) => (
-                            <button
-                                key={range}
-                                onClick={() => setTimeRange(range)}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${timeRange === range
-                                    ? 'bg-zinc-800 text-white shadow-sm'
-                                    : 'text-zinc-500 hover:text-zinc-300'
-                                    }`}
-                            >
-                                {range.toUpperCase()}
-                            </button>
-                        ))}
+                    {/* Time Range Filter - Dropdown Style */}
+                    <div className="relative">
+                        <button
+                            onClick={() => {
+                                const dropdown = document.getElementById('analytics-time-range-dropdown')
+                                if (dropdown) {
+                                    dropdown.classList.toggle('hidden')
+                                }
+                            }}
+                            onBlur={(e) => {
+                                setTimeout(() => {
+                                    const dropdown = document.getElementById('analytics-time-range-dropdown')
+                                    if (dropdown && !dropdown.contains(e.relatedTarget as Node)) {
+                                        dropdown.classList.add('hidden')
+                                    }
+                                }, 150)
+                            }}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900/80 border border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-100 hover:bg-zinc-800/80 transition-all"
+                        >
+                            <span>
+                                {timeRange === '30m' ? '30M' :
+                                    timeRange === '24h' ? '24H' :
+                                        timeRange === '7d' ? '7D' : '30D'}
+                            </span>
+                            <svg className="w-3 h-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div
+                            id="analytics-time-range-dropdown"
+                            className="hidden absolute top-full right-0 mt-2 w-28 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg overflow-hidden z-20"
+                        >
+                            {[
+                                { label: '30 Minutes', value: '30m' },
+                                { label: '24 Hours', value: '24h' },
+                                { label: '7 Days', value: '7d' },
+                                { label: '30 Days', value: '30d' }
+                            ].map((option) => (
+                                <button
+                                    key={option.value}
+                                    onClick={() => {
+                                        setTimeRange(option.value as TimeRange)
+                                        document.getElementById('analytics-time-range-dropdown')?.classList.add('hidden')
+                                    }}
+                                    className={`w-full px-4 py-2 text-xs text-left transition-colors ${timeRange === option.value
+                                            ? 'bg-zinc-800 text-zinc-100'
+                                            : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+                                        }`}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <button
@@ -222,10 +262,61 @@ export default function AnalyticsDashboard() {
                                 onClick={() => toggleSeries('received')}
                                 hidden={hiddenSeries.includes('received')}
                             />
+
+                            {/* Zoom Buttons */}
+                            <div className="flex items-center gap-1 ml-2">
+                                <button
+                                    onClick={() => {
+                                        const levels: TimeRange[] = ['30m', '24h', '7d', '30d']
+                                        const currentIndex = levels.indexOf(timeRange)
+                                        if (currentIndex > 0) {
+                                            setTimeRange(levels[currentIndex - 1])
+                                        }
+                                    }}
+                                    disabled={timeRange === '30m'}
+                                    className={`p-1.5 rounded-md transition-all ${timeRange !== '30m'
+                                        ? 'bg-zinc-900/80 border border-zinc-800/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80'
+                                        : 'bg-zinc-900/30 border border-zinc-800/30 text-zinc-700 cursor-not-allowed'
+                                        }`}
+                                    title="Zoom In (More Detail)"
+                                >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const levels: TimeRange[] = ['30m', '24h', '7d', '30d']
+                                        const currentIndex = levels.indexOf(timeRange)
+                                        if (currentIndex < levels.length - 1) {
+                                            setTimeRange(levels[currentIndex + 1])
+                                        }
+                                    }}
+                                    disabled={timeRange === '30d'}
+                                    className={`p-1.5 rounded-md transition-all ${timeRange !== '30d'
+                                        ? 'bg-zinc-900/80 border border-zinc-800/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80'
+                                        : 'bg-zinc-900/30 border border-zinc-800/30 text-zinc-700 cursor-not-allowed'
+                                        }`}
+                                    title="Zoom Out (Wider View)"
+                                >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="h-[300px] w-full">
+                    <style jsx global>{`
+                        .no-scrollbar::-webkit-scrollbar {
+                            display: none;
+                        }
+                        .no-scrollbar {
+                            -ms-overflow-style: none;
+                            scrollbar-width: none;
+                        }
+                    `}</style>
+                    <div className="h-[300px] w-full overflow-hidden no-scrollbar">
                         {loading && !data ? (
                             <div className="h-full w-full flex items-center justify-center bg-zinc-900/30 rounded-lg">
                                 <span className="text-zinc-600 text-sm animate-pulse">Loading data...</span>
@@ -313,13 +404,7 @@ export default function AnalyticsDashboard() {
                                         name="Received"
                                         hide={hiddenSeries.includes('received')}
                                     />
-                                    <Brush
-                                        dataKey="date"
-                                        height={30}
-                                        stroke="#52525b"
-                                        fill="#18181b"
-                                        tickFormatter={formatXAxis}
-                                    />
+
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (

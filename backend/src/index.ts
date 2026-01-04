@@ -33,6 +33,7 @@ import analyticsRoutes from './api/routes/analyticsRoutes';
 import usersRoutes from './api/routes/usersRoutes';
 import permissionsRoutes from './api/routes/permissionsRoutes';
 import invitationsRoutes from './api/routes/invitationsRoutes';
+import sheetsRoutes from './api/routes/sheetsRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -83,6 +84,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/permissions', permissionsRoutes);
 app.use('/api/invitations', invitationsRoutes);
+app.use('/api/sheets', sheetsRoutes);
 
 // 404 handler
 app.use((req, res) => {

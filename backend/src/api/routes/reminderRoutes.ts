@@ -168,8 +168,12 @@ router.post('/', async (req, res) => {
             templateConfig, // Changed from messageTemplate
         } = req.body;
 
+        // Debug logging
+        console.log('[Reminder] Create request body:', JSON.stringify(req.body, null, 2));
+
         // Validate required fields
         if (!name || !botId || !targetId || !templateConfig) {
+            console.error('[Reminder] Validation failed:', { name, botId, targetId, templateConfig });
             return res.status(400).json({
                 success: false,
                 error: 'Missing required fields',
@@ -193,6 +197,9 @@ router.post('/', async (req, res) => {
         const reminderId = uuidv4();
         let finalDataSourceId = dataSourceId;
 
+        // TODO: Fix data_sources schema mismatch
+        // For now, Google Sheets config is stored in templateConfig
+        /*
         // Create data source if Google Sheets URL is provided
         if (googleSheetsUrl && !dataSourceId) {
             finalDataSourceId = uuidv4();
@@ -201,6 +208,7 @@ router.post('/', async (req, res) => {
                 VALUES (?, ?, ?, 'google_sheets', ?, '{}', ?, datetime('now'))
             `, [finalDataSourceId, tenantId, `Data Source for ${name}`, googleSheetsUrl, userId]);
         }
+        */
 
         // Create reminder - matching the connection-sqlite schema
         await query(`

@@ -1,6 +1,6 @@
 import { query } from '../../database/connection-sqlite';
 
-type TimeRange = '24h' | '7d' | '30d';
+type TimeRange = '30m' | '24h' | '7d' | '30d';
 
 interface AnalyticsFilter {
     timeRange: TimeRange;
@@ -22,11 +22,17 @@ export class AnalyticsController {
         let groupByFormat = '%Y-%m-%d';
 
         switch (timeRange) {
+            case '30m':
+                startDate.setMinutes(startDate.getMinutes() - 30);
+                prevStartDate.setMinutes(prevStartDate.getMinutes() - 60);
+                prevEndDate.setMinutes(prevEndDate.getMinutes() - 30);
+                groupByFormat = '%Y-%m-%d %H:%M'; // Group by minute
+                break;
             case '24h':
                 startDate.setHours(startDate.getHours() - 24);
                 prevStartDate.setHours(prevStartDate.getHours() - 48);
                 prevEndDate.setHours(prevEndDate.getHours() - 24);
-                groupByFormat = '%Y-%m-%d %H:%M'; // Group by minute for granular zoom
+                groupByFormat = '%Y-%m-%d %H:00'; // Group by hour for 24h view
                 break;
             case '7d':
                 startDate.setDate(startDate.getDate() - 7);
@@ -41,6 +47,9 @@ export class AnalyticsController {
                 groupByFormat = '%Y-%m-%d';
                 break;
         }
+
+        // Debug log
+        console.log(`[Analytics] TimeRange: ${timeRange}, StartDate: ${startDate.toISOString()}, GroupBy: ${groupByFormat}`);
 
         const startIso = startDate.toISOString();
         const prevStartIso = prevStartDate.toISOString();
@@ -88,7 +97,7 @@ export class AnalyticsController {
         const trafficResult = await query(`
             SELECT 
                 strftime(?, datetime(m.created_at, 'localtime')) as date,
-                SUM(CASE WHEN m.source = 'auto_reply' OR (m.direction='outbound' AND m.source IS NULL) THEN 1 ELSE 0 END) as auto_replies,
+                SUM(CASE WHEN (m.source = 'auto_reply' OR m.direction = 'outbound') AND (m.source IS NULL OR m.source NOT IN ('campaign', 'reminder')) THEN 1 ELSE 0 END) as auto_replies,
                 SUM(CASE WHEN m.source = 'campaign' THEN 1 ELSE 0 END) as campaigns,
                 SUM(CASE WHEN m.source = 'reminder' THEN 1 ELSE 0 END) as reminders,
                 SUM(CASE WHEN m.direction = 'inbound' THEN 1 ELSE 0 END) as received
@@ -99,7 +108,47 @@ export class AnalyticsController {
             ORDER BY 1
         `, [groupByFormat, tenantId, startIso]);
 
-        const trafficChart = trafficResult.rows;
+
+        let trafficChart = trafficResult.rows;
+
+        // Generate empty buckets to ensure full time range is displayed
+        const buckets: any[] = [];
+
+        if (timeRange === '30m') {
+            // 30 Minutes: Minute intervals
+            for (let i = 30; i >= 0; i--) {
+                const d = new Date(now.getTime() - i * 60 * 1000);
+                const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                buckets.push({ date: timeStr, auto_replies: 0, campaigns: 0, reminders: 0, received: 0 });
+            }
+        } else if (timeRange === '24h') {
+            // 24 Hours: Hourly intervals (Clean chart style)
+            for (let i = 24; i >= 0; i--) {
+                const d = new Date(now.getTime() - i * 60 * 60 * 1000);
+                const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:00`;
+                buckets.push({ date: timeStr, auto_replies: 0, campaigns: 0, reminders: 0, received: 0 });
+            }
+        } else if (timeRange === '7d' || timeRange === '30d') {
+            // Days: Daily intervals
+            const days = timeRange === '7d' ? 7 : 30;
+            for (let i = days; i >= 0; i--) {
+                const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+                const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                buckets.push({ date: timeStr, auto_replies: 0, campaigns: 0, reminders: 0, received: 0 });
+            }
+        }
+
+        // Merge actual data into buckets
+        if (buckets.length > 0) {
+            const dataMap = new Map(trafficChart.map(row => [row.date, row]));
+            trafficChart = buckets.map(bucket => {
+                const actualData = dataMap.get(bucket.date);
+                return actualData || bucket;
+            });
+        }
+
+        // Debug log
+        console.log(`[Analytics] Traffic data points: ${trafficChart.length}, First: ${trafficChart[0]?.date}, Last: ${trafficChart[trafficChart.length - 1]?.date}`);
 
         // 4. Message Distribution - Real Data Now
         const distributionResult = await query(`

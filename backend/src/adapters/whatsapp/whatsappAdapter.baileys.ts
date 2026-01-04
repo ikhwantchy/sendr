@@ -310,9 +310,10 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                     message_keys: Object.keys(msg.message || {}),
                 });
 
-                // Skip own messages
+                // Handle own messages (manual replies/sends) - Log to DB but don't trigger events
                 if (msg.key.fromMe) {
-                    logger.debug('Skipping own message', { bot_id: botId });
+                    logger.debug('Logging own outbound message', { bot_id: botId });
+                    await this.handleOutboundLog(msg, bot);
                     continue;
                 }
 
@@ -321,6 +322,46 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
         });
 
         logger.info('Event handlers registered successfully', { bot_id: botId });
+    }
+
+    /**
+     * Handle Logger for Outbound (Manual) Messages
+     */
+    private async handleOutboundLog(msg: WAMessage, bot: any): Promise<void> {
+        try {
+            const messageContent =
+                msg.message?.conversation ||
+                msg.message?.extendedTextMessage?.text ||
+                msg.message?.imageMessage?.caption ||
+                '';
+
+            if (!messageContent) return;
+
+            // Use current time for safety
+            const timestamp = new Date().toISOString();
+
+            logger.info('📝 Logging manual outbound message', {
+                bot_id: bot.id,
+                content: messageContent,
+                timestamp
+            });
+
+            // NOTE: source MUST be 'auto_reply' because SQLite CHECK constraint restricts values.
+            await query(`
+                INSERT INTO messages (
+                    id, bot_id, wa_message_id, direction, source,
+                    message_type, content, created_at
+                ) VALUES (?, ?, ?, 'outbound', 'auto_reply', 'text', ?, ?)
+            `, [
+                uuidv4(),
+                bot.id,
+                msg.key.id || `manual_${Date.now()}`,
+                messageContent,
+                timestamp
+            ]);
+        } catch (error) {
+            logger.error('❌ Failed to log outbound manual message', { error });
+        }
     }
 
     /**

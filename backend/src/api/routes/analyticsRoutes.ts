@@ -69,12 +69,12 @@ router.get('/dashboard-stats', async (req, res) => {
 });
 
 // Activity Logs
-// Activity Logs
 router.get('/activity-logs', async (req, res) => {
     try {
         const userId = (req as any).user.id;
         const limit = parseInt(req.query.limit as string) || 50;
         const timeRange = (req.query.timeRange as string) || '24h';
+        const botId = req.query.botId as string; // Optional botId filter
         const activities: any[] = [];
 
         // Helper for date filtering
@@ -83,8 +83,13 @@ router.get('/activity-logs', async (req, res) => {
             let modifier = '-1 day';
             if (timeRange === '7d') modifier = '-7 days';
             if (timeRange === '30d') modifier = '-30 days';
-            // Robust comparison: normalize column to datetime
             return `AND datetime(${col}) >= datetime('now', '${modifier}')`;
+        };
+
+        // Helper for bot filtering
+        const getBotFilter = (tableAlias: string) => {
+            if (!botId) return '';
+            return `AND ${tableAlias}.id = '${botId}'`; // Assuming botId is safe (UUID)
         };
 
         // 1. Campaigns
@@ -92,7 +97,7 @@ router.get('/activity-logs', async (req, res) => {
             const campaigns = await query(`
                 SELECT c.id, c.name, c.status, c.created_at, c.updated_at, b.name as bot_name
                 FROM campaigns c JOIN bots b ON c.bot_id = b.id
-                WHERE b.created_by = ? ${getDateFilter('c.updated_at')}
+                WHERE b.created_by = ? ${getDateFilter('c.updated_at')} ${getBotFilter('b')}
                 ORDER BY c.updated_at DESC LIMIT ?
             `, [userId, limit]);
 
@@ -112,12 +117,11 @@ router.get('/activity-logs', async (req, res) => {
         try {
             const bots = await query(`
                 SELECT id, name, status, updated_at FROM bots 
-                WHERE created_by = ? ${getDateFilter('updated_at')}
+                WHERE created_by = ? ${getDateFilter('updated_at')} ${getBotFilter('bots')}
                 ORDER BY updated_at DESC LIMIT ?
             `, [userId, limit]);
 
             bots.rows.forEach(b => {
-                // Show status for all states, not just connected
                 let statusText = b.status;
                 if (b.status === 'connected') statusText = 'connected';
                 else if (b.status === 'paused') statusText = 'paused';
@@ -138,7 +142,7 @@ router.get('/activity-logs', async (req, res) => {
             const rules = await query(`
                 SELECT r.id, r.keyword, r.created_at, b.name as bot_name 
                 FROM keyword_rules r JOIN bots b ON r.bot_id = b.id
-                WHERE b.created_by = ? ${getDateFilter('r.created_at')}
+                WHERE b.created_by = ? ${getDateFilter('r.created_at')} ${getBotFilter('b')}
                 ORDER BY r.created_at DESC LIMIT ?
             `, [userId, limit]);
 
@@ -152,46 +156,51 @@ router.get('/activity-logs', async (req, res) => {
             });
         } catch (e) { }
 
-        // 4. Messages (Outbound)
+        // 4. Messages (Inbound & Outbound)
         try {
             const msgs = await query(`
-                SELECT m.id, m.content, m.created_at, m.source, b.name as bot_name
+                SELECT m.id, m.content, m.created_at, m.source, m.direction, b.name as bot_name
                 FROM messages m JOIN bots b ON m.bot_id = b.id
-                WHERE b.created_by = ? AND m.direction = 'outbound' ${getDateFilter('m.created_at')}
+                WHERE b.created_by = ? ${getDateFilter('m.created_at')} ${getBotFilter('b')}
                 ORDER BY m.created_at DESC LIMIT ?
             `, [userId, limit]);
 
             msgs.rows.forEach(m => {
                 let type = 'message';
                 if (m.source === 'reminder') type = 'reminder';
+                if (m.source === 'campaign') type = 'campaign'; // Though campaigns are usually tracked in their own table, individual msgs also helpful
 
                 activities.push({
                     id: `msg-${m.id}`,
                     type: type,
-                    message: `Sent: ${m.content?.substring(0, 30)}...`,
+                    direction: m.direction, // Pass direction to frontend
+                    message: `${m.direction === 'inbound' ? 'Received' : 'Sent'}: ${m.content?.substring(0, 30)}...`,
                     timestamp: m.created_at
                 });
             });
         } catch (e) { }
 
-        // 5. System Activity Logs (Persistent History)
-        try {
-            // Note: Currently fetches all system logs. In production, filter by tenant_id.
-            const logs = await query(`
-                SELECT id, type, message, created_at FROM activity_logs
-                WHERE 1=1 ${getDateFilter('created_at')}
-                ORDER BY created_at DESC LIMIT ?
-            `, [limit]);
+        // 5. System Activity Logs (Persistent History) - ONLY if no botId is specified, or fetch specific?
+        // Usually system logs are global. If filtering by bot, maybe skip or filter message content?
+        // For now, let's skip system logs if filtering by bot to keep it clean.
+        if (!botId) {
+            try {
+                const logs = await query(`
+                    SELECT id, type, message, created_at FROM activity_logs
+                    WHERE 1=1 ${getDateFilter('created_at')}
+                    ORDER BY created_at DESC LIMIT ?
+                `, [limit]);
 
-            logs.rows.forEach(l => {
-                activities.push({
-                    id: `sys-${l.id}`,
-                    type: l.type,
-                    message: l.message,
-                    timestamp: l.created_at
+                logs.rows.forEach(l => {
+                    activities.push({
+                        id: `sys-${l.id}`,
+                        type: l.type,
+                        message: l.message,
+                        timestamp: l.created_at
+                    });
                 });
-            });
-        } catch (e) { }
+            } catch (e) { }
+        }
 
         activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         res.json({ success: true, data: activities.slice(0, limit) });

@@ -92,7 +92,11 @@ export const api = {
         get: () => apiClient.get('/analytics'),
         getFull: (timeRange: '24h' | '7d' | '30d') => apiClient.get(`/analytics/full?timeRange=${timeRange}`),
         getDashboardStats: () => apiClient.get('/analytics/dashboard-stats'),
-        getActivityLogs: (limit: number = 8) => apiClient.get(`/analytics/activity-logs?limit=${limit}`),
+        getActivityLogs: (limit: number = 8, botId?: string) => {
+            let url = `/analytics/activity-logs?limit=${limit}`;
+            if (botId) url += `&botId=${botId}`;
+            return apiClient.get(url);
+        },
         getSystemStatus: () => apiClient.get('/analytics/system-status'),
     },
 
