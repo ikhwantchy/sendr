@@ -142,8 +142,7 @@ ssh user@your-server-ip
     ```
 
 ## 🌐 Step 5: Nginx Configuration (Reverse Proxy)
-
-Since `Cucii.my.id` is already running, we will add a new server block for the bot. You can use a subdomain like `wa.cucii.my.id` or `bot.cucii.my.id`.
+*Use this method if you have a domain (e.g., `bot.yoursite.com`) and want to run this app alongside existing apps on Port 80/443.*
 
 1.  **Create Nginx Config**:
     ```bash
@@ -151,12 +150,12 @@ Since `Cucii.my.id` is already running, we will add a new server block for the b
     ```
 
 2.  **Paste Configuration**:
-    Replace `wa.cucii.my.id` with your desired domain.
+    Replace `wa.yourdomain.com` with your actual domain/subdomain.
 
     ```nginx
     server {
         listen 80;
-        server_name wa.cucii.my.id;
+        server_name wa.yourdomain.com; # CHANGE THIS
 
         # Frontend (Next.js)
         location / {
@@ -200,10 +199,29 @@ Since `Cucii.my.id` is already running, we will add a new server block for the b
     ```
 
 5.  **SSL Setup (HTTPS)** (Optional but Recommended):
-    Use Certbot:
     ```bash
-    sudo certbot --nginx -d wa.cucii.my.id
+    sudo certbot --nginx -d wa.yourdomain.com
     ```
+
+## 🚪 Alternative: Direct Port Access (No Domain)
+*Use this method if you don't have a domain yet or just want to test using the Server IP.*
+
+1.  **Open Ports in AWS Security Group**:
+    - Go to AWS Console > EC2 > Security Groups.
+    - Edit Inbound Rules for your instance.
+    - Add Custom TCP Rule for Port **3000** (Frontend) and **3001** (Backend).
+    - Source: `0.0.0.0/0` (Anywhere).
+
+2.  **Update Frontend Environment**:
+    Edit `frontend/.env.local` to point to the IP address:
+    ```env
+    NEXT_PUBLIC_API_URL=http://YOUR_SERVER_IP:3001/api
+    ```
+    *Rebuild frontend after changing this (`npm run build`).*
+
+3.  **Access App**:
+    - Frontend: `http://YOUR_SERVER_IP:3000`
+    - Backend: `http://YOUR_SERVER_IP:3001`
 
 ## ✅ Done!
 Your application should now be accessible at `http://wa.cucii.my.id`.
