@@ -375,17 +375,20 @@ export default function ActivityHistoryPage() {
                             </div>
 
                             {/* Message Content */}
-                            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-4">
-                                <p
-                                    className="text-sm text-zinc-300 leading-relaxed"
+                            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-4 w-full">
+                                <div
+                                    className="text-sm text-zinc-300 leading-relaxed w-full"
                                     style={{
-                                        whiteSpace: 'pre-wrap',
+                                        whiteSpace: 'normal',
+                                        wordWrap: 'break-word',
                                         wordBreak: 'break-word',
-                                        overflowWrap: 'anywhere'
+                                        overflowWrap: 'break-word',
+                                        maxWidth: 'none',
+                                        width: '100%'
                                     }}
                                 >
                                     {selectedLog.message}
-                                </p>
+                                </div>
                             </div>
 
                             {/* Timestamp */}
