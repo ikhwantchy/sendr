@@ -9,7 +9,11 @@ export const metadata: Metadata = {
     title: 'BroBot',
     description: 'Multi-tenant WhatsApp automation and bot management platform',
     icons: {
-        icon: '/brobot-logo.png',
+        icon: [
+            { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
+            { url: '/favicon.png', sizes: '16x16', type: 'image/png' },
+        ],
+        apple: '/favicon.png',
     },
 }
 
