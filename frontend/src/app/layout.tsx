@@ -10,10 +10,13 @@ export const metadata: Metadata = {
     description: 'Multi-tenant WhatsApp automation and bot management platform',
     icons: {
         icon: [
+            { url: '/favicon.png', sizes: '128x128', type: 'image/png' },
+            { url: '/favicon.png', sizes: '64x64', type: 'image/png' },
             { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
             { url: '/favicon.png', sizes: '16x16', type: 'image/png' },
         ],
-        apple: '/favicon.png',
+        apple: { url: '/favicon.png', sizes: '180x180' },
+        shortcut: '/favicon.png',
     },
 }
 
