@@ -6,8 +6,11 @@ import { Providers } from '@/components/providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-    title: 'BroBot - WhatsApp Automation',
+    title: 'BroBot',
     description: 'Multi-tenant WhatsApp automation and bot management platform',
+    icons: {
+        icon: '/brobot-logo.png',
+    },
 }
 
 export default function RootLayout({
