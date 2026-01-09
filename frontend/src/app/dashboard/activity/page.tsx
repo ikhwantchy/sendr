@@ -106,7 +106,7 @@ export default function ActivityHistoryPage() {
     const renderMessage = (msg: string) => {
         const parts = msg.split(' ')
         return (
-            <span className="text-sm text-zinc-200">
+            <span className="text-sm text-zinc-200 break-words inline-block">
                 {parts.map((part, i) => {
                     const lower = part.toLowerCase()
                     let className = ''
@@ -283,11 +283,11 @@ export default function ActivityHistoryPage() {
 
 
                                         {/* Content */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
+                                        <div className="flex-1">
+                                            <div className="flex items-start gap-2 flex-wrap">
                                                 {renderMessage(log.message)}
                                                 {relTime && (
-                                                    <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-1.5 rounded-sm font-medium">
+                                                    <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-1.5 rounded-sm font-medium flex-shrink-0">
                                                         {relTime}
                                                     </span>
                                                 )}
