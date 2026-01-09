@@ -1,8 +1,8 @@
-# 🚀 Auto-Deployment Setup Guide
+# 🚀 Manual Deployment Setup Guide
 
-## Cara Setup Auto-Deploy ke AWS
+## Cara Setup Manual Deploy ke AWS
 
-Setelah setup ini, **setiap kali kamu push ke GitHub, aplikasi otomatis update di server AWS!**
+Setelah setup ini, **kamu bisa deploy ke server AWS kapan aja dengan 1 klik di GitHub!**
 
 ---
 
@@ -66,19 +66,21 @@ chmod 600 ~/.ssh/authorized_keys
 
 ---
 
-## 📋 Step 3: Test Auto-Deploy
+## 📋 Step 3: Test Manual Deploy
 
 1. **Push perubahan ke GitHub**:
    ```bash
    git add .
-   git commit -m "Test auto-deploy"
+   git commit -m "Test manual deploy"
    git push origin main
    ```
 
-2. **Monitor deployment**:
+2. **Trigger deployment manual**:
    - Buka GitHub repository
    - Klik tab **Actions**
-   - Lihat workflow "Auto Deploy to AWS" berjalan
+   - Klik workflow **"Deploy to AWS"** (di sidebar kiri)
+   - Klik tombol **"Run workflow"** (kanan atas)
+   - Klik **"Run workflow"** hijau
    - Tunggu sampai selesai (✅ hijau = sukses, ❌ merah = error)
 
 3. **Cek preview**:
@@ -89,26 +91,32 @@ chmod 600 ~/.ssh/authorized_keys
 
 ## 🎯 Workflow Harian Kamu:
 
+### 1. Coding & Testing di Local
 ```bash
-# 1. Coding di local
 # Edit file, tambah fitur, dll
-
-# 2. Test di localhost (opsional)
+# Test di localhost
 npm run dev
-
-# 3. Commit & Push
-git add .
-git commit -m "Deskripsi update"
-git push origin main
-
-# 4. DONE! ✅
-# GitHub Actions otomatis:
-# - Pull code ke server
-# - Install dependencies
-# - Build backend & frontend
-# - Restart PM2
-# Preview langsung tersedia di IP server dalam 1-2 menit!
 ```
+
+### 2. Push ke GitHub (Tidak Auto-Deploy)
+```bash
+git add .
+git commit -m "Update feature X"
+git push origin main
+```
+
+### 3. Deploy Manual (Kapan Kamu Mau)
+1. **Buka GitHub repository**: https://github.com/ikhwantchy/BroBot
+2. **Klik tab Actions**
+3. **Klik workflow "Deploy to AWS"** (di sidebar kiri)
+4. **Klik tombol "Run workflow"** (kanan atas)
+5. **(Opsional)** Isi reason: "Deploy feature X"
+6. **Klik "Run workflow"** hijau
+7. **Tunggu 1-2 menit** sampai selesai ✅
+
+### 4. Preview Tersedia!
+- Buka: `http://YOUR_SERVER_IP:3000`
+- Perubahan kamu sudah live! 🎉
 
 ---
 
@@ -160,8 +168,10 @@ git push origin main
 
 Sekarang kamu bisa:
 - ✅ Coding di local
-- ✅ Push ke GitHub
+- ✅ Test di localhost
+- ✅ Push ke GitHub (tidak auto-deploy)
+- ✅ Deploy kapan aja dengan 1 klik di GitHub
 - ✅ Preview langsung di server AWS
-- ✅ Tidak perlu manual SSH & deploy lagi!
+- ✅ Kontrol penuh kapan mau deploy!
 
 **Happy coding! 🚀**

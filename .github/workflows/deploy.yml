@@ -1,15 +1,24 @@
-name: Auto Deploy to AWS
+name: Deploy to AWS
 
 on:
-  push:
-    branches:
-      - main  # Trigger saat push ke branch main
+  workflow_dispatch:  # Manual trigger only
+    inputs:
+      reason:
+        description: 'Reason for deployment'
+        required: false
+        default: 'Manual deployment'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Log Deployment Info
+        run: |
+          echo "🚀 Deploying to AWS Server"
+          echo "📝 Reason: ${{ github.event.inputs.reason }}"
+          echo "👤 Triggered by: ${{ github.actor }}"
+          
       - name: Deploy to AWS Server
         uses: appleboy/ssh-action@v1.0.0
         with:
