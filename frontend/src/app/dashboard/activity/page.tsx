@@ -19,6 +19,7 @@ export default function ActivityHistoryPage() {
     const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h')
     const [searchQuery, setSearchQuery] = useState('')
     const [currentPage, setCurrentPage] = useState(1)
+    const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null)
     const itemsPerPage = 25
 
     useEffect(() => {
@@ -105,7 +106,7 @@ export default function ActivityHistoryPage() {
     const renderMessage = (msg: string) => {
         const parts = msg.split(' ')
         return (
-            <span className="text-sm text-zinc-200 truncate">
+            <span className="text-sm text-zinc-200">
                 {parts.map((part, i) => {
                     const lower = part.toLowerCase()
                     let className = ''
@@ -269,7 +270,11 @@ export default function ActivityHistoryPage() {
                                 const relTime = getRelativeTime(log.timestamp)
 
                                 return (
-                                    <div key={log.id} className="group flex items-center gap-4 px-6 py-3.5 hover:bg-zinc-900/50 transition-colors">
+                                    <div
+                                        key={log.id}
+                                        onClick={() => setSelectedLog(log)}
+                                        className="group flex items-center gap-4 px-6 py-3.5 hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                                    >
                                         {/* Icon */}
                                         <div className={`flex-shrink-0 p-2 rounded-lg ${getColorBg(log)}`}>
                                             {getIcon(log)}
@@ -334,6 +339,68 @@ export default function ActivityHistoryPage() {
                             >
                                 <ChevronRight className="w-4 h-4" />
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal for Full Message */}
+                {selectedLog && (
+                    <div
+                        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+                        onClick={() => setSelectedLog(null)}
+                    >
+                        <div
+                            className="bg-[#0e0e11] border border-zinc-800 rounded-xl max-w-2xl w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Header */}
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2.5 rounded-lg ${getColorBg(selectedLog)}`}>
+                                        {getIcon(selectedLog)}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-white">Log Details</h3>
+                                        <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mt-0.5">
+                                            {selectedLog.type}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setSelectedLog(null)}
+                                    className="text-zinc-500 hover:text-white transition-colors"
+                                >
+                                    <XCircle className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Message Content */}
+                            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-4">
+                                <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
+                                    {selectedLog.message}
+                                </p>
+                            </div>
+
+                            {/* Timestamp */}
+                            <div className="flex items-center gap-2 text-xs text-zinc-500">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span className="font-mono">{formatTimestamp(selectedLog.timestamp)}</span>
+                                {getRelativeTime(selectedLog.timestamp) && (
+                                    <span className="text-emerald-500">
+                                        ({getRelativeTime(selectedLog.timestamp)})
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Close Button */}
+                            <div className="mt-6 flex justify-end">
+                                <button
+                                    onClick={() => setSelectedLog(null)}
+                                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-sm rounded-lg transition-colors"
+                                >
+                                    Close
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
