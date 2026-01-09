@@ -1,0 +1,40 @@
+name: Auto Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main  # Trigger saat push ke branch main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Deploy to AWS Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USERNAME }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            cd ~/brobot
+            
+            # Pull latest changes
+            git pull origin main
+            
+            # Update Backend
+            cd backend
+            npm install
+            npm run build
+            pm2 restart brobot-backend
+            
+            # Update Frontend
+            cd ../frontend
+            npm install
+            npm run build
+            pm2 restart brobot-frontend
+            
+            # Show status
+            pm2 status
+            
+            echo "✅ Deployment completed successfully!"

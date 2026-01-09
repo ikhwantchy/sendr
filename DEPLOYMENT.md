@@ -226,21 +226,156 @@ ssh user@your-server-ip
 ## ✅ Done!
 Your application should now be accessible at `http://wa.cucii.my.id`.
 
-### 🔄 Updating in Future
-To update the app with new changes:
+---
+
+## 🔄 Auto-Deployment Setup
+
+### Method 1: GitHub Actions (Recommended)
+**Otomatis deploy setiap kali push ke GitHub!**
+
+#### Setup GitHub Secrets:
+1. Go to your GitHub repository
+2. Navigate to: **Settings** → **Secrets and variables** → **Actions**
+3. Click **New repository secret** and add these:
+
+| Secret Name | Value | Description |
+|-------------|-------|-------------|
+| `AWS_HOST` | Your server IP address | e.g., `13.123.45.67` |
+| `AWS_USERNAME` | SSH username | Usually `ubuntu` or `ec2-user` |
+| `AWS_SSH_KEY` | Your private SSH key | Full content of your `.pem` file |
+
+#### Setup SSH Key on Server:
 ```bash
+# On your local machine, copy your public key
+cat ~/.ssh/id_rsa.pub
+
+# On AWS server, add it to authorized_keys
+ssh user@your-server-ip
+mkdir -p ~/.ssh
+nano ~/.ssh/authorized_keys
+# Paste your public key, save and exit
+
+# Set permissions
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+```
+
+#### How it Works:
+- ✅ Push code to GitHub → Auto-deploy triggered
+- ✅ Server pulls latest changes
+- ✅ Installs dependencies
+- ✅ Builds backend & frontend
+- ✅ Restarts PM2 processes
+- ✅ Preview langsung tersedia di IP server!
+
+**Workflow file sudah dibuat di:** `.github/workflows/deploy.yml`
+
+---
+
+### Method 2: Manual Deploy Script
+**Untuk deploy manual dari server**
+
+1. **Upload script ke server:**
+   ```bash
+   # From local machine
+   scp deploy.sh user@your-server-ip:~/brobot/
+   ```
+
+2. **Make it executable:**
+   ```bash
+   # On server
+   ssh user@your-server-ip
+   cd ~/brobot
+   chmod +x deploy.sh
+   ```
+
+3. **Run deployment:**
+   ```bash
+   ./deploy.sh
+   ```
+
+---
+
+### 🎯 Workflow Setelah Setup:
+
+#### Dari Local (Development):
+```bash
+# 1. Buat perubahan di code
+# 2. Test di localhost jika perlu
+# 3. Commit & Push
+git add .
+git commit -m "Update feature X"
+git push origin main
+
+# 4. GitHub Actions otomatis deploy ke server
+# 5. Tunggu 1-2 menit
+# 6. Preview langsung di: http://YOUR_SERVER_IP:3000
+```
+
+#### Manual Update (Tanpa GitHub Actions):
+```bash
+# SSH ke server
+ssh user@your-server-ip
+
+# Run deploy script
 cd ~/brobot
+./deploy.sh
+```
+
+---
+
+### 📝 Monitoring Deployment:
+
+**Check GitHub Actions:**
+- Go to: Repository → **Actions** tab
+- See deployment progress in real-time
+
+**Check Server Status:**
+```bash
+# SSH to server
+ssh user@your-server-ip
+
+# Check PM2 status
+pm2 status
+
+# Check logs
+pm2 logs brobot-backend --lines 50
+pm2 logs brobot-frontend --lines 50
+
+# Restart if needed
+pm2 restart all
+```
+
+---
+
+### 🔧 Troubleshooting:
+
+**Deployment Failed?**
+```bash
+# Check GitHub Actions logs in Actions tab
+
+# Or manually check on server:
+ssh user@your-server-ip
+cd ~/brobot
+git status
 git pull origin main
+pm2 status
+```
 
-# Update Backend
-cd backend
+**Port not accessible?**
+- Check AWS Security Group (Ports 3000, 3001 must be open)
+- Check Nginx configuration if using reverse proxy
+
+**Build errors?**
+```bash
+# Clear cache and rebuild
+cd ~/brobot/backend
+rm -rf node_modules dist
 npm install
 npm run build
-pm2 restart brobot-backend
 
-# Update Frontend
-cd ../frontend
+cd ~/brobot/frontend
+rm -rf node_modules .next
 npm install
 npm run build
-pm2 restart brobot-frontend
 ```
