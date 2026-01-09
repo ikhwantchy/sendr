@@ -376,7 +376,14 @@ export default function ActivityHistoryPage() {
 
                             {/* Message Content */}
                             <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-4">
-                                <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
+                                <p
+                                    className="text-sm text-zinc-300 leading-relaxed"
+                                    style={{
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        overflowWrap: 'anywhere'
+                                    }}
+                                >
                                     {selectedLog.message}
                                 </p>
                             </div>
