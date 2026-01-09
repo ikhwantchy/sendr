@@ -350,7 +350,7 @@ export default function ActivityHistoryPage() {
                         onClick={() => setSelectedLog(null)}
                     >
                         <div
-                            className="bg-[#0e0e11] border border-zinc-800 rounded-xl max-w-2xl w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200"
+                            className="bg-[#0e0e11] border border-zinc-800 rounded-xl max-w-4xl w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 overflow-visible"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {/* Header */}
@@ -375,16 +375,22 @@ export default function ActivityHistoryPage() {
                             </div>
 
                             {/* Message Content */}
-                            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-4 w-full">
+                            <div
+                                className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-4"
+                                style={{ overflow: 'visible', width: '100%' }}
+                            >
                                 <div
-                                    className="text-sm text-zinc-300 leading-relaxed w-full"
+                                    className="text-sm text-zinc-300 leading-relaxed"
                                     style={{
-                                        whiteSpace: 'normal',
+                                        whiteSpace: 'pre-wrap',
                                         wordWrap: 'break-word',
                                         wordBreak: 'break-word',
                                         overflowWrap: 'break-word',
+                                        overflow: 'visible',
+                                        textOverflow: 'clip',
                                         maxWidth: 'none',
-                                        width: '100%'
+                                        width: '100%',
+                                        display: 'block'
                                     }}
                                 >
                                     {selectedLog.message}
