@@ -346,15 +346,34 @@ export default function ActivityHistoryPage() {
                 {/* Modal for Full Message */}
                 {selectedLog && (
                     <div
-                        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            background: 'rgba(0, 0, 0, 0.8)',
+                            backdropFilter: 'blur(4px)',
+                            zIndex: 50,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '1rem'
+                        }}
                         onClick={() => setSelectedLog(null)}
                     >
                         <div
-                            className="bg-[#0e0e11] border border-zinc-800 rounded-xl max-w-4xl w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 overflow-visible"
+                            style={{
+                                background: '#0e0e11',
+                                border: '1px solid rgb(39, 39, 42)',
+                                borderRadius: '0.75rem',
+                                maxWidth: '56rem',
+                                width: '100%',
+                                padding: '1.5rem',
+                                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                                overflow: 'visible'
+                            }}
                             onClick={(e) => e.stopPropagation()}
                         >
                             {/* Header */}
-                            <div className="flex items-start justify-between mb-4">
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
                                 <div className="flex items-center gap-3">
                                     <div className={`p-2.5 rounded-lg ${getColorBg(selectedLog)}`}>
                                         {getIcon(selectedLog)}
