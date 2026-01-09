@@ -376,12 +376,21 @@ export default function ActivityHistoryPage() {
 
                             {/* Message Content */}
                             <div
-                                className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-4"
-                                style={{ overflow: 'visible', width: '100%' }}
+                                style={{
+                                    background: 'rgba(39, 39, 42, 0.5)',
+                                    border: '1px solid rgba(63, 63, 70, 1)',
+                                    borderRadius: '0.5rem',
+                                    padding: '1rem',
+                                    marginBottom: '1rem',
+                                    overflow: 'visible',
+                                    width: '100%'
+                                }}
                             >
                                 <div
-                                    className="text-sm text-zinc-300 leading-relaxed"
                                     style={{
+                                        fontSize: '0.875rem',
+                                        color: 'rgb(212, 212, 216)',
+                                        lineHeight: '1.625',
                                         whiteSpace: 'pre-wrap',
                                         wordWrap: 'break-word',
                                         wordBreak: 'break-word',
