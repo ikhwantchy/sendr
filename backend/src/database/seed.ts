@@ -10,7 +10,8 @@ async function seed() {
 
     try {
         // 1. Ensure Default Tenant Exists
-        const defaultTenantId = 'default-tenant-id';
+        // Use a fixed valid UUID for default tenant to avoid constraint errors
+        const defaultTenantId = '11111111-1111-1111-1111-111111111111';
         const tenantCheck = await query('SELECT * FROM tenants WHERE id = $1', [defaultTenantId]);
 
         if (tenantCheck.rows.length === 0) {
