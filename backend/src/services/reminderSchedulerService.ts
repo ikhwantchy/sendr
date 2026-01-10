@@ -1,12 +1,5 @@
 import cron from 'node-cron';
-// Handle cron-parser import issues for different environments
-let cronParser: any;
-try {
-    const cp = require('cron-parser');
-    cronParser = cp.default || cp;
-} catch (e) {
-    cronParser = require('cron-parser');
-}
+import cronParser from 'cron-parser';
 import { query } from '../database/connection-sqlite';
 import googleSheetsService from './googleSheetsService';
 import templateEngineService from './templateEngineService';
