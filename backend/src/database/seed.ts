@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { query } from './connection';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,7 +17,7 @@ async function seed() {
             const hashedPassword = await bcrypt.hash('admin123', 10);
 
             await query(`
-                INSERT INTO users (id, email, password, name, role, created_at, updated_at)
+                INSERT INTO users (id, email, password_hash, name, role, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
             `, [uuidv4(), 'admin@example.com', hashedPassword, 'Admin User', 'admin']);
 
