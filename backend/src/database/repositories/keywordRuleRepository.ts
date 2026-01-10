@@ -67,7 +67,7 @@ class KeywordRuleRepository {
     async findByBot(tenantId: string, botId: string): Promise<KeywordRule[]> {
         const result = await query(
             `SELECT * FROM keyword_rules 
-       WHERE tenant_id = ? AND bot_id = ? AND is_active = true
+       WHERE tenant_id = ? AND bot_id = ?
        ORDER BY priority DESC, created_at ASC`,
             [tenantId, botId]
         );
