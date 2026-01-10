@@ -5,8 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import RichTextEditor from '@/components/editors/RichTextEditor'
-import WhatsAppPreview from '@/components/previews/WhatsAppPreview'
-import { X, Zap, ChevronRight, Image as ImageIcon, Trash2 } from 'lucide-react'
+import { X, Image as ImageIcon, Trash2, MessageSquare } from 'lucide-react'
 
 interface EditRuleModalProps {
     botId: string
@@ -53,7 +52,7 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
             setFormData({ ...formData, media: file })
             const url = URL.createObjectURL(file)
             setPreviewUrl(url)
-            setExistingMediaUrl(null) // Clear existing media when new file is selected
+            setExistingMediaUrl(null)
         }
     }
 
@@ -74,9 +73,8 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
 
     const updateMutation = useMutation({
         mutationFn: async (data: any) => {
-            let mediaUrl = existingMediaUrl; // Keep existing media by default
+            let mediaUrl = existingMediaUrl;
 
-            // If new media is uploaded, convert to base64
             if (data.media) {
                 mediaUrl = await fileToBase64(data.media);
             }
@@ -127,30 +125,40 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
 
     const displayMediaUrl = previewUrl || existingMediaUrl
 
+    const SectionHeader = ({ title, desc }: { title: string, desc: string }) => (
+        <div className="mb-6">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                {title}
+            </h3>
+            <p className="text-sm text-zinc-500">{desc}</p>
+        </div>
+    )
+
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-            <div className="bg-[#0e0e11] border border-zinc-800 rounded-xl w-full max-w-5xl h-[600px] shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 lg:p-10 animate-in fade-in duration-200">
+            <div className="w-full max-w-7xl h-full max-h-[85vh] bg-[#09090b] rounded-2xl shadow-2xl border border-zinc-800 flex overflow-hidden ring-1 ring-white/10">
 
-                {/* Header (Mobile only) */}
-                <div className="md:hidden px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-white">Edit Rule</h2>
-                    <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+                {/* Left Panel: Form (60%) */}
+                <div className="w-[60%] flex flex-col h-full border-r border-zinc-800 relative bg-[#09090b]">
+                    {/* Header */}
+                    <div className="h-16 flex items-center justify-between px-8 border-b border-zinc-800 shrink-0 bg-[#09090b] z-20">
+                        <h1 className="text-xl font-bold text-white tracking-tight">Edit Auto-Reply</h1>
+                        <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
+                            <X size={20} />
+                        </button>
+                    </div>
 
-                {/* Left Column: Form */}
-                <div className="flex-1 flex flex-col h-full bg-[#0e0e11]">
-                    <div className="p-6 md:p-8 flex-1 overflow-y-auto">
-                        <div className="mb-8 hidden md:block">
-                            <h2 className="text-xl font-bold text-white tracking-tight">Edit Auto-Reply</h2>
-                            <p className="text-zinc-500 text-sm mt-1">Update how the bot responds to this trigger.</p>
-                        </div>
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
 
-                        <div className="space-y-6">
-                            {/* Trigger Input */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                        {/* 1. Trigger Setup */}
+                        <section className="mb-10 pb-8 border-b border-zinc-800/50">
+                            <SectionHeader
+                                title="Trigger Setup"
+                                desc="Update the keyword that activates this auto-reply."
+                            />
+                            <div className="space-y-4">
+                                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
                                     Keyword Trigger <span className="text-red-500">*</span>
                                 </label>
                                 <input
@@ -158,18 +166,24 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
                                     value={formData.trigger}
                                     onChange={(e) => setFormData({ ...formData, trigger: e.target.value })}
                                     placeholder="e.g. price, hello, help"
-                                    className="w-full bg-zinc-900/50 border border-zinc-800 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-zinc-700 placeholder:text-zinc-700 font-mono transition-shadow shadow-sm"
+                                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:ring-1 focus:ring-blue-600 outline-none transition-all font-mono"
                                     autoFocus
                                 />
                                 <p className="text-xs text-zinc-600">
-                                    Triggered when message contains this exact keyword.
+                                    Triggered when message contains this keyword.
                                 </p>
                             </div>
+                        </section>
 
-                            {/* Response Input */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                                    Response Message <span className="text-red-500">*</span>
+                        {/* 2. Response Message */}
+                        <section className="mb-10 pb-8 border-b border-zinc-800/50">
+                            <SectionHeader
+                                title="Response Message"
+                                desc="Update the automated reply that will be sent."
+                            />
+                            <div className="space-y-4">
+                                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                                    Reply Text <span className="text-red-500">*</span>
                                 </label>
                                 <RichTextEditor
                                     value={formData.reply}
@@ -178,26 +192,21 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
                                     maxLength={2000}
                                 />
                             </div>
+                        </section>
 
-                            {/* Media Attachment */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider flex justify-between">
-                                    <span>Attachment (Optional)</span>
-                                    {(formData.media || existingMediaUrl) && (
-                                        <button
-                                            onClick={removeImage}
-                                            className="text-red-400 hover:text-red-300 flex items-center gap-1 text-[10px]"
-                                            type="button"
-                                        >
-                                            <Trash2 className="w-3 h-3" /> Remove
-                                        </button>
-                                    )}
-                                </label>
+                        {/* 3. Media Attachment */}
+                        <section className="mb-10 pb-8 border-b border-zinc-800/50">
+                            <SectionHeader
+                                title="Media Attachment"
+                                desc="Update or remove the image attachment."
+                            />
+                            <div className="space-y-4">
                                 {!formData.media && !existingMediaUrl ? (
                                     <div className="relative group">
-                                        <div className="border border-zinc-800 border-dashed rounded-lg p-4 bg-zinc-900/30 hover:bg-zinc-900/50 transition-colors flex flex-col items-center justify-center gap-2 cursor-pointer">
-                                            <ImageIcon className="w-5 h-5 text-zinc-500 group-hover:text-zinc-400" />
-                                            <span className="text-xs text-zinc-500">Click to upload image</span>
+                                        <div className="border border-zinc-800 border-dashed rounded-lg p-6 bg-zinc-900/30 hover:bg-zinc-900/50 transition-colors flex flex-col items-center justify-center gap-2 cursor-pointer">
+                                            <ImageIcon className="w-6 h-6 text-zinc-500 group-hover:text-zinc-400" />
+                                            <span className="text-sm text-zinc-500">Click to upload image</span>
+                                            <span className="text-xs text-zinc-600">PNG, JPG up to 5MB</span>
                                         </div>
                                         <input
                                             type="file"
@@ -207,23 +216,36 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
                                         />
                                     </div>
                                 ) : (
-                                    <div className="border border-zinc-800 rounded-lg p-2 bg-zinc-900 flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded bg-zinc-800 overflow-hidden relative">
+                                    <div className="border border-zinc-800 rounded-lg p-3 bg-zinc-900 flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded bg-zinc-800 overflow-hidden relative">
                                             {displayMediaUrl && <img src={displayMediaUrl} alt="Preview" className="w-full h-full object-cover" />}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-xs text-zinc-300 truncate font-medium">
+                                            <p className="text-sm text-zinc-300 truncate font-medium">
                                                 {formData.media?.name || 'Existing image'}
                                             </p>
-                                            <p className="text-[10px] text-zinc-500">
+                                            <p className="text-xs text-zinc-500">
                                                 {formData.media ? `${(formData.media.size / 1024).toFixed(1)} KB` : 'From server'}
                                             </p>
                                         </div>
+                                        <button
+                                            onClick={removeImage}
+                                            className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                                            type="button"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 )}
                             </div>
+                        </section>
 
-                            {/* Active Toggle */}
+                        {/* 4. Rule Status */}
+                        <section className="mb-6">
+                            <SectionHeader
+                                title="Rule Status"
+                                desc="Enable or disable this auto-reply rule."
+                            />
                             <div className="flex items-center gap-3 pt-2">
                                 <button
                                     type="button"
@@ -240,39 +262,35 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
                                     {formData.is_active ? 'Rule is Active' : 'Rule is Paused'}
                                 </span>
                             </div>
-                        </div>
+                        </section>
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="px-6 md:px-8 py-4 border-t border-zinc-800 flex justify-between items-center bg-[#0e0e11]">
+                    <div className="px-8 py-4 border-t border-zinc-800 flex justify-end items-center bg-[#09090b] gap-3">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="text-sm font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
+                            className="px-4 py-2.5 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             onClick={handleSubmit}
                             disabled={updateMutation.isPending}
-                            className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20"
                         >
-                            {updateMutation.isPending ? (
-                                <span className="animate-pulse">Saving...</span>
-                            ) : (
-                                <>
-                                    Update Rule
-                                    <ChevronRight className="w-4 h-4" />
-                                </>
-                            )}
+                            {updateMutation.isPending ? 'Updating...' : 'Update Reminder'}
                         </button>
                     </div>
                 </div>
 
-                {/* Right Column: Preview */}
-                <div className="hidden md:flex w-[400px] bg-zinc-950 border-l border-zinc-800 relative flex-col">
-                    <div className="p-4 border-b border-zinc-900 bg-zinc-950">
-                        <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Live Preview</h3>
+                {/* Right Panel: Preview (40%) */}
+                <div className="w-[40%] bg-zinc-950 flex flex-col">
+                    <div className="p-6 border-b border-zinc-900 bg-zinc-950">
+                        <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                            <MessageSquare size={16} />
+                            Live Preview
+                        </h3>
                     </div>
                     <div className="flex-1 p-6 flex flex-col items-center justify-center bg-[url('/whatsapp-bg-dark.png')] bg-cover bg-center opacity-80 backdrop-blur-sm grayscale-[0.8]">
                         {/* Mock Phone Frame */}
