@@ -10,16 +10,25 @@ async function seed() {
 
     try {
         // 1. Ensure Default Tenant Exists
-        // Use a fixed valid UUID for default tenant to avoid constraint errors
-        const defaultTenantId = '11111111-1111-1111-1111-111111111111';
-        const tenantCheck = await query('SELECT * FROM tenants WHERE id = $1', [defaultTenantId]);
+        let tenantId = '11111111-1111-1111-1111-111111111111';
 
-        if (tenantCheck.rows.length === 0) {
-            console.log('Creating default tenant...');
-            await query(`
-                INSERT INTO tenants (id, name, slug, created_at, updated_at)
-                VALUES ($1, $2, $3, NOW(), NOW())
-             `, [defaultTenantId, 'Default Tenant', 'default']);
+        // Check by slug first (to avoid unique constraint error)
+        const slugCheck = await query('SELECT * FROM tenants WHERE slug = $1', ['default']);
+
+        if (slugCheck.rows.length > 0) {
+            console.log('ℹ️ Default tenant found (by slug)');
+            tenantId = slugCheck.rows[0].id;
+        } else {
+            // Check by ID just in case
+            const idCheck = await query('SELECT * FROM tenants WHERE id = $1', [tenantId]);
+
+            if (idCheck.rows.length === 0) {
+                console.log('Creating default tenant...');
+                await query(`
+                    INSERT INTO tenants (id, name, slug, created_at, updated_at)
+                    VALUES ($1, $2, $3, NOW(), NOW())
+                 `, [tenantId, 'Default Tenant', 'default']);
+            }
         }
 
         // 2. Check if admin exists
@@ -32,7 +41,7 @@ async function seed() {
             await query(`
                 INSERT INTO users (id, tenant_id, email, password_hash, name, role, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-            `, [uuidv4(), defaultTenantId, 'admin@example.com', hashedPassword, 'Admin User', 'OWNER']);
+            `, [uuidv4(), tenantId, 'admin@example.com', hashedPassword, 'Admin User', 'OWNER']);
 
             console.log('✅ Admin user created');
         } else {
