@@ -596,7 +596,8 @@ export default function BotDetailPage() {
                                     return (
                                         <div
                                             key={rule.id}
-                                            className="group flex items-center gap-4 px-4 py-4 hover:bg-zinc-800/50 transition-colors"
+                                            className={`group flex items-center gap-4 px-4 py-4 hover:bg-zinc-800/50 transition-colors ${!isActive ? 'opacity-50' : ''
+                                                }`}
                                         >
                                             {/* Icon Container */}
                                             <div className="w-8 h-8 rounded bg-zinc-900/50 flex items-center justify-center flex-shrink-0">
@@ -615,6 +616,12 @@ export default function BotDetailPage() {
                                                     <span className="px-2 py-0.5 bg-zinc-900/50 border border-zinc-800/50 rounded text-xs text-zinc-500 font-mono">
                                                         {rule.match_type || 'contains'}
                                                     </span>
+                                                    {/* Inactive Badge */}
+                                                    {!isActive && (
+                                                        <span className="px-2 py-0.5 bg-zinc-800/50 border border-zinc-700/50 rounded text-xs text-zinc-600 font-medium">
+                                                            Inactive
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="flex items-center gap-3 text-xs">
                                                     <span className="text-zinc-500 truncate max-w-[300px]">
