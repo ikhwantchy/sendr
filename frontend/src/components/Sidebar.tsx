@@ -90,45 +90,27 @@ export default function Sidebar() {
     const SidebarContent = () => (
         <>
             {/* Logo */}
-            <div className={`flex items-center px-4 py-6 border-b border-zinc-800/50 ${isExpanded ? 'justify-between' : 'justify-center flex-col gap-3'
-                }`}>
-                {isExpanded ? (
-                    <>
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
-                                <img src="/brobot-logo.png" alt="BroBot" className="w-10 h-10 object-contain" />
-                            </div>
-                            <div className="min-w-0">
-                                <h1 className="text-zinc-100 font-semibold text-sm tracking-tight truncate">BroBot</h1>
-                                <p className="text-zinc-600 text-xs truncate">Automation Platform</p>
-                            </div>
+            <div className="flex items-center justify-between px-4 py-6 border-b border-zinc-800/50">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
+                        <img src="/brobot-logo.png" alt="BroBot" className="w-10 h-10 object-contain" />
+                    </div>
+                    {isExpanded && (
+                        <div className="min-w-0">
+                            <h1 className="text-zinc-100 font-semibold text-sm tracking-tight truncate">BroBot</h1>
+                            <p className="text-zinc-600 text-xs truncate">Automation Platform</p>
                         </div>
+                    )}
+                </div>
 
-                        {/* Desktop Toggle - Expanded */}
-                        <button
-                            onClick={toggleSidebar}
-                            className="hidden md:flex items-center justify-center w-6 h-6 rounded-md hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-100 transition-colors"
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        {/* Logo Only */}
-                        <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
-                            <img src="/brobot-logo.png" alt="BroBot" className="w-10 h-10 object-contain" />
-                        </div>
-
-                        {/* Desktop Toggle - Collapsed */}
-                        <button
-                            onClick={toggleSidebar}
-                            className="hidden md:flex items-center justify-center w-8 h-8 rounded-md bg-zinc-800/50 hover:bg-zinc-700/50 text-zinc-400 hover:text-zinc-100 transition-colors"
-                            title="Expand sidebar"
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </button>
-                    </>
-                )}
+                {/* Desktop Toggle - Always in top right */}
+                <button
+                    onClick={toggleSidebar}
+                    className="hidden md:flex items-center justify-center w-6 h-6 rounded-md hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-100 transition-colors flex-shrink-0"
+                    title={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                >
+                    {isExpanded ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
 
                 {/* Mobile Close */}
                 <button
