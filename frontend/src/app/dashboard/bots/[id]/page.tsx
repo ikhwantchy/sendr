@@ -7,6 +7,7 @@ import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import CreateRuleModal from '@/components/modals/CreateRuleModal'
+import EditRuleModal from '@/components/modals/EditRuleModal'
 import CreateCampaignModal from '@/components/modals/CreateCampaignModal'
 import CampaignsTable from '@/components/tables/CampaignsTable'
 import ActivityChart from '@/components/ActivityChart'
@@ -31,6 +32,8 @@ export default function BotDetailPage() {
 
     // Modal states
     const [showCreateRuleModal, setShowCreateRuleModal] = useState(false)
+    const [showEditRuleModal, setShowEditRuleModal] = useState(false)
+    const [selectedRule, setSelectedRule] = useState<any>(null)
     const [showCreateCampaignModal, setShowCreateCampaignModal] = useState(false)
 
     // Fetch bot details
@@ -668,8 +671,8 @@ export default function BotDetailPage() {
                                             {/* Edit Button */}
                                             <button
                                                 onClick={() => {
-                                                    // Navigate to edit or open modal
-                                                    toast.info('Edit functionality coming soon')
+                                                    setSelectedRule(rule)
+                                                    setShowEditRuleModal(true)
                                                 }}
                                                 className="w-8 h-8 rounded-lg bg-zinc-900/50 hover:bg-zinc-800/50 flex items-center justify-center transition-colors flex-shrink-0"
                                             >
@@ -921,6 +924,17 @@ export default function BotDetailPage() {
                 <CreateRuleModal
                     botId={botId}
                     onClose={() => setShowCreateRuleModal(false)}
+                />
+            )}
+
+            {showEditRuleModal && selectedRule && (
+                <EditRuleModal
+                    botId={botId}
+                    rule={selectedRule}
+                    onClose={() => {
+                        setShowEditRuleModal(false)
+                        setSelectedRule(null)
+                    }}
                 />
             )}
 
