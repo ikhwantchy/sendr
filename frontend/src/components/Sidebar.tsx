@@ -31,9 +31,24 @@ export default function Sidebar() {
             setUser(JSON.parse(userData))
         }
 
+        // Load sidebar state from localStorage
+        const savedState = localStorage.getItem('sidebarExpanded')
+        if (savedState !== null) {
+            setIsExpanded(savedState === 'true')
+        }
+
         // Close mobile menu on route change
         setIsMobileOpen(false)
     }, [pathname])
+
+    const toggleSidebar = () => {
+        const newState = !isExpanded
+        setIsExpanded(newState)
+        // Save to localStorage
+        localStorage.setItem('sidebarExpanded', String(newState))
+        // Dispatch custom event to notify layout
+        window.dispatchEvent(new Event('sidebarToggle'))
+    }
 
     const handleLogout = () => {
         localStorage.removeItem('token')
@@ -90,7 +105,7 @@ export default function Sidebar() {
 
                 {/* Desktop Toggle */}
                 <button
-                    onClick={() => setIsExpanded(!isExpanded)}
+                    onClick={toggleSidebar}
                     className="hidden md:flex items-center justify-center w-6 h-6 rounded-md hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-100 transition-colors"
                 >
                     {isExpanded ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
