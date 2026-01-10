@@ -138,56 +138,50 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
     const parseWhatsAppFormatting = (text: string) => {
         if (!text) return null
 
-        const parts: React.ReactNode[] = []
-        let lastIndex = 0
+        // Split by newlines to preserve them
+        const lines = text.split('\n')
 
-        // Regex patterns for WhatsApp formatting
-        const patterns = [
-            { regex: /\*([^*]+)\*/g, tag: 'strong' },      // *bold*
-            { regex: /_([^_]+)_/g, tag: 'em' },            // _italic_
-            { regex: /~([^~]+)~/g, tag: 'del' },           // ~strikethrough~
-            { regex: /```([^`]+)```/g, tag: 'code' },      // ```monospace```
-        ]
+        return lines.map((line, lineIndex) => {
+            const parts: React.ReactNode[] = []
+            let remaining = line
+            let keyCounter = 0
 
-        // Combine all matches
-        const allMatches: Array<{ index: number, length: number, text: string, tag: string }> = []
+            // Process formatting in order
+            while (remaining.length > 0) {
+                let matched = false
 
-        patterns.forEach(({ regex, tag }) => {
-            let match
-            const re = new RegExp(regex)
-            while ((match = re.exec(text)) !== null) {
-                allMatches.push({
-                    index: match.index,
-                    length: match[0].length,
-                    text: match[1],
-                    tag
-                })
+                // Try each pattern
+                const patterns = [
+                    { regex: /^\*([^*\n]+)\*/, tag: 'strong' },      // *bold*
+                    { regex: /^_([^_\n]+)_/, tag: 'em' },            // _italic_
+                    { regex: /^~([^~\n]+)~/, tag: 'del' },           // ~strikethrough~
+                    { regex: /^```([^`\n]+)```/, tag: 'code' },      // ```monospace```
+                ]
+
+                for (const { regex, tag } of patterns) {
+                    const match = remaining.match(regex)
+                    if (match) {
+                        const Tag = tag as keyof JSX.IntrinsicElements
+                        parts.push(<Tag key={`${lineIndex}-${keyCounter++}`}>{match[1]}</Tag>)
+                        remaining = remaining.slice(match[0].length)
+                        matched = true
+                        break
+                    }
+                }
+
+                // If no pattern matched, take one character
+                if (!matched) {
+                    parts.push(remaining[0])
+                    remaining = remaining.slice(1)
+                }
             }
-        })
 
-        // Sort by index
-        allMatches.sort((a, b) => a.index - b.index)
-
-        // Build formatted output
-        allMatches.forEach((match, i) => {
-            // Add text before this match
-            if (match.index > lastIndex) {
-                parts.push(text.substring(lastIndex, match.index))
+            // Add line break except for last line
+            if (lineIndex < lines.length - 1) {
+                return <span key={lineIndex}>{parts}<br /></span>
             }
-
-            // Add formatted text
-            const Tag = match.tag as keyof JSX.IntrinsicElements
-            parts.push(<Tag key={i}>{match.text}</Tag>)
-
-            lastIndex = match.index + match.length
+            return <span key={lineIndex}>{parts}</span>
         })
-
-        // Add remaining text
-        if (lastIndex < text.length) {
-            parts.push(text.substring(lastIndex))
-        }
-
-        return parts.length > 0 ? parts : text
     }
 
     return (
