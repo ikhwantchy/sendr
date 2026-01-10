@@ -1,5 +1,7 @@
 import cron from 'node-cron';
-import cronParser from 'cron-parser';
+// Robust require for cron-parser
+const cronParser = require('cron-parser');
+const parseExpression = cronParser.parseExpression || cronParser.default?.parseExpression || cronParser;
 import { query } from '../database/connection-sqlite';
 import googleSheetsService from './googleSheetsService';
 import templateEngineService from './templateEngineService';
@@ -72,7 +74,7 @@ class ReminderSchedulerService {
 
             // Calculate next run at
             try {
-                const interval = cronParser.parseExpression(reminder.schedule, {
+                const interval = parseExpression(reminder.schedule, {
                     tz: reminder.timezone || 'Asia/Jakarta'
                 });
                 const nextRunAt = interval.next().toISOString();

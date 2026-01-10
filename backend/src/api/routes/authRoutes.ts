@@ -4,7 +4,7 @@
 
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { query } from '../../database/connection-sqlite';
+import { query } from '../../database/connection'; // Use wrapper
 import { generateToken } from '../middleware/auth';
 import { logger } from '../../utils/logger';
 
@@ -14,6 +14,7 @@ const router = Router();
  * POST /api/auth/login
  */
 router.post('/login', async (req, res) => {
+    logger.info('Login attempt', { email: req.body.email }); // Safe log without password
     try {
         const { email, password } = req.body;
 
@@ -50,7 +51,7 @@ router.post('/login', async (req, res) => {
         // Normal database authentication
         try {
             const result = await query(
-                "SELECT * FROM users WHERE email = ? AND status = 'active'",
+                "SELECT * FROM users WHERE email = $1 AND status = 'active'",
                 [email]
             );
 
@@ -72,7 +73,7 @@ router.post('/login', async (req, res) => {
                 });
             }
 
-            await query("UPDATE users SET last_login_at = datetime('now') WHERE id = ?", [user.id]);
+            await query("UPDATE users SET last_login_at = datetime('now') WHERE id = $1", [user.id]);
 
             const token = generateToken({
                 id: user.id,
