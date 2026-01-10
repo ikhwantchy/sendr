@@ -285,51 +285,72 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
                 </div>
 
                 {/* Right Panel: Preview (40%) */}
-                <div className="w-[40%] bg-zinc-950 flex flex-col">
-                    <div className="p-6 border-b border-zinc-900 bg-zinc-950">
-                        <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-                            <MessageSquare size={16} />
-                            Live Preview
-                        </h3>
+                <div className="w-[40%] bg-[#0b141a] relative flex flex-col h-full border-l border-zinc-800">
+                    {/* Header */}
+                    <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10">
+                        <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center overflow-hidden">
+                            <img src="/brobot-logo.png" alt="BroBot" className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-[#e9edef] text-sm font-medium truncate">BroBot Assistant</div>
+                            <div className="text-[#8696a0] text-xs">Business Account</div>
+                        </div>
+                        <div className="text-xs text-[#8696a0] uppercase tracking-wider font-semibold">LIVE PREVIEW</div>
                     </div>
-                    <div className="flex-1 p-6 flex flex-col items-center justify-center bg-[url('/whatsapp-bg-dark.png')] bg-cover bg-center opacity-80 backdrop-blur-sm grayscale-[0.8]">
-                        {/* Mock Phone Frame */}
-                        <div className="w-[300px] bg-[#0b141a] rounded-3xl border-[3px] border-zinc-800 shadow-2xl overflow-hidden flex flex-col h-[500px]">
-                            {/* WA Header */}
-                            <div className="h-14 bg-[#202c33] flex items-center px-4 gap-3 border-b border-zinc-800">
-                                <div className="w-8 h-8 rounded-full bg-zinc-600" />
-                                <div className="flex-1">
-                                    <div className="h-2 w-20 bg-zinc-700 rounded mb-1" />
-                                    <div className="h-1.5 w-12 bg-zinc-800 rounded" />
-                                </div>
+
+                    {/* Chat Area */}
+                    <div className="flex-1 relative flex flex-col min-h-0">
+                        {/* Background Pattern */}
+                        <div className="absolute inset-0 bg-[url('https://static.whatsapp.net/rsrc.php/v3/yl/r/gi_DckOUM5a.png')] bg-repeat opacity-[0.06] pointer-events-none mix-blend-overlay"></div>
+
+                        {/* Messages */}
+                        <div className="relative z-10 flex-1 p-6 flex flex-col justify-end gap-3 overflow-y-auto">
+                            {/* Date Badge */}
+                            <div className="flex justify-center mb-4">
+                                <span className="bg-[#182229] text-[#8696a0] text-xs px-3 py-1.5 rounded-lg shadow-sm font-medium">TODAY</span>
                             </div>
 
-                            {/* Chat Area */}
-                            <div className="flex-1 p-4 space-y-4 overflow-hidden relative">
-                                {/* Trigger Msg */}
-                                <div className="flex justify-end">
-                                    <div className="bg-[#005c4b] text-white text-xs p-2 rounded-lg rounded-tr-none max-w-[80%] shadow-sm">
-                                        {formData.trigger || '...'}
-                                        <div className="text-[9px] text-white/50 text-right mt-1">10:00</div>
+                            {/* User Message (Trigger) */}
+                            <div className="self-end max-w-[85%] relative group animate-in slide-in-from-right-2">
+                                <div className="bg-[#005c4b] p-3 rounded-lg rounded-tr-none shadow text-white text-sm relative">
+                                    <div className="whitespace-pre-wrap leading-relaxed">
+                                        {formData.trigger || <span className="text-white/50 italic">Type keyword...</span>}
                                     </div>
+                                    <div className="text-[10px] text-white/50 text-right mt-1">10:00</div>
                                 </div>
+                                <div className="absolute top-0 -right-2 w-0 h-0 border-t-[10px] border-t-[#005c4b] border-r-[10px] border-r-transparent"></div>
+                            </div>
 
-                                {/* Reply Msg */}
-                                <div className="flex justify-start">
-                                    <div className="bg-[#202c33] text-zinc-100 text-xs p-2 rounded-lg rounded-tl-none max-w-[80%] shadow-sm">
-                                        {/* Image Preview in Message */}
-                                        {displayMediaUrl && (
-                                            <div className="mb-2 rounded overflow-hidden">
-                                                <img src={displayMediaUrl} alt="Sent Media" className="w-full h-auto object-cover max-h-40" />
-                                            </div>
-                                        )}
-                                        {formData.reply || '...'}
-                                        <div className="text-[9px] text-zinc-500 text-right mt-1 flex items-center justify-end gap-1">
-                                            10:00
+                            {/* Bot Reply */}
+                            <div className="self-start max-w-[85%] relative group animate-in slide-in-from-left-2">
+                                <div className="bg-[#202c33] p-1 rounded-lg rounded-tl-none shadow border border-white/5 text-[#e9edef] text-sm relative">
+                                    {/* Image Preview */}
+                                    {displayMediaUrl && (
+                                        <div className="mb-1 rounded-lg overflow-hidden">
+                                            <img src={displayMediaUrl} alt="Attached" className="w-full h-auto object-cover max-h-60" />
                                         </div>
+                                    )}
+
+                                    <div className="px-2 pt-1 pb-6 whitespace-pre-wrap leading-relaxed">
+                                        {formData.reply || <span className="text-white/30 italic">Type reply message...</span>}
                                     </div>
+                                    <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">10:00</div>
                                 </div>
+                                <div className="absolute top-0 -left-2 w-0 h-0 border-t-[10px] border-t-[#202c33] border-l-[10px] border-l-transparent transform scale-x-[-1]"></div>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Input Field */}
+                    <div className="h-[62px] bg-[#202c33] px-3 flex items-center gap-3 shrink-0 border-t border-[#2a3942] mt-auto relative z-20">
+                        <svg className="w-6 h-6 text-[#8696a0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <div className="flex-1 bg-[#2a3942] rounded-lg h-9 px-3 flex items-center text-[#8696a0] text-sm">Type a message</div>
+                        <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                            </svg>
                         </div>
                     </div>
                 </div>
