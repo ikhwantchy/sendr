@@ -145,6 +145,13 @@ export default function LoginPage() {
                         Sign up
                     </Link>
                 </p>
+
+                {/* Default Credentials Hint (Dev only) */}
+                <div className="mt-8 flex items-center justify-center gap-4 text-xs text-zinc-600 font-mono opacity-50 hover:opacity-100 transition-opacity">
+                    <span>admin@example.com</span>
+                    <span>•</span>
+                    <span>admin123</span>
+                </div>
             </div>
         </div>
     )
