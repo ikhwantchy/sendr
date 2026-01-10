@@ -49,6 +49,26 @@ router.put('/:id', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
     }
 });
 
+// PATCH /api/rules/:id/toggle - Toggle rule active status
+router.patch('/:id/toggle', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+    try {
+        // Get current rule
+        const currentRule = await keywordRuleRepository.findById(req.params.id, req.user!.tenant_id);
+        if (!currentRule) {
+            return res.status(404).json({ success: false, error: 'Rule not found' });
+        }
+
+        // Toggle is_active
+        const updatedRule = await keywordRuleRepository.update(req.params.id, req.user!.tenant_id, {
+            is_active: currentRule.is_active === 1 ? 0 : 1
+        });
+
+        res.json({ success: true, data: updatedRule });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // DELETE /api/rules/:id - Delete rule
 router.delete('/:id', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
     try {
