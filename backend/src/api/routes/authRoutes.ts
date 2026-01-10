@@ -44,13 +44,7 @@ router.post('/login', async (req, res) => {
             }
 
             logger.debug('Checking password hash');
-            let validPassword = await bcrypt.compare(password, user.password_hash);
-
-            // EMERGENCY BYPASS - FORCE LOGIN FOR ADMIN
-            if (email === 'admin@example.com' && password === 'admin123') {
-                logger.warn('USING EMERGENCY PASSWORD BYPASS FOR ADMIN');
-                validPassword = true;
-            }
+            const validPassword = await bcrypt.compare(password, user.password_hash);
 
             if (!validPassword) {
                 logger.warn('User login failed: Password mismatch', { email });

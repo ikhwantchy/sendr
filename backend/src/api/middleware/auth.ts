@@ -7,7 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { logger } from '../../utils/logger';
 
-const getJwtSecret = () => 'FIXED_SECRET_KEY_FOR_DEBUGGING_12345'; // Hardcoded for stability
+const getJwtSecret = () => process.env.JWT_SECRET || 'your-secret-key';
 
 export interface AuthUser {
     id: string;
