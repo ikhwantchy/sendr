@@ -7,7 +7,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { logger } from './utils/logger';
-import { pool, closePool } from './database/connection';
+import { query, closePool } from './database/connection';
 
 // Load environment variables
 dotenv.config();
@@ -59,7 +59,7 @@ app.use((req, res, next) => {
 // Health check
 app.get('/health', async (req, res) => {
     try {
-        await pool.query('SELECT 1');
+        await query('SELECT 1');
         res.json({
             status: 'healthy',
             timestamp: new Date().toISOString(),
