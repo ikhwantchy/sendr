@@ -3,7 +3,7 @@
  * Handles user invitation and acceptance
  */
 
-const { query } = require('../database/connection-sqlite');
+const { query } = require('../database/connection');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
@@ -17,7 +17,7 @@ const validateToken = async (req, res) => {
 
         const result = await query(
             `SELECT * FROM user_invitations 
-             WHERE token = ? AND status = 'pending' AND expires_at > datetime('now')`,
+             WHERE token = ? AND status = 'pending' AND expires_at > CURRENT_TIMESTAMP`,
             [token]
         );
 
@@ -65,7 +65,7 @@ const acceptInvitation = async (req, res) => {
         // Get invitation
         const invitationResult = await query(
             `SELECT * FROM user_invitations 
-             WHERE token = ? AND status = 'pending' AND expires_at > datetime('now')`,
+             WHERE token = ? AND status = 'pending' AND expires_at > CURRENT_TIMESTAMP`,
             [token]
         );
 
@@ -98,14 +98,14 @@ const acceptInvitation = async (req, res) => {
         const userId = crypto.randomUUID();
         await query(
             `INSERT INTO users (id, tenant_id, email, name, password_hash, role, status, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
+             VALUES (?, ?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
             [userId, 'default-tenant', invitation.email, name, passwordHash, invitation.role]
         );
 
         // Mark invitation as accepted
         await query(
             `UPDATE user_invitations 
-             SET status = 'accepted', accepted_at = datetime('now') 
+             SET status = 'accepted', accepted_at = CURRENT_TIMESTAMP 
              WHERE id = ?`,
             [invitation.id]
         );

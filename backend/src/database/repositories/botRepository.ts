@@ -3,7 +3,7 @@
  * Database operations for bots table
  */
 
-import { query } from '../connection-sqlite';
+import { query } from '../connection';
 
 export interface Bot {
     id: string;

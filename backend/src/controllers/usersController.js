@@ -3,7 +3,7 @@
  * Handles user management operations (owner only)
  */
 
-const { query } = require('../database/connection-sqlite');
+const { query } = require('../database/connection');
 const crypto = require('crypto');
 
 /**
@@ -180,7 +180,7 @@ const updateUser = async (req, res) => {
       UPDATE users 
       SET name = COALESCE(?, name),
           role = COALESCE(?, role),
-          updated_at = datetime('now')
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
       RETURNING id, email, name, role, created_at, updated_at
     `, [name, role, id]);

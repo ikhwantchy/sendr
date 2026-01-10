@@ -1,19 +1,37 @@
 'use client'
 
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import RichTextEditor from '@/components/editors/RichTextEditor'
-import { X, Image as ImageIcon, Trash2, MessageSquare, Zap } from 'lucide-react'
+import { X, Image as ImageIcon, Trash2, MessageSquare, Zap, Globe, Users, User, Plus, Search, ArrowRight, Upload, Save } from 'lucide-react'
 
 interface CreateRuleModalProps {
-    botId: string
+    botId?: string // Optional
+    bots?: any[] // List of bots for selection
     onClose: () => void
 }
 
-export default function CreateRuleModal({ botId, onClose }: CreateRuleModalProps) {
+interface Group {
+    id?: string
+    jid: string
+    name: string
+    participant_count?: number
+}
+
+export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModalProps) {
     const queryClient = useQueryClient()
+
+    // State for universal usage
+    const [selectedBotId, setSelectedBotId] = useState<string>(botId || '')
+
+    // Update selectedBotId if prop changes
+    useEffect(() => {
+        if (botId) setSelectedBotId(botId)
+    }, [botId])
+
+    // Core Form State
     const [formData, setFormData] = useState({
         trigger: '',
         reply: '',
@@ -21,7 +39,34 @@ export default function CreateRuleModal({ botId, onClose }: CreateRuleModalProps
         is_active: true,
         media: null as File | null
     })
+
+    // Target Audience State
+    const [targetType, setTargetType] = useState<'global' | 'group' | 'contact'>('global')
+    const [selectedGroups, setSelectedGroups] = useState<string[]>([])
+    const [specificContacts, setSpecificContacts] = useState('')
+    const [isGroupSelectorOpen, setIsGroupSelectorOpen] = useState(false)
+
+    // Global Config State (Everyone)
+    const [globalConfig, setGlobalConfig] = useState({ private: true, group: true })
+
+    // UI Helper State
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+    // Fetch Groups for Selector (depend on selectedBotId)
+    const { data: groupsData } = useQuery({
+        queryKey: ['groups', selectedBotId],
+        queryFn: async () => {
+            if (!selectedBotId) return []
+            try {
+                const res = await api.bots.getGroups(selectedBotId)
+                return res.data.data as Group[] || []
+            } catch (e) {
+                console.error('Failed to fetch groups', e)
+                return []
+            }
+        },
+        enabled: targetType === 'group' && !!selectedBotId
+    })
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -48,19 +93,35 @@ export default function CreateRuleModal({ botId, onClose }: CreateRuleModalProps
 
     const createMutation = useMutation({
         mutationFn: async (data: any) => {
+            if (!selectedBotId) throw new Error('Please select a bot')
+
             let mediaUrl = null;
             if (data.media) {
                 mediaUrl = await fileToBase64(data.media);
             }
 
+            // Determine Scope Target Logic
+            let scope = targetType
+            let scopeTarget = null
+
+            if (targetType === 'group') {
+                if (selectedGroups.length === 0) throw new Error('Please select at least one group')
+                scopeTarget = selectedGroups.join(',')
+            } else if (targetType === 'contact') {
+                if (!specificContacts.trim()) throw new Error('Please enter at least one contact number')
+                scopeTarget = specificContacts.trim()
+            } else {
+                scope = 'global'
+            }
+
             const backendData = {
-                bot_id: botId,
+                bot_id: selectedBotId,
                 name: `Auto-reply: ${data.trigger}`,
                 keyword: data.trigger,
-                match_type: 'contains',
-                scope: 'global',
-                scope_target: null,
-                priority: 10,
+                match_type: data.match_type,
+                scope: scope,
+                scope_target: scopeTarget,
+                priority: 10, // Default priority
                 actions: [{
                     type: mediaUrl ? 'SEND_IMAGE' : 'SEND_TEXT',
                     config: {
@@ -69,21 +130,23 @@ export default function CreateRuleModal({ botId, onClose }: CreateRuleModalProps
                         variables: {}
                     }
                 }],
-                metadata: {},
+                metadata: {
+                    reply_in_private: globalConfig.private,
+                    reply_in_group: globalConfig.group
+                },
                 is_active: data.is_active ? 1 : 0
             }
 
             return await api.rules.create(backendData)
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['rules', botId] })
+            queryClient.invalidateQueries({ queryKey: ['rules', selectedBotId] })
+            queryClient.invalidateQueries({ queryKey: ['rules'] })
             toast.success('Rule created successfully!')
             onClose()
         },
         onError: (error: any) => {
-            const errorMessage = error.response?.data?.message ||
-                error.response?.data?.error ||
-                'Failed to create rule'
+            const errorMessage = error.message || error.response?.data?.message || 'Failed to create rule'
             toast.error(errorMessage)
         },
     })
@@ -91,7 +154,7 @@ export default function CreateRuleModal({ botId, onClose }: CreateRuleModalProps
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
         if (!formData.trigger || !formData.reply) {
-            toast.error('Please fill all required fields')
+            toast.error('Trigger and Reply message are required')
             return
         }
         createMutation.mutate(formData)
@@ -106,273 +169,385 @@ export default function CreateRuleModal({ botId, onClose }: CreateRuleModalProps
         </div>
     )
 
-    // Parse WhatsApp formatting for preview
-    const parseWhatsAppFormatting = (text: string) => {
-        if (!text) return null
-
-        // Split by newlines to preserve them
-        const lines = text.split('\n')
-
-        return lines.map((line, lineIndex) => {
-            const parts: React.ReactNode[] = []
-            let remaining = line
-            let keyCounter = 0
-
-            // Process formatting in order
-            while (remaining.length > 0) {
-                let matched = false
-
-                // Try each pattern
-                const patterns = [
-                    { regex: /^\*([^*\n]+)\*/, tag: 'strong' },      // *bold*
-                    { regex: /^_([^_\n]+)_/, tag: 'em' },            // _italic_
-                    { regex: /^~([^~\n]+)~/, tag: 'del' },           // ~strikethrough~
-                    { regex: /^```([^`\n]+)```/, tag: 'code' },      // ```monospace```
-                ]
-
-                for (const { regex, tag } of patterns) {
-                    const match = remaining.match(regex)
-                    if (match) {
-                        const Tag = tag as keyof JSX.IntrinsicElements
-                        parts.push(<Tag key={`${lineIndex}-${keyCounter++}`}>{match[1]}</Tag>)
-                        remaining = remaining.slice(match[0].length)
-                        matched = true
-                        break
-                    }
-                }
-
-                // If no pattern matched, take one character
-                if (!matched) {
-                    parts.push(remaining[0])
-                    remaining = remaining.slice(1)
-                }
-            }
-
-            // Add line break except for last line
-            if (lineIndex < lines.length - 1) {
-                return <span key={lineIndex}>{parts}<br /></span>
-            }
-            return <span key={lineIndex}>{parts}</span>
-        })
+    // Derived Preview Logic
+    const getPreviewBotName = () => {
+        if (!selectedBotId || !bots) return 'BroBot Assistant'
+        const bot = bots.find(b => b.id === selectedBotId)
+        return bot ? bot.name : 'BroBot Assistant'
     }
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 lg:p-10 animate-in fade-in duration-200">
             <div className="w-full max-w-7xl h-full max-h-[85vh] bg-[#09090b] rounded-2xl shadow-2xl border border-zinc-800 flex overflow-hidden ring-1 ring-white/10">
 
-                {/* Left Panel: Form (60%) */}
+                {/* --- Left Panel: Scrollable Form (60%) --- */}
                 <div className="w-[60%] flex flex-col h-full border-r border-zinc-800 relative bg-[#09090b]">
                     {/* Header */}
                     <div className="h-16 flex items-center justify-between px-8 border-b border-zinc-800 shrink-0 bg-[#09090b] z-20">
-                        <h1 className="text-xl font-bold text-white tracking-tight">Create Auto-Reply</h1>
+                        <h1 className="text-xl font-bold text-white tracking-tight">Create New Rule</h1>
                         <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
                             <X size={20} />
                         </button>
                     </div>
 
-                    {/* Scrollable Content */}
+                    {/* Content */}
                     <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
 
-                        {/* 1. Trigger Setup */}
+                        {/* Bot Selection (If not provided) */}
+                        {!botId && bots && (
+                            <section className="mb-10 pb-8 border-b border-zinc-800/50">
+                                <SectionHeader title="Select Bot" desc="Which bot should this rule apply to?" />
+                                <div className="space-y-4">
+                                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Target Bot</label>
+                                    <select
+                                        value={selectedBotId}
+                                        onChange={(e) => setSelectedBotId(e.target.value)}
+                                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:ring-1 focus:ring-blue-600 outline-none transition-all text-sm appearance-none cursor-pointer placeholder-zinc-600"
+                                    >
+                                        <option value="">Select a Bot...</option>
+                                        {bots.map((b: any) => (
+                                            <option key={b.id} value={b.id}>{b.name} ({b.status})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Trigger & Scope */}
                         <section className="mb-10 pb-8 border-b border-zinc-800/50">
-                            <SectionHeader
-                                title="Trigger Setup"
-                                desc="Define the keyword that will activate this auto-reply."
-                            />
-                            <div className="space-y-4">
-                                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
-                                    Keyword Trigger <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.trigger}
-                                    onChange={(e) => setFormData({ ...formData, trigger: e.target.value })}
-                                    placeholder="e.g. price, hello, help"
-                                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:ring-1 focus:ring-blue-600 outline-none transition-all font-mono"
-                                    autoFocus
-                                />
-                                <p className="text-xs text-zinc-600">
-                                    Triggered when message contains this keyword.
-                                </p>
+                            <SectionHeader title="Trigger Condition" desc="Define the keywords that trigger this rule." />
+
+                            <div className="space-y-6">
+                                {/* Keyword */}
+                                <div>
+                                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2 block">Keyword (Trigger)</label>
+                                    <input
+                                        type="text"
+                                        value={formData.trigger}
+                                        onChange={(e) => setFormData({ ...formData, trigger: e.target.value })}
+                                        placeholder="e.g. /price, hello, !help"
+                                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:ring-1 focus:ring-blue-600 outline-none transition-all"
+                                    />
+                                </div>
+
+                                {/* Match Type */}
+                                <div>
+                                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2 block">Match Logic</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {[
+                                            { id: 'contains', label: 'Contains Keyword' },
+                                            { id: 'exact', label: 'Exact Match' },
+                                            { id: 'starts_with', label: 'Starts With' }
+                                        ].map(type => (
+                                            <button
+                                                key={type.id}
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, match_type: type.id as any })}
+                                                className={`py-3 px-2 rounded-lg border text-sm font-medium transition-all ${formData.match_type === type.id
+                                                    ? 'bg-zinc-100 text-black border-zinc-100'
+                                                    : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                                                    }`}
+                                            >
+                                                {type.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         </section>
 
-                        {/* 2. Response Message */}
                         <section className="mb-10 pb-8 border-b border-zinc-800/50">
-                            <SectionHeader
-                                title="Response Message"
-                                desc="Configure the automated reply that will be sent."
-                            />
-                            <div className="space-y-4">
-                                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
-                                    Reply Text <span className="text-red-500">*</span>
-                                </label>
-                                <RichTextEditor
-                                    value={formData.reply}
-                                    onChange={(value) => setFormData({ ...formData, reply: value })}
-                                    placeholder="Enter the reply text..."
-                                    maxLength={2000}
-                                />
-                            </div>
-                        </section>
+                            <SectionHeader title="Target Audience" desc="Who should be able to trigger this rule?" />
 
-                        {/* 3. Media Attachment */}
-                        <section className="mb-10 pb-8 border-b border-zinc-800/50">
-                            <SectionHeader
-                                title="Media Attachment"
-                                desc="Optionally attach an image to your reply."
-                            />
-                            <div className="space-y-4">
-                                {!formData.media ? (
-                                    <div className="relative group">
-                                        <div className="border border-zinc-800 border-dashed rounded-lg p-6 bg-zinc-900/30 hover:bg-zinc-900/50 transition-colors flex flex-col items-center justify-center gap-2 cursor-pointer">
-                                            <ImageIcon className="w-6 h-6 text-zinc-500 group-hover:text-zinc-400" />
-                                            <span className="text-sm text-zinc-500">Click to upload image</span>
-                                            <span className="text-xs text-zinc-600">PNG, JPG up to 5MB</span>
+                            <div className="flex bg-zinc-900 p-1 rounded-lg border border-zinc-800 mb-6 w-fit">
+                                {[
+                                    { id: 'global', label: 'Everyone' },
+                                    { id: 'group', label: 'WhatsApp Groups' },
+                                    { id: 'contact', label: 'Individual Contacts' }
+                                ].map(t => (
+                                    <button
+                                        key={t.id}
+                                        type="button"
+                                        onClick={() => setTargetType(t.id as any)}
+                                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${targetType === t.id
+                                            ? 'bg-zinc-800 text-white shadow-sm'
+                                            : 'text-zinc-500 hover:text-zinc-300'
+                                            }`}
+                                    >
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Global Config Options */}
+                            {targetType === 'global' && (
+                                <div className="mt-4 flex flex-col sm:flex-row gap-4 animate-in fade-in p-4 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+                                    <label className="flex items-center gap-3 text-sm text-zinc-300 cursor-pointer hover:text-white transition-colors">
+                                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${globalConfig.private ? 'bg-blue-600 border-blue-600' : 'border-zinc-600 bg-zinc-800'}`}>
+                                            {globalConfig.private && <Zap size={12} className="text-white fill-current" />}
                                         </div>
                                         <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={handleFileChange}
-                                            className="absolute inset-0 opacity-0 cursor-pointer"
+                                            type="checkbox"
+                                            checked={globalConfig.private}
+                                            onChange={e => setGlobalConfig({ ...globalConfig, private: e.target.checked })}
+                                            className="hidden"
                                         />
-                                    </div>
-                                ) : (
-                                    <div className="border border-zinc-800 rounded-lg p-3 bg-zinc-900 flex items-center gap-3">
-                                        <div className="w-12 h-12 rounded bg-zinc-800 overflow-hidden relative">
-                                            {previewUrl && <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />}
+                                        <span>Allow Private Chat</span>
+                                    </label>
+                                    <label className="flex items-center gap-3 text-sm text-zinc-300 cursor-pointer hover:text-white transition-colors">
+                                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${globalConfig.group ? 'bg-blue-600 border-blue-600' : 'border-zinc-600 bg-zinc-800'}`}>
+                                            {globalConfig.group && <Users size={12} className="text-white fill-current" />}
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm text-zinc-300 truncate font-medium">{formData.media.name}</p>
-                                            <p className="text-xs text-zinc-500">{(formData.media.size / 1024).toFixed(1)} KB</p>
-                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={globalConfig.group}
+                                            onChange={e => setGlobalConfig({ ...globalConfig, group: e.target.checked })}
+                                            className="hidden"
+                                        />
+                                        <span>Allow Group Chat</span>
+                                    </label>
+                                </div>
+                            )}
+
+                            {/* Dynamic Target Inputs */}
+                            {targetType === 'group' && (
+                                <div className="space-y-4 animate-in fade-in">
+                                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Selected Groups</label>
+
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {selectedGroups.map(id => {
+                                            const group = groupsData?.find(g => g.jid === id)
+                                            return (
+                                                <span key={id} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full text-sm">
+                                                    {group?.name || id}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedGroups(selectedGroups.filter(g => g !== id))}
+                                                        className="hover:text-white"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </span>
+                                            )
+                                        })}
                                         <button
-                                            onClick={removeImage}
-                                            className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
                                             type="button"
+                                            onClick={() => setIsGroupSelectorOpen(!isGroupSelectorOpen)}
+                                            className="inline-flex items-center gap-1 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-full text-sm border border-zinc-700 transition delay-75"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Plus size={14} /> Add Group
                                         </button>
                                     </div>
-                                )}
-                            </div>
+
+                                    {isGroupSelectorOpen && (
+                                        <div className="bg-zinc-900 border border-zinc-800 rounded-lg max-h-48 overflow-y-auto shadow-xl p-2 animate-in zoom-in-95">
+                                            {groupsData?.length === 0 && <div className="p-2 text-xs text-zinc-500 text-center">No groups found</div>}
+                                            {groupsData?.filter(g => !selectedGroups.includes(g.jid)).map(g => (
+                                                <button
+                                                    key={g.jid}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedGroups([...selectedGroups, g.jid])
+                                                        setIsGroupSelectorOpen(false)
+                                                    }}
+                                                    className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 rounded-md flex items-center justify-between group"
+                                                >
+                                                    {g.name}
+                                                    <Plus size={14} className="opacity-0 group-hover:opacity-100 text-zinc-500" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {targetType === 'contact' && (
+                                <div className="animate-in fade-in space-y-4">
+                                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Phone Numbers</label>
+                                    <textarea
+                                        value={specificContacts}
+                                        onChange={(e) => setSpecificContacts(e.target.value)}
+                                        placeholder="Enter phone numbers (e.g. 628123456789), one per line or comma separated..."
+                                        rows={3}
+                                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white font-mono text-sm focus:ring-1 focus:ring-blue-600 outline-none"
+                                    />
+                                </div>
+                            )}
                         </section>
 
-                        {/* 4. Rule Status */}
-                        <section className="mb-6">
-                            <SectionHeader
-                                title="Rule Status"
-                                desc="Enable or disable this auto-reply rule."
-                            />
-                            <div className="flex items-center gap-3 pt-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
-                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${formData.is_active ? 'bg-blue-600' : 'bg-zinc-800'
-                                        }`}
-                                >
-                                    <span
-                                        className={`${formData.is_active ? 'translate-x-6' : 'translate-x-1'
-                                            } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
-                                    />
-                                </button>
-                                <span className="text-sm font-medium text-zinc-300">
-                                    {formData.is_active ? 'Rule is Active' : 'Rule is Paused'}
-                                </span>
+                        {/* Response Action */}
+                        <section className="mb-24">
+                            <SectionHeader title="Response Action" desc="What should the bot do when triggered?" />
+
+                            <div className="space-y-4">
+                                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2 block">Reply Message</label>
+
+                                {/* Rich Text Editor */}
+                                <RichTextEditor
+                                    value={formData.reply}
+                                    onChange={(val) => setFormData({ ...formData, reply: val })}
+                                    placeholder="Type your automated reply here..."
+                                    minHeight="200px"
+                                />
+
+                                {/* Image Attachment Mock */}
+                                <div className="pt-2">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Attachment (Optional)</label>
+                                    </div>
+                                    {!previewUrl ? (
+                                        <div className="border border-dashed border-zinc-800 rounded-lg p-6 hover:bg-zinc-900/50 transition-colors text-center cursor-pointer relative group">
+                                            <input
+                                                type="file"
+                                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                                onChange={handleFileChange}
+                                                accept="image/*"
+                                            />
+                                            <div className="flex flex-col items-center gap-2">
+                                                <div className="p-3 bg-zinc-900 rounded-full group-hover:bg-zinc-800 transition-colors">
+                                                    <ImageIcon className="text-zinc-500 group-hover:text-zinc-300" size={24} />
+                                                </div>
+                                                <p className="text-sm text-zinc-500 group-hover:text-zinc-400">Click to upload image</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="relative w-fit group">
+                                            <img src={previewUrl} alt="Preview" className="h-32 rounded-lg border border-zinc-800 object-cover" />
+                                            <button
+                                                type="button"
+                                                onClick={removeImage}
+                                                className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all scale-90 active:scale-95"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </section>
                     </div>
 
-                    {/* Footer Actions */}
-                    <div className="px-8 py-4 border-t border-zinc-800 flex justify-end items-center bg-[#09090b] gap-3">
+                    {/* Footer Actions - Floating */}
+                    <div className="absolute bottom-0 left-0 right-0 p-6 bg-[#09090b]/95 backdrop-blur border-t border-zinc-800 z-30">
                         <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2.5 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSubmit}
+                            onClick={() => createMutation.mutate(formData)}
                             disabled={createMutation.isPending}
-                            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20"
+                            className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                         >
-                            {createMutation.isPending ? 'Creating...' : 'Create Reminder'}
+                            {createMutation.isPending ? (
+                                <><Zap size={18} className="animate-spin" /> Creating Rule...</>
+                            ) : (
+                                <><Save size={18} /> Create Rule</>
+                            )}
                         </button>
                     </div>
                 </div>
 
-                {/* Right Panel: Preview (40%) */}
-                <div className="w-[40%] bg-[#0b141a] relative flex flex-col h-full border-l border-zinc-800">
-                    {/* Header */}
-                    <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10">
+                {/* --- Right Panel: Preview (40%) --- */}
+                <div className="w-[40%] bg-[#0b141a] relative flex flex-col h-full border-l border-zinc-800 hidden lg:flex">
+                    {/* Preview Header */}
+                    <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10 shrink-0">
                         <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center overflow-hidden">
                             <img src="/brobot-logo.png" alt="BroBot" className="w-full h-full object-cover" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="text-[#e9edef] text-sm font-medium truncate">BroBot Assistant</div>
+                            <div className="text-[#e9edef] text-sm font-medium truncate">{getPreviewBotName()}</div>
                             <div className="text-[#8696a0] text-xs">Business Account</div>
                         </div>
-                        <div className="text-xs text-[#8696a0] uppercase tracking-wider font-semibold">LIVE PREVIEW</div>
+                        <Search size={20} className="text-[#aebac1]" />
                     </div>
 
-                    {/* Chat Area */}
-                    <div className="flex-1 relative flex flex-col min-h-0">
-                        {/* Background Pattern */}
+                    {/* Preview Body */}
+                    <div className="flex-1 relative flex flex-col min-h-0 bg-[#0b141a]">
                         <div className="absolute inset-0 bg-[url('https://static.whatsapp.net/rsrc.php/v3/yl/r/gi_DckOUM5a.png')] bg-repeat opacity-[0.06] pointer-events-none mix-blend-overlay"></div>
 
-                        {/* Messages */}
                         <div className="relative z-10 flex-1 p-6 flex flex-col justify-end gap-3 overflow-y-auto">
-                            {/* Date Badge */}
-                            <div className="flex justify-center mb-4">
-                                <span className="bg-[#182229] text-[#8696a0] text-xs px-3 py-1.5 rounded-lg shadow-sm font-medium">TODAY</span>
-                            </div>
+                            <div className="flex justify-center mb-4"><span className="bg-[#182229] text-[#8696a0] text-xs px-3 py-1.5 rounded-lg shadow-sm font-medium">TODAY</span></div>
 
-                            {/* User Message (Trigger) */}
-                            <div className="self-end max-w-[85%] relative group animate-in slide-in-from-right-2">
-                                <div className="bg-[#005c4b] p-3 rounded-lg rounded-tr-none shadow text-white text-sm relative">
-                                    <div className="whitespace-pre-wrap leading-relaxed">
-                                        {formData.trigger || <span className="text-white/50 italic">Type keyword...</span>}
-                                    </div>
-                                    <div className="text-[10px] text-white/50 text-right mt-1">10:00</div>
+                            {/* User Message Simulation */}
+                            <div className="self-end max-w-[80%] bg-[#005c4b] p-2 rounded-lg rounded-tr-none shadow text-[#e9edef] text-sm mb-4 animate-in fade-in slide-in-from-right-4">
+                                <p>{formData.trigger || 'hello'}</p>
+                                <div className="text-[10px] text-[#8696a0] text-right mt-1 flex items-center justify-end gap-1">
+                                    09:41 <div className="text-[#53bdeb]"><Zap size={10} fill="currentColor" /></div>
                                 </div>
-                                <div className="absolute top-0 -right-2 w-0 h-0 border-t-[10px] border-t-[#005c4b] border-r-[10px] border-r-transparent"></div>
                             </div>
 
-                            {/* Bot Reply */}
-                            <div className="self-start max-w-[85%] relative group animate-in slide-in-from-left-2">
-                                <div className="bg-[#202c33] p-1 rounded-lg rounded-tl-none shadow border border-white/5 text-[#e9edef] text-sm relative">
-                                    {/* Image Preview */}
+                            {/* Bot Reply Preview */}
+                            <div className="self-start max-w-[90%] relative group animate-in slide-in-from-left-2 transition-all">
+                                <div className="bg-[#202c33] p-1 rounded-lg rounded-tl-none shadow border border-white/5 text-[#e9edef] text-sm relative min-w-[120px]">
+
+                                    {/* Image in Preview */}
                                     {previewUrl && (
                                         <div className="mb-1 rounded-lg overflow-hidden">
-                                            <img src={previewUrl} alt="Attached" className="w-full h-auto object-cover max-h-60" />
+                                            <img src={previewUrl} alt="Preview" className="w-full h-auto object-cover max-h-60" />
                                         </div>
                                     )}
 
+                                    {/* Text Content */}
                                     <div className="px-2 pt-1 pb-6 whitespace-pre-wrap leading-relaxed">
-                                        {formData.reply ? parseWhatsAppFormatting(formData.reply) : <span className="text-white/30 italic">Type reply message...</span>}
+                                        {(() => {
+                                            if (!formData.reply) {
+                                                return <span className="text-white/30 italic text-xs">Start typing to preview...</span>
+                                            }
+
+                                            // 1. Variable Substitution
+                                            const text = formData.reply
+                                                .replace(/{name}/gi, 'John Doe')
+                                                .replace(/{tanggal}/gi, new Date().toLocaleDateString())
+                                                .replace(/{phone}/gi, '+62812345678')
+
+                                            // Recursive formatting function
+                                            const formatWaText = (input: string): React.ReactNode => {
+                                                // Split by the first matching outer formatting token
+                                                // We use a simplified split that prioritizes code blocks, then others
+                                                const parts = input.split(/(```.+?```|\*.+?\*|_.+?_|~.+?~)/g);
+
+                                                return parts.map((part, index) => {
+                                                    // Code block (no recursion inside)
+                                                    if (part.startsWith('```') && part.endsWith('```') && part.length >= 6) {
+                                                        return <code key={index} className="font-mono bg-black/20 px-1 rounded text-[#53bdeb] text-xs">{part.slice(3, -3)}</code>;
+                                                    }
+                                                    // Bold -> Recurse content
+                                                    if (part.startsWith('*') && part.endsWith('*') && part.length >= 2) {
+                                                        return <strong key={index} className="font-bold">{formatWaText(part.slice(1, -1))}</strong>;
+                                                    }
+                                                    // Italic -> Recurse content
+                                                    if (part.startsWith('_') && part.endsWith('_') && part.length >= 2) {
+                                                        return <em key={index} className="italic">{formatWaText(part.slice(1, -1))}</em>;
+                                                    }
+                                                    // Strike -> Recurse content
+                                                    if (part.startsWith('~') && part.endsWith('~') && part.length >= 2) {
+                                                        return <s key={index} className="line-through decoration-white/50">{formatWaText(part.slice(1, -1))}</s>;
+                                                    }
+                                                    // Plain text
+                                                    return <span key={index}>{part}</span>;
+                                                });
+                                            };
+
+                                            return text.split('\n').map((line, i) => (
+                                                <div key={i} className="min-h-[1.25em] whitespace-pre-wrap">
+                                                    {formatWaText(line)}
+                                                </div>
+                                            ));
+                                        })()}
                                     </div>
-                                    <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">10:00</div>
+
+                                    <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">09:41</div>
                                 </div>
                                 <div className="absolute top-0 -left-2 w-0 h-0 border-t-[10px] border-t-[#202c33] border-l-[10px] border-l-transparent transform scale-x-[-1]"></div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Input Field */}
-                    <div className="h-[62px] bg-[#202c33] px-3 flex items-center gap-3 shrink-0 border-t border-[#2a3942] mt-auto relative z-20">
-                        <svg className="w-6 h-6 text-[#8696a0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                    {/* Preview Footer (Input Mock) */}
+                    <div className="h-[62px] bg-[#202c33] px-3 flex items-center gap-3 shrink-0 border-t border-[#2a3942] z-20">
+                        <Upload size={24} className="text-[#8696a0]" />
                         <div className="flex-1 bg-[#2a3942] rounded-lg h-9 px-3 flex items-center text-[#8696a0] text-sm">Type a message</div>
-                        <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                            </svg>
+                        <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white cursor-not-allowed">
+                            <ArrowRight size={16} />
                         </div>
                     </div>
                 </div>
-
             </div>
         </div>
     )

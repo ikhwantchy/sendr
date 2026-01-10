@@ -2,13 +2,13 @@
  * Event Log Repository
  */
 
-import { query } from '../connection-sqlite';
+import { query } from '../connection';
 
 export interface EventLog {
     id: string;
     tenant_id: string;
     event_type: string;
-    event_data: any;
+    payload: any;
     context: any;
     created_at: string;
 }
@@ -20,11 +20,12 @@ class EventLogRepository {
         event_data: any;
         context: any;
     }): Promise<EventLog> {
-        const result = await query(
-            `INSERT INTO event_logs (tenant_id, event_type, event_data, context)
-       VALUES (?, ?, ?, ?)
-       RETURNING *`,
+        const id = require('uuid').v4();
+        await query(
+            `INSERT INTO event_logs (id, tenant_id, event_type, payload, context)
+             VALUES (?, ?, ?, ?, ?)`,
             [
+                id,
                 data.tenant_id,
                 data.event_type,
                 JSON.stringify(data.event_data),
@@ -32,7 +33,14 @@ class EventLogRepository {
             ]
         );
 
-        return result.rows[0];
+        return {
+            id,
+            tenant_id: data.tenant_id,
+            event_type: data.event_type,
+            payload: data.event_data,
+            context: data.context,
+            created_at: new Date().toISOString()
+        };
     }
 
     async findByTenant(
@@ -70,7 +78,7 @@ class EventLogRepository {
     async deleteOld(daysOld: number = 30): Promise<number> {
         const result = await query(
             `DELETE FROM event_logs 
-       WHERE created_at < datetime('now') - INTERVAL '${daysOld} days'`
+       WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '${daysOld} days'`
         );
 
         return result.rowCount || 0;

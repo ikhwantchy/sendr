@@ -3,7 +3,7 @@
  * Handles bot permission management
  */
 
-const { query } = require('../database/connection-sqlite');
+const { query } = require('../database/connection');
 
 // Minimal implementations - just enough to not crash
 const getUserPermissions = async (req, res) => {

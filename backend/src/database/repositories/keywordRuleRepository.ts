@@ -2,7 +2,7 @@
  * Keyword Rule Repository
  */
 
-import { query } from '../connection-sqlite';
+import { query } from '../connection';
 
 export interface KeywordRule {
     id: string;

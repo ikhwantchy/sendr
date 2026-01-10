@@ -7,15 +7,17 @@ import {
     FileText, Check, AlertCircle, ChevronRight, CheckCircle2,
     Database, Wand2, ChevronDown, ChevronUp, RefreshCw, Type,
     Bold, Italic, Link, Image as ImageIcon, Smile, Globe,
-    Strikethrough, Code, Search, ArrowRight, Lock, Eye, MessageSquare, Paperclip
+    Strikethrough, Code, Search, ArrowRight, Lock, Eye, MessageSquare, Paperclip,
+    Cat, Coffee, Dumbbell, Car, Lightbulb, Heart, Hand
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
+import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 
 // --- Types ---
 type TargetType = 'group' | 'contact'
 type ContactMethod = 'manual' | 'csv' | 'sheet'
-type Frequency = 'once' | 'daily' | 'weekly' | 'monthly'
+type Frequency = 'now' | 'once' | 'daily' | 'weekly' | 'monthly'
 
 interface Group {
     id?: string
@@ -59,12 +61,23 @@ interface CreateReminderWizardProps {
 
 // --- Constants ---
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-const EMOJIS = ['😊', '😂', '🥺', '🔥', '❤️', '👍', '🙏', '🎉', '👋', '✅']
+
+const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+    'Smileys': <Smile size={18} />,
+    'Gestures & People': <Hand size={18} />,
+    'Animals & Nature': <Cat size={18} />,
+    'Food & Drink': <Coffee size={18} />,
+    'Activity': <Dumbbell size={18} />,
+    'Objects': <Lightbulb size={18} />,
+    'Travel & Places': <Car size={18} />,
+    'Symbols': <Heart size={18} />,
+}
 
 export default function CreateReminderWizard({ botId, onClose, reminderId }: CreateReminderWizardProps) {
     const queryClient = useQueryClient()
-    const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const textareaRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const isTypingRef = useRef(false)
 
     // Default Dates
     const today = new Date().toISOString().split('T')[0]
@@ -73,8 +86,11 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
     const [isContactPreviewOpen, setIsContactPreviewOpen] = useState(false)
     const [isGroupSelectorOpen, setIsGroupSelectorOpen] = useState(false)
     const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
+    const [activeEmojiCategory, setActiveEmojiCategory] = useState<keyof typeof EMOJI_CATEGORIES>('Smileys')
     const [availableTabs, setAvailableTabs] = useState<Array<{ gid: string; name: string }>>([])
     const [isLoadingTabs, setIsLoadingTabs] = useState(false)
+    const emojiPickerRef = useRef<HTMLDivElement>(null)
+    const emojiTriggerRef = useRef<HTMLButtonElement>(null)
 
     // Form State
     const [formData, setFormData] = useState<FormData>({
@@ -250,6 +266,64 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         return () => clearTimeout(timeoutId)
     }, [formData.contactSheetUrl, formData.dataSource])
 
+    // Close emoji picker when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (
+                emojiPickerRef.current &&
+                !emojiPickerRef.current.contains(event.target as Node) &&
+                emojiTriggerRef.current &&
+                !emojiTriggerRef.current.contains(event.target as Node)
+            ) {
+                setIsEmojiPickerOpen(false)
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [])
+
+    // Sync markdown to contentEditable (only on external changes)
+    useEffect(() => {
+        if (textareaRef.current && !isTypingRef.current) {
+            const currentMD = htmlToMarkdown(textareaRef.current);
+            if (currentMD !== formData.message) {
+                // Save cursor position
+                const selection = window.getSelection();
+                let cursorOffset = 0;
+                if (selection && selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    cursorOffset = range.startOffset;
+                }
+
+                // Update content
+                textareaRef.current.innerHTML = markdownToHtml(formData.message);
+
+                // Restore cursor position
+                if (selection && textareaRef.current.firstChild) {
+                    try {
+                        const newRange = document.createRange();
+                        const textNode = textareaRef.current.firstChild;
+                        const offset = Math.min(cursorOffset, (textNode.textContent || '').length);
+                        newRange.setStart(textNode, offset);
+                        newRange.collapse(true);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                    } catch (e) {
+                        // Cursor restoration failed, ignore
+                    }
+                }
+            }
+        }
+    }, [formData.message])
+
+    // Set initial content
+    useEffect(() => {
+        if (textareaRef.current && !textareaRef.current.innerHTML) {
+            textareaRef.current.innerHTML = markdownToHtml(formData.message) || '<br>';
+        }
+    }, [])
 
     // Live Preview Fetcher
     useEffect(() => {
@@ -293,14 +367,35 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
             let targetId: string | null = null;
 
             if (formData.targetType === 'group') {
-                // For now, take the first selected group
-                // TODO: Support multiple groups (loop or separate reminders)
-                targetId = formData.selectedGroups[0] || null;
+                // Join all selected groups with comma
+                targetId = formData.selectedGroups.join(',') || null;
             } else {
                 if (formData.contactMethod === 'sheet') {
                     targetId = formData.contactSheetUrl;
                 } else {
-                    const contacts = formData.manualContacts.split('\n').filter(l => l.trim().length > 0).join(',');
+                    // Format manual contacts to WhatsApp JID
+                    const formatPhoneToJID = (phone: string): string => {
+                        // Remove all non-digit characters
+                        let cleaned = phone.replace(/\D/g, '');
+
+                        // If starts with 0, replace with 62 (Indonesia)
+                        if (cleaned.startsWith('0')) {
+                            cleaned = '62' + cleaned.substring(1);
+                        }
+
+                        // If doesn't start with country code, add 62
+                        if (!cleaned.startsWith('62')) {
+                            cleaned = '62' + cleaned;
+                        }
+
+                        return cleaned + '@s.whatsapp.net';
+                    };
+
+                    const contacts = formData.manualContacts
+                        .split('\n')
+                        .filter(l => l.trim().length > 0)
+                        .map(phone => formatPhoneToJID(phone.trim()))
+                        .join(',');
                     targetId = contacts;
                 }
             }
@@ -313,6 +408,11 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                 body: formData.message,
             };
 
+            // Add image if attached
+            if (formData.imagePreview) {
+                templateConfig.image_url = formData.imagePreview;
+            }
+
             // Add Google Sheets config if enabled
             if (formData.dataSource === 'google_sheets') {
                 templateConfig.isDigestMode = formData.isDigestMode;
@@ -321,6 +421,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                 templateConfig.triggerColumn = formData.triggerColumn;
                 templateConfig.triggerValue = formData.triggerValue;
             }
+
 
             // 4. Prepare Payload (match backend API)
             const payload = {
@@ -363,6 +464,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
     // Helpers
     const generateCron = (freq: Frequency, time: string, days: number[], dateStr: string) => {
+        if (freq === 'now') return 'now'
         const [hh, mm] = time.split(':')
         const date = new Date(dateStr)
         const dd = date.getDate()
@@ -374,48 +476,214 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         return `0 9 * * *`
     }
 
-    const insertFormatting = (char: string) => {
-        if (!textareaRef.current) return
-        const start = textareaRef.current.selectionStart
-        const end = textareaRef.current.selectionEnd
-        const text = formData.message
-        const before = text.substring(0, start)
-        const selection = text.substring(start, end)
-        const after = text.substring(end)
+    // Helper: Convert Markdown to HTML for visual display
+    const markdownToHtml = (text: string) => {
+        if (!text) return '';
 
-        const newText = `${before}${char}${selection}${char}${after}`
-        setFormData({ ...formData, message: newText })
+        let html = text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
 
-        // Reset cursor/selection
-        setTimeout(() => {
-            textareaRef.current?.focus()
-            textareaRef.current?.setSelectionRange(start + char.length, end + char.length)
-        }, 0)
+        html = html.replace(/\*([^\*]+)\*/g, '<b>$1</b>');
+        html = html.replace(/_([^_]+)_/g, '<i>$1</i>');
+        html = html.replace(/~([^~]+)~/g, '<s>$1</s>');
+        html = html.replace(/```([^`]+)```/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px; font-family: monospace;">$1</code>');
+
+        html = html.replace(/\n/g, '<br>');
+
+        return html;
+    }
+
+    // Helper: Convert HTML Visual back to Markdown for storage
+    const htmlToMarkdown = (element: HTMLElement, activeStyles: { bold?: boolean, italic?: boolean, strike?: boolean, code?: boolean } = {}): string => {
+        let markdown = '';
+
+        for (const node of Array.from(element.childNodes)) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                markdown += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                const el = node as HTMLElement;
+                const tagName = el.tagName.toLowerCase();
+                const styles = window.getComputedStyle(el);
+
+                const isBold = tagName === 'b' || tagName === 'strong' || parseInt(styles.fontWeight) >= 600 || el.style.fontWeight === 'bold';
+                const isItalic = tagName === 'i' || tagName === 'em' || styles.fontStyle === 'italic';
+                const isStrike = tagName === 's' || tagName === 'strike' || styles.textDecoration.includes('line-through');
+                const isCode = tagName === 'code';
+                const isDiv = tagName === 'div';
+
+                let content = htmlToMarkdown(el, {
+                    bold: activeStyles.bold || isBold,
+                    italic: activeStyles.italic || isItalic,
+                    strike: activeStyles.strike || isStrike,
+                    code: activeStyles.code || isCode
+                });
+
+                // Format wrapping logic - prevent redundancy
+                if (isBold && !activeStyles.bold) content = `*${content}*`;
+                if (isItalic && !activeStyles.italic) content = `_${content}_`;
+                if (isStrike && !activeStyles.strike) content = `~${content}~`;
+                if (isCode && !activeStyles.code) content = `\`\`\`${content}\`\`\``;
+
+                if (isDiv) {
+                    markdown += (markdown ? '\n' : '') + content;
+                } else if (tagName === 'br') {
+                    markdown += '\n';
+                } else {
+                    markdown += content;
+                }
+            }
+        }
+
+        return markdown
+            .replace(/\*\*+/g, '*')
+            .replace(/__+/g, '_')
+            .replace(/~~+/g, '~')
+            .replace(/\n\n+/g, '\n')
+            .replace(/^\n+/, '')
+            .trim();
     }
 
     const insertText = (str: string) => {
         if (!textareaRef.current) return
-        const start = textareaRef.current.selectionStart
-        const end = textareaRef.current.selectionEnd
-        const text = formData.message
-        const newText = text.substring(0, start) + str + text.substring(end)
-        setFormData({ ...formData, message: newText })
+        textareaRef.current.focus()
+        document.execCommand('insertText', false, str)
+        handleEditorInput()
+    }
+
+    const insertCode = () => {
+        if (!textareaRef.current) return
+        const selection = window.getSelection()
+        if (!selection) return
+
+        const selectedText = selection.toString()
+        const codeText = selectedText || 'code'
+
+        textareaRef.current.focus()
+        document.execCommand('insertHTML', false, `<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px; font-family: monospace;">${codeText}</code>&nbsp;`)
+        handleEditorInput()
+    }
+
+    const handleEditorInput = () => {
+        if (!textareaRef.current) return;
+        isTypingRef.current = true;
+
+        const markdown = htmlToMarkdown(textareaRef.current);
+        setFormData(prev => ({ ...prev, message: markdown.slice(0, 2000) }));
+
         setTimeout(() => {
-            textareaRef.current?.focus()
-            textareaRef.current?.setSelectionRange(start + str.length, start + str.length)
-        }, 0)
+            isTypingRef.current = false;
+        }, 100);
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+
+            const range = selection.getRangeAt(0);
+            const textNode = range.startContainer;
+
+            if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
+                const textBeforeCaret = textNode.textContent.slice(0, range.startOffset);
+
+                const patterns = [
+                    { regex: /\*([^*]+)\*$/, tag: 'b' },
+                    { regex: /_([^_]+)_$/, tag: 'i' },
+                    { regex: /~([^~]+)~$/, tag: 's' },
+                    { regex: /```([^`]+)```$/, tag: 'code' }
+                ];
+
+                for (const pattern of patterns) {
+                    const match = textBeforeCaret.match(pattern.regex);
+                    if (match) {
+                        e.preventDefault();
+                        const matchIndex = match.index!;
+                        const content = match[1];
+
+                        const updateRange = document.createRange();
+                        updateRange.setStart(textNode, matchIndex);
+                        updateRange.setEnd(textNode, range.startOffset);
+                        updateRange.deleteContents();
+
+                        const el = document.createElement(pattern.tag);
+                        if (pattern.tag === 'code') {
+                            el.style.cssText = "background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px; font-family: monospace;";
+                        }
+                        el.textContent = content;
+
+                        updateRange.insertNode(el);
+                        updateRange.setStartAfter(el);
+                        updateRange.setEndAfter(el);
+
+                        const spaceNode = document.createTextNode(e.key === 'Enter' ? '\n' : '\u00A0');
+                        updateRange.insertNode(spaceNode);
+                        updateRange.setStartAfter(spaceNode);
+                        updateRange.setEndAfter(spaceNode);
+
+                        selection.removeAllRanges();
+                        selection.addRange(updateRange);
+
+                        document.execCommand('removeFormat');
+                        handleEditorInput();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    const execCommand = (command: string, value: string | undefined = undefined) => {
+        if (!textareaRef.current) return;
+        textareaRef.current.focus();
+        document.execCommand(command, false, value);
+        handleEditorInput();
+    }
+
+    // Format WhatsApp markdown for preview
+    const formatWhatsAppText = (text: string) => {
+        if (!text) return ''
+
+        let formatted = text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+
+        // Bold: *text*
+        formatted = formatted.replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
+
+        // Italic: _text_
+        formatted = formatted.replace(/_([^_]+)_/g, '<em>$1</em>')
+
+        // Strikethrough: ~text~
+        formatted = formatted.replace(/~([^~]+)~/g, '<s>$1</s>')
+
+        // Code: ```text```
+        formatted = formatted.replace(/```([^`]+)```/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px; font-family: monospace;">$1</code>')
+
+        // Newlines
+        formatted = formatted.replace(/\n/g, '<br>')
+
+        return formatted
     }
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (file) {
-            setFormData({
-                ...formData,
-                imageFile: file,
-                imagePreview: URL.createObjectURL(file)
-            })
+            // Convert to base64 instead of blob URL
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                setFormData({
+                    ...formData,
+                    imageFile: file,
+                    imagePreview: reader.result as string // base64 data URL
+                })
+            }
+            reader.readAsDataURL(file)
         }
     }
+
 
     // --- Derived State for Preview ---
     const getPreviewContactName = () => {
@@ -882,30 +1150,136 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         <section className="mb-10 pb-8 border-b border-zinc-800/50">
                             <SectionHeader title="Schedule" desc="When should this reminder run?" />
                             <div className="space-y-6">
-                                <div className="grid grid-cols-4 gap-2">
-                                    {['once', 'daily', 'weekly', 'monthly'].map(f => (
-                                        <button key={f} onClick={() => setFormData({ ...formData, frequency: f as any })} className={`py-3 px-2 rounded-lg border text-sm font-medium capitalize transition-all ${formData.frequency === f ? 'bg-zinc-100 text-black' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'}`}>{f}</button>
-                                    ))}
+                                {/* Schedule Type Selector */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, frequency: 'now' as any })}
+                                        className={`p-4 rounded-xl border transition-all text-left ${formData.frequency === 'now' ? 'bg-cyan-500/20 border-cyan-500 shadow-lg shadow-cyan-500/20' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className={`p-1.5 rounded-lg ${formData.frequency === 'now' ? 'bg-cyan-500/30 text-cyan-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                                                <ArrowRight size={16} />
+                                            </div>
+                                            <span className={`font-semibold text-sm ${formData.frequency === 'now' ? 'text-cyan-400' : 'text-zinc-400'}`}>Send Now</span>
+                                        </div>
+                                        <div className={`text-xs ${formData.frequency === 'now' ? 'text-cyan-300/80' : 'text-zinc-500'}`}>Send immediately</div>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, frequency: 'once' as any })}
+                                        className={`p-4 rounded-xl border transition-all text-left ${formData.frequency === 'once' || formData.frequency === 'daily' ? 'bg-blue-500/20 border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className={`p-1.5 rounded-lg ${formData.frequency === 'once' || formData.frequency === 'daily' ? 'bg-blue-500/30 text-blue-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                                                <Calendar size={16} />
+                                            </div>
+                                            <span className={`font-semibold text-sm ${formData.frequency === 'once' || formData.frequency === 'daily' ? 'text-blue-400' : 'text-zinc-400'}`}>Once / Daily</span>
+                                        </div>
+                                        <div className={`text-xs ${formData.frequency === 'once' || formData.frequency === 'daily' ? 'text-blue-300/80' : 'text-zinc-500'}`}>Schedule or repeat</div>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, frequency: 'weekly' as any })}
+                                        className={`p-4 rounded-xl border transition-all text-left ${formData.frequency === 'weekly' ? 'bg-purple-500/20 border-purple-500 shadow-lg shadow-purple-500/20' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className={`p-1.5 rounded-lg ${formData.frequency === 'weekly' ? 'bg-purple-500/30 text-purple-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                                                <RefreshCw size={16} />
+                                            </div>
+                                            <span className={`font-semibold text-sm ${formData.frequency === 'weekly' ? 'text-purple-400' : 'text-zinc-400'}`}>Weekly</span>
+                                        </div>
+                                        <div className={`text-xs ${formData.frequency === 'weekly' ? 'text-purple-300/80' : 'text-zinc-500'}`}>Repeat weekly</div>
+                                    </button>
                                 </div>
-                                <div className="grid grid-cols-2 gap-6">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-medium text-zinc-400 uppercase">{formData.frequency === 'once' ? 'Execution Date' : 'Start Date'}</label>
-                                        <input type="date" value={formData.startDate} min={today} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white outline-none" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-medium text-zinc-400 uppercase">Time</label>
-                                        <input type="time" value={formData.time} onChange={e => setFormData({ ...formData, time: e.target.value })} className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white outline-none" />
-                                    </div>
-                                </div>
-                                {formData.frequency !== 'once' && (
-                                    <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
-                                        <span className="text-sm text-zinc-400">Set End Date?</span>
-                                        <button onClick={() => setFormData({ ...formData, hasEndDate: !formData.hasEndDate })} className={`w-10 h-6 rounded-full p-1 transition-colors ${formData.hasEndDate ? 'bg-blue-600' : 'bg-zinc-700'}`}>
-                                            <div className={`w-4 h-4 bg-white rounded-full transition-transform ${formData.hasEndDate ? 'translate-x-4' : 'translate-x-0'}`} />
-                                        </button>
+                                {/* Once/Daily Options */}
+                                {(formData.frequency === 'once' || formData.frequency === 'daily') && (
+                                    <div className="space-y-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                        {/* Repeat Daily Toggle */}
+                                        <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg border border-zinc-800">
+                                            <div>
+                                                <div className="font-medium text-white text-sm">Repeat Daily</div>
+                                                <div className="text-xs text-zinc-500">Send every day at the same time</div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, frequency: formData.frequency === 'daily' ? 'once' : 'daily' as any })}
+                                                className={`w-11 h-6 rounded-full p-0.5 transition-colors ${formData.frequency === 'daily' ? 'bg-blue-600' : 'bg-zinc-700'}`}
+                                            >
+                                                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${formData.frequency === 'daily' ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+
+                                        {/* Date & Time */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-medium text-zinc-400 uppercase">{formData.frequency === 'daily' ? 'Start Date' : 'Execution Date'}</label>
+                                                <input
+                                                    type="date"
+                                                    value={formData.startDate}
+                                                    min={today}
+                                                    onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                                                    className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white outline-none focus:border-blue-500 transition-colors"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-medium text-zinc-400 uppercase">Time</label>
+                                                <input
+                                                    type="time"
+                                                    value={formData.time}
+                                                    onChange={e => setFormData({ ...formData, time: e.target.value })}
+                                                    className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white outline-none focus:border-blue-500 transition-colors"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
-                                {formData.hasEndDate && <input type="date" value={formData.endDate} min={formData.startDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white outline-none" />}
+
+                                {/* Weekly Options */}
+                                {formData.frequency === 'weekly' && (
+                                    <div className="space-y-4 p-4 bg-purple-500/5 border border-purple-500/20 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                        {/* Day Selector */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-medium text-zinc-400 uppercase">Select Days</label>
+                                            <div className="grid grid-cols-7 gap-2">
+                                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+                                                    <button
+                                                        key={day}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const days = formData.days.includes(index)
+                                                                ? formData.days.filter(d => d !== index)
+                                                                : [...formData.days, index].sort()
+                                                            setFormData({ ...formData, days })
+                                                        }}
+                                                        className={`py-3 px-2 rounded-lg border text-xs font-semibold transition-all ${formData.days.includes(index)
+                                                            ? 'bg-purple-500 border-purple-500 text-white shadow-lg shadow-purple-500/30'
+                                                            : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                                                            }`}
+                                                    >
+                                                        {day}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {formData.days.length === 0 && (
+                                                <p className="text-xs text-red-400 mt-1">Please select at least one day</p>
+                                            )}
+                                        </div>
+
+                                        {/* Time */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-medium text-zinc-400 uppercase">Time</label>
+                                            <input
+                                                type="time"
+                                                value={formData.time}
+                                                onChange={e => setFormData({ ...formData, time: e.target.value })}
+                                                className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white outline-none focus:border-purple-500 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </section>
 
@@ -935,20 +1309,61 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
                                 {/* Toolbar */}
                                 <div className="bg-[#18181b] p-2 flex items-center justify-between border-b border-zinc-800">
-                                    <div className="flex items-center gap-1">
-                                        <button onClick={() => insertFormatting('*')} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded"><Bold size={14} /></button>
-                                        <button onClick={() => insertFormatting('_')} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded"><Italic size={14} /></button>
-                                        <button onClick={() => insertFormatting('~')} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded"><Strikethrough size={14} /></button>
-                                        <button onClick={() => insertFormatting('```')} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded"><Code size={14} /></button>
+                                    <div className="flex items-center gap-1 relative">
+                                        <button onClick={() => execCommand('bold')} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded" title="Bold"><Bold size={14} /></button>
+                                        <button onClick={() => execCommand('italic')} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded" title="Italic"><Italic size={14} /></button>
+                                        <button onClick={() => execCommand('strikeThrough')} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded" title="Strikethrough"><Strikethrough size={14} /></button>
+                                        <button onClick={() => insertCode()} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded" title="Code"><Code size={14} /></button>
                                         <div className="w-[1px] h-4 bg-zinc-700 mx-1" />
-                                        <button onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)} className="p-1.5 text-zinc-400 hover:text-yellow-400 hover:bg-zinc-800 rounded relative">
+                                        <button
+                                            ref={emojiTriggerRef}
+                                            onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
+                                            className={`p-1.5 rounded transition-all ${isEmojiPickerOpen ? 'text-yellow-400 bg-yellow-400/10' : 'text-zinc-400 hover:text-yellow-400 hover:bg-zinc-800'}`}
+                                            title="Insert Emoji"
+                                        >
                                             <Smile size={14} />
-                                            {isEmojiPickerOpen && (
-                                                <div className="absolute top-full left-0 mt-2 bg-zinc-800 border border-zinc-700 rounded-lg p-2 grid grid-cols-5 gap-1 shadow-xl z-50 min-w-[150px]">
-                                                    {EMOJIS.map(e => <button key={e} onClick={() => insertText(e)} className="p-1 hover:bg-zinc-700 rounded text-lg">{e}</button>)}
-                                                </div>
-                                            )}
                                         </button>
+
+                                        {/* Rich Emoji Picker */}
+                                        {isEmojiPickerOpen && (
+                                            <div
+                                                ref={emojiPickerRef}
+                                                className="absolute left-0 top-full mt-2 z-50 w-80 bg-[#1f2c34]/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 origin-top-left"
+                                            >
+                                                <div className="flex bg-[#111b21]/50 p-1.5 gap-1 overflow-x-auto custom-scrollbar border-b border-zinc-700/30 no-scrollbar">
+                                                    {Object.keys(EMOJI_CATEGORIES).map((cat) => (
+                                                        <button
+                                                            key={cat}
+                                                            type="button"
+                                                            onClick={() => setActiveEmojiCategory(cat as any)}
+                                                            className={`p-2 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ${activeEmojiCategory === cat
+                                                                ? 'bg-[#2a3942] text-[#00a884] shadow-sm ring-1 ring-[#00a884]/20'
+                                                                : 'text-[#8696a0] hover:bg-[#2a3942]/30 hover:text-zinc-300'
+                                                                }`}
+                                                        >
+                                                            {CATEGORY_ICONS[cat] || <Smile size={18} />}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <div className="h-64 overflow-y-auto p-3 custom-scrollbar bg-[#111b21]">
+                                                    <div className="grid grid-cols-8 gap-y-2 gap-x-1">
+                                                        {EMOJI_CATEGORIES[activeEmojiCategory].map((emoji) => (
+                                                            <button
+                                                                key={emoji}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    insertText(emoji)
+                                                                    setIsEmojiPickerOpen(false)
+                                                                }}
+                                                                className="w-8 h-8 flex items-center justify-center text-xl rounded-lg hover:bg-[#2a3942] cursor-pointer transition-all hover:scale-110 active:scale-95"
+                                                            >
+                                                                {emoji}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {formData.isDigestMode && (
                                             <>
@@ -973,21 +1388,27 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                     </div>
                                 </div>
 
-                                <textarea
+                                <div
                                     ref={textareaRef}
-                                    value={formData.message}
-                                    onChange={e => setFormData({ ...formData, message: e.target.value })}
-                                    className="w-full bg-transparent p-4 min-h-[200px] text-zinc-200 placeholder-zinc-600 resize-y focus:outline-none font-mono text-sm leading-relaxed"
-                                    placeholder={formData.isDigestMode
-                                        ? "Use the 'Insert Academic Template' button above to generate a daily digest format.\nAvailable variables: {SCHEDULE_TODAY}, {TASKS_URGENT}, {TODAY_DATE}, {TODAY_NAME}"
-                                        : "Type your message here... Use {{ColumnName}} to insert sheet data."}
+                                    contentEditable
+                                    onInput={handleEditorInput}
+                                    onKeyDown={handleKeyDown}
+                                    className="w-full bg-transparent p-4 min-h-[200px] text-zinc-200 focus:outline-none font-mono text-sm leading-relaxed resize-y overflow-y-auto"
+                                    style={{ maxHeight: '400px' }}
+                                    spellCheck={false}
+                                    suppressContentEditableWarning
                                 />
 
-                                <div className="px-3 py-2 bg-[#18181b] border-t border-zinc-800 flex items-center gap-2 overflow-x-auto text-[10px]">
-                                    <span className="text-zinc-500 uppercase mr-2 font-bold">Variables:</span>
-                                    {['{NAME}', '{PHONE}', '{{Deadline}}', '{{Tugas}}', '{TODAY}'].map(tag => (
-                                        <button key={tag} onClick={() => insertText(tag)} className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-blue-400 rounded hover:bg-zinc-700">{tag}</button>
-                                    ))}
+                                <div className="px-3 py-2 bg-[#18181b] border-t border-zinc-800 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-2 overflow-x-auto flex-1">
+                                        <span className="text-zinc-500 uppercase mr-2 font-bold flex-shrink-0">Variables:</span>
+                                        {['{NAME}', '{PHONE}', '{{Deadline}}', '{{Tugas}}', '{TODAY}'].map(tag => (
+                                            <button key={tag} onClick={() => insertText(tag)} className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-blue-400 rounded hover:bg-zinc-700 flex-shrink-0">{tag}</button>
+                                        ))}
+                                    </div>
+                                    <div className={`text-[10px] font-medium tracking-wide flex-shrink-0 ${formData.message.length >= 2000 ? 'text-red-500' : 'text-zinc-600'}`}>
+                                        {formData.message.length} / 2000
+                                    </div>
                                 </div>
                             </div>
                         </section>
@@ -1027,7 +1448,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                         </div>
                                     )}
 
-                                    <div className="px-2 pt-1 pb-6 whitespace-pre-wrap leading-relaxed">
+                                    <div className="px-2 pt-1 pb-6 leading-relaxed">
                                         {/* Dynamic Preview Logic */}
                                         {(() => {
                                             // Handle Digest Preview (Real Data)
@@ -1041,7 +1462,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                 }
                                                 // Only show if we truly have fetched content
                                                 if (previewText) {
-                                                    return previewText;
+                                                    return <div dangerouslySetInnerHTML={{ __html: formatWhatsAppText(previewText) }} />
                                                 }
                                             }
 
@@ -1063,7 +1484,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                     return mockData.map((row, i) => {
                                                         let itemText = template;
                                                         // Naive replacement
-                                                        itemText = itemText.replace(/{.*?}/g, (match) => {
+                                                        itemText = itemText.replace(/{.*?}/g, (match: string) => {
                                                             return typeof row === 'string' ? row : match;
                                                         });
                                                         return itemText;
@@ -1071,7 +1492,11 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                 });
                                             }
 
-                                            return finalMsg || <span className="text-white/30 italic">Start typing to preview...</span>
+                                            if (!finalMsg) {
+                                                return <span className="text-white/30 italic">Start typing to preview...</span>
+                                            }
+
+                                            return <div dangerouslySetInnerHTML={{ __html: formatWhatsAppText(finalMsg) }} />
                                         })()}
                                     </div>
                                     <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">{formData.time}</div>

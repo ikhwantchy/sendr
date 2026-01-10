@@ -1,4 +1,4 @@
-import { query } from '../../database/connection-sqlite';
+import { query } from '../../database/connection';
 
 type TimeRange = '30m' | '24h' | '7d' | '30d';
 

@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Search, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Activity, Filter, ChevronLeft, ChevronRight, Clock, Bot, Zap, Megaphone, MessageCircle, Play, Pause, Wifi, WifiOff } from 'lucide-react'
+import LogDetailModal from '@/components/modals/LogDetailModal'
 
 interface ActivityLog {
     id: string
     type: 'bot' | 'rule' | 'campaign' | 'reminder' | 'message' | 'error'
     message: string
     timestamp: string
+    is_deleted?: boolean
 }
 
 export default function ActivityHistoryPage() {
@@ -103,35 +105,58 @@ export default function ActivityHistoryPage() {
         }
     }
 
-    const renderMessage = (msg: string) => {
-        const parts = msg.split(' ')
-        return (
-            <span className="text-sm text-zinc-200 break-words inline-block">
-                {parts.map((part, i) => {
-                    const lower = part.toLowerCase()
-                    let className = ''
-                    if (lower.includes('resumed')) className = 'text-blue-500 font-medium'
-                    else if (lower.includes('paused')) className = 'text-yellow-500 font-medium'
-                    else if (lower.includes('connected') && !lower.includes('dis')) className = 'text-emerald-400 font-medium'
-                    else if (lower.includes('disconnected')) className = 'text-red-400 font-medium'
+    const renderMessage = (log: ActivityLog) => {
+        const msg = log.message;
+        const isDeleted = log.is_deleted;
+        const isBotEvent = log.type === 'bot';
 
-                    return <span key={i} className={`${className} mr-1`}>{part}</span>
-                })}
-            </span>
+        return (
+            <div className="flex flex-col gap-0.5 min-w-0 w-full relative">
+                <div className="flex items-center gap-2">
+                    {/* Status Dot for Deleted */}
+                    {isDeleted && (
+                        <div className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" title="Deleted Message" />
+                    )}
+
+                    <span className={`text-sm truncate select-none ${isDeleted ? 'text-zinc-500 line-through decoration-zinc-700' : 'text-zinc-200'} ${isBotEvent ? 'font-medium' : ''}`}>
+                        {msg}
+                    </span>
+                </div>
+
+                <div className="flex items-center gap-2 h-4">
+                    {isDeleted ? (
+                        <span className="text-[10px] font-bold text-red-500/80 tracking-wider flex items-center gap-1.5">
+                            DELETED
+                            <span className="w-0.5 h-0.5 rounded-full bg-zinc-700" />
+                            <span className="font-normal text-zinc-500 normal-case tracking-normal">Click to view content</span>
+                        </span>
+                    ) : (
+                        <span className="text-[10px] text-zinc-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                            Click to view details
+                        </span>
+                    )}
+                </div>
+            </div>
         )
     }
 
-    // "Real" absolute timestamp format: Jan 01, 14:30:45
+    // "Real" absolute timestamp format: HH:mm:ss for today, Jan 01 14:30 for others
     // Force UTC interpretation if 'Z' is missing to ensure local conversion
     const formatTimestamp = (timestamp: string) => {
         const timeString = timestamp.endsWith('Z') ? timestamp : `${timestamp}Z`
         const date = new Date(timeString)
+        const now = new Date()
+        const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
+
+        if (isToday) {
+            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+        }
+
         return date.toLocaleDateString('en-US', {
             month: 'short',
             day: '2-digit',
             hour: '2-digit',
             minute: '2-digit',
-            second: '2-digit',
             hour12: false
         })
     }
@@ -273,37 +298,34 @@ export default function ActivityHistoryPage() {
                                     <div
                                         key={log.id}
                                         onClick={() => setSelectedLog(log)}
-                                        className="group flex items-center gap-4 px-6 py-3.5 hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                                        className="group flex items-start gap-4 px-6 py-4 hover:bg-zinc-900/50 transition-colors cursor-pointer border-b border-zinc-800/30 last:border-0"
                                     >
                                         {/* Icon */}
-                                        <div className={`flex-shrink-0 p-2 rounded-lg ${getColorBg(log)}`}>
+                                        <div className={`flex-shrink-0 p-2.5 rounded-xl ${getColorBg(log)} mt-0.5 transition-colors`}>
                                             {getIcon(log)}
                                         </div>
 
-
-
                                         {/* Content */}
-                                        <div className="flex-1">
-                                            <div className="flex items-start gap-2 flex-wrap">
-                                                {renderMessage(log.message)}
+                                        <div className="flex-1 min-w-0 pt-1">
+                                            {renderMessage(log)}
+                                        </div>
+
+                                        {/* Timestamp & Meta */}
+                                        <div className="text-right flex-shrink-0 flex flex-col items-end gap-1.5 ml-4 pt-1">
+                                            <div className="flex items-center gap-2">
                                                 {relTime && (
-                                                    <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-1.5 rounded-sm font-medium flex-shrink-0">
+                                                    <span className="text-[10px] font-medium text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">
                                                         {relTime}
                                                     </span>
                                                 )}
+                                                <div className="text-xs font-mono text-zinc-500 group-hover:text-zinc-300 transition-colors">
+                                                    {formatTimestamp(log.timestamp)}
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-2 mt-0.5">
-                                                <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
-                                                    {log.type}
-                                                </span>
-                                            </div>
-                                        </div>
 
-                                        {/* Timestamp */}
-                                        <div className="text-right flex-shrink-0">
-                                            <div className="text-xs font-mono text-zinc-500 group-hover:text-zinc-300 transition-colors">
-                                                {formatTimestamp(log.timestamp)}
-                                            </div>
+                                            <span className="text-[10px] uppercase tracking-wider font-bold text-zinc-600 group-hover:text-zinc-500 transition-colors">
+                                                {log.type}
+                                            </span>
                                         </div>
                                     </div>
                                 )
@@ -344,110 +366,11 @@ export default function ActivityHistoryPage() {
                 )}
 
                 {/* Modal for Full Message */}
-                {selectedLog && (
-                    <div
-                        style={{
-                            position: 'fixed',
-                            inset: 0,
-                            background: 'rgba(0, 0, 0, 0.8)',
-                            backdropFilter: 'blur(4px)',
-                            zIndex: 50,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '1rem'
-                        }}
-                        onClick={() => setSelectedLog(null)}
-                    >
-                        <div
-                            style={{
-                                background: '#0e0e11',
-                                border: '1px solid rgb(39, 39, 42)',
-                                borderRadius: '0.75rem',
-                                maxWidth: '56rem',
-                                width: '100%',
-                                padding: '1.5rem',
-                                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                                overflow: 'visible'
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {/* Header */}
-                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2.5 rounded-lg ${getColorBg(selectedLog)}`}>
-                                        {getIcon(selectedLog)}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-white">Log Details</h3>
-                                        <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mt-0.5">
-                                            {selectedLog.type}
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setSelectedLog(null)}
-                                    className="text-zinc-500 hover:text-white transition-colors"
-                                >
-                                    <XCircle className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {/* Message Content */}
-                            <div
-                                style={{
-                                    background: 'rgba(39, 39, 42, 0.5)',
-                                    border: '1px solid rgba(63, 63, 70, 1)',
-                                    borderRadius: '0.5rem',
-                                    padding: '1rem',
-                                    marginBottom: '1rem',
-                                    overflow: 'visible',
-                                    width: '100%'
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        fontSize: '0.875rem',
-                                        color: 'rgb(212, 212, 216)',
-                                        lineHeight: '1.625',
-                                        whiteSpace: 'pre-wrap',
-                                        wordWrap: 'break-word',
-                                        wordBreak: 'break-word',
-                                        overflowWrap: 'break-word',
-                                        overflow: 'visible',
-                                        textOverflow: 'clip',
-                                        maxWidth: 'none',
-                                        width: '100%',
-                                        display: 'block'
-                                    }}
-                                >
-                                    {selectedLog.message}
-                                </div>
-                            </div>
-
-                            {/* Timestamp */}
-                            <div className="flex items-center gap-2 text-xs text-zinc-500">
-                                <Clock className="w-3.5 h-3.5" />
-                                <span className="font-mono">{formatTimestamp(selectedLog.timestamp)}</span>
-                                {getRelativeTime(selectedLog.timestamp) && (
-                                    <span className="text-emerald-500">
-                                        ({getRelativeTime(selectedLog.timestamp)})
-                                    </span>
-                                )}
-                            </div>
-
-                            {/* Close Button */}
-                            <div className="mt-6 flex justify-end">
-                                <button
-                                    onClick={() => setSelectedLog(null)}
-                                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-sm rounded-lg transition-colors"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <LogDetailModal
+                    isOpen={!!selectedLog}
+                    onClose={() => setSelectedLog(null)}
+                    log={selectedLog}
+                />
 
             </div>
         </div>

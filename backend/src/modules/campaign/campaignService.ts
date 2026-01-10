@@ -6,7 +6,7 @@
  * ✅ Tracks sent/failed in campaign_recipients
  */
 
-import { query } from '../../database/connection-sqlite';
+import { query } from '../../database/connection';
 import { messageQueue } from '../../queue/messageQueue';
 import { logger } from '../../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
@@ -93,7 +93,7 @@ class CampaignService {
             // Update status to running
             await query(
                 `UPDATE campaigns 
-                SET status = 'running', started_at = datetime('now') 
+                SET status = 'running', started_at = CURRENT_TIMESTAMP 
                 WHERE id = ?`,
                 [campaignId]
             );
@@ -193,7 +193,7 @@ class CampaignService {
         try {
             await query(
                 `UPDATE campaign_recipients 
-                SET status = ?, sent_at = datetime('now'), error = ? 
+                SET status = ?, sent_at = CURRENT_TIMESTAMP, error = ? 
                 WHERE id = ?`,
                 [status, error || null, recipientId]
             );
@@ -232,7 +232,7 @@ class CampaignService {
                     if (totalProcessed >= campaign.total_contacts) {
                         await query(
                             `UPDATE campaigns 
-                            SET status = 'completed', completed_at = datetime('now') 
+                            SET status = 'completed', completed_at = CURRENT_TIMESTAMP 
                             WHERE id = ?`,
                             [campaignId]
                         );

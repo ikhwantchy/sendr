@@ -10,11 +10,11 @@ export default function CreateReminderPage() {
     const editId = searchParams.get('edit') // Edit mode if this exists
 
     const handleClose = () => {
-        // Navigate back to reminders list
+        // Navigate back to bot detail page (Reminders tab)
         if (botId) {
-            router.push(`/dashboard/reminders?botId=${botId}`)
+            router.push(`/dashboard/bots/${botId}#reminders`)
         } else {
-            router.push('/dashboard/reminders')
+            router.push('/dashboard/bots')
         }
     }
 

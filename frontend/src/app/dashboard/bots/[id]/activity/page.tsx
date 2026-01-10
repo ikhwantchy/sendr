@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { api } from '@/lib/api'
+import LogDetailModal from '@/components/modals/LogDetailModal'
 import {
     ArrowLeft, Search, RefreshCw, Activity,
     ChevronLeft, ChevronRight, Clock, Bot, Zap,
-    Megaphone, MessageCircle, Play, Pause, Wifi, WifiOff, XCircle
+    Megaphone, MessageCircle, Play, Pause, Wifi, WifiOff, XCircle, Eye
 } from 'lucide-react'
 
 interface ActivityLog {
@@ -14,6 +15,7 @@ interface ActivityLog {
     type: 'bot' | 'rule' | 'campaign' | 'reminder' | 'message' | 'error'
     message: string
     timestamp: string
+    is_deleted?: boolean
 }
 
 export default function BotActivityPage() {
@@ -28,6 +30,7 @@ export default function BotActivityPage() {
     const [searchQuery, setSearchQuery] = useState('')
     const [currentPage, setCurrentPage] = useState(1)
     const [botName, setBotName] = useState<string>('Bot')
+    const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null)
     const itemsPerPage = 25
 
     useEffect(() => {
@@ -109,34 +112,58 @@ export default function BotActivityPage() {
         }
     }
 
-    const renderMessage = (msg: string) => {
-        const parts = msg.split(' ')
-        return (
-            <span className="text-sm text-zinc-200 truncate">
-                {parts.map((part, i) => {
-                    const lower = part.toLowerCase()
-                    let className = ''
-                    if (lower.includes('resumed')) className = 'text-blue-500 font-medium'
-                    else if (lower.includes('paused')) className = 'text-yellow-500 font-medium'
-                    else if (lower.includes('connected') && !lower.includes('dis')) className = 'text-emerald-400 font-medium'
-                    else if (lower.includes('disconnected')) className = 'text-red-400 font-medium'
+    const renderMessage = (log: ActivityLog) => {
+        const msg = log.message;
+        const isDeleted = log.is_deleted;
+        const isBotEvent = log.type === 'bot';
 
-                    return <span key={i} className={`${className} mr-1`}>{part}</span>
-                })}
-            </span>
+        return (
+            <div className="flex flex-col gap-0.5 min-w-0 w-full relative notranslate">
+                <div className="flex items-center gap-2">
+                    {/* Status Dot for Deleted */}
+                    {isDeleted && (
+                        <div className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" title="Deleted Message" />
+                    )}
+
+                    <span className={`text-sm truncate select-none ${isDeleted ? 'text-zinc-500 line-through decoration-zinc-700' : 'text-zinc-200'} ${isBotEvent ? 'font-medium' : ''}`}>
+                        {msg}
+                    </span>
+                </div>
+
+                <div className="flex items-center gap-2 h-4">
+                    {isDeleted ? (
+                        <span className="text-[10px] font-bold text-red-500/80 tracking-wider flex items-center gap-1.5">
+                            DELETED
+                            <span className="w-0.5 h-0.5 rounded-full bg-zinc-700" />
+                            <span className="font-normal text-zinc-500 normal-case tracking-normal">Click to view content</span>
+                        </span>
+                    ) : (
+                        <span className="text-[10px] text-zinc-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                            Click to view details
+                        </span>
+                    )}
+                </div>
+            </div>
         )
     }
 
     // "Real" absolute timestamp format: Jan 01, 14:30:45
+    // "Real" absolute timestamp format: HH:mm:ss for today, Jan 01 14:30 for others
     const formatTimestamp = (timestamp: string) => {
         const timeString = timestamp.endsWith('Z') ? timestamp : `${timestamp}Z`
         const date = new Date(timeString)
+        const now = new Date()
+        const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
+
+        if (isToday) {
+            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+        }
+
         return date.toLocaleDateString('en-US', {
             month: 'short',
             day: '2-digit',
             hour: '2-digit',
             minute: '2-digit',
-            second: '2-digit',
             hour12: false
         })
     }
@@ -275,33 +302,32 @@ export default function BotActivityPage() {
                                 const relTime = getRelativeTime(log.timestamp)
 
                                 return (
-                                    <div key={log.id} className="group flex items-center gap-4 px-6 py-3.5 hover:bg-zinc-900/50 transition-colors">
+                                    <div
+                                        key={log.id}
+                                        onClick={() => setSelectedLog(log)}
+                                        className="group flex items-start gap-4 px-6 py-4 hover:bg-zinc-900/50 hover:bg-[#131317] bg-transparent border-b border-zinc-800/30 last:border-0 border-l-2 border-l-transparent hover:border-l-blue-500 transition-all cursor-pointer"
+                                    >
                                         {/* Icon */}
-                                        <div className={`flex-shrink-0 p-2 rounded-lg ${getColorBg(log)}`}>
+                                        <div className={`flex-shrink-0 p-2.5 rounded-xl ${getColorBg(log)} mt-0.5 transition-colors`}>
                                             {getIcon(log)}
                                         </div>
 
                                         {/* Content */}
-                                        <div className="flex-1 min-w-0">
+                                        <div className="flex-1 min-w-0 pt-1">
+                                            {renderMessage(log)}
+                                        </div>
+
+                                        {/* Timestamp & Meta */}
+                                        <div className="text-right flex-shrink-0 flex flex-col items-end gap-1.5 ml-4 pt-1">
                                             <div className="flex items-center gap-2">
-                                                {renderMessage(log.message)}
                                                 {relTime && (
-                                                    <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-1.5 rounded-sm font-medium">
+                                                    <span className="text-[10px] font-medium text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">
                                                         {relTime}
                                                     </span>
                                                 )}
-                                            </div>
-                                            <div className="flex items-center gap-2 mt-0.5">
-                                                <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
-                                                    {log.type}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* Timestamp */}
-                                        <div className="text-right flex-shrink-0">
-                                            <div className="text-xs font-mono text-zinc-500 group-hover:text-zinc-300 transition-colors">
-                                                {formatTimestamp(log.timestamp)}
+                                                <div className="text-xs font-mono text-zinc-500 group-hover:text-zinc-300 transition-colors">
+                                                    {formatTimestamp(log.timestamp)}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -318,7 +344,7 @@ export default function BotActivityPage() {
 
                 {/* Pagination */}
                 {filteredLogs.length > 0 && (
-                    <div className="flex items-center justify-between text-xs text-zinc-500">
+                    <div className="flex items-center justify-between text-xs text-zinc-500 p-4 border-t border-zinc-800">
                         <div>
                             Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredLogs.length)} of {filteredLogs.length}
                         </div>
@@ -341,6 +367,12 @@ export default function BotActivityPage() {
                         </div>
                     </div>
                 )}
+
+                <LogDetailModal
+                    isOpen={!!selectedLog}
+                    onClose={() => setSelectedLog(null)}
+                    log={selectedLog}
+                />
 
             </div>
         </div>

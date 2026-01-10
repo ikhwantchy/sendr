@@ -192,24 +192,133 @@
     }
   }
 
-  /* Minimal Glow Effects */
-  .glow-cyan {
-    box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+  /* Auth Slide Animations */
+  .animate-slide-in-right {
+    animation: slide-in-right 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
-  .glow-purple {
-    box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+  .animate-slide-in-left {
+    animation: slide-in-left 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
-  .glow-pink {
-    box-shadow: 0 0 10px rgba(236, 72, 153, 0.2);
+  @keyframes slide-in-right {
+    0% {
+      opacity: 0;
+      transform: translateX(40px);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
-  .glow-green {
-    box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+  @keyframes slide-in-left {
+    0% {
+      opacity: 0;
+      transform: translateX(-40px);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
-  .glow-orange {
-    box-shadow: 0 0 10px rgba(251, 146, 60, 0.2);
+  /* Auth Continuous Slide Animations (Sliding Door Effect) */
+  .animate-door-slide-in-right {
+    animation: door-slide-in-right 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .animate-door-slide-in-left {
+    animation: door-slide-in-left 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes door-slide-in-right {
+    0% {
+      transform: translateX(100%);
+    }
+
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes door-slide-in-left {
+    0% {
+      transform: translateX(-100%);
+    }
+
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  /* Auth Push Slide Animations (Physical Sliding Door) */
+  .animate-push-slide-in-right {
+    animation: push-slide-in-right 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform;
+  }
+
+  .animate-push-slide-in-left {
+    animation: push-slide-in-left 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform;
+  }
+
+  @keyframes push-slide-in-right {
+    0% {
+      transform: translateX(100%);
+    }
+
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes push-slide-in-left {
+    0% {
+      transform: translateX(-100%);
+    }
+
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  /* Auth Snap Slide Animations */
+  .animate-snap-in-right {
+    animation: snap-in-right 0.7s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+  }
+
+  .animate-snap-in-left {
+    animation: snap-in-left 0.7s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+  }
+
+  @keyframes snap-in-right {
+    0% {
+      opacity: 0;
+      transform: translateX(100px) skewX(-5deg) scale(0.98);
+      filter: blur(4px);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translateX(0) skewX(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes snap-in-left {
+    0% {
+      opacity: 0;
+      transform: translateX(-100px) skewX(5deg) scale(0.98);
+      filter: blur(4px);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translateX(0) skewX(0) scale(1);
+      filter: blur(0);
+    }
   }
 }

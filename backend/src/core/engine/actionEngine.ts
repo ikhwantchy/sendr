@@ -211,7 +211,10 @@ class ActionExecutionEngine {
      * Execute SEND_IMAGE action
      */
     private async executeSendImage(context: any, config: any): Promise<any> {
-        const { image_url, caption, variables } = config;
+        // Support both naming conventions (backend vs frontend fallback)
+        const image_url = config.image_url || config.url;
+        const caption = config.caption || config.message;
+        const { variables } = config;
 
         // Render caption template
         const renderedCaption = caption
@@ -325,7 +328,7 @@ class ActionExecutionEngine {
     ): Promise<void> {
         try {
             // Dynamically import query to avoid circular dependencies
-            const { query } = await import('../../database/connection-sqlite');
+            const { query } = await import('../../database/connection');
             const { v4: uuidv4 } = await import('uuid');
 
             // Only log if we have necessary context
@@ -341,7 +344,7 @@ class ActionExecutionEngine {
                 INSERT INTO messages (
                     id, bot_id, wa_message_id, direction, 
                     message_type, content, media_url, source, created_at
-                ) VALUES (?, ?, ?, 'outbound', ?, ?, ?, ?, datetime('now'))
+                ) VALUES (?, ?, ?, 'outbound', ?, ?, ?, ?, CURRENT_TIMESTAMP)
             `, [
                 messageId,
                 context.bot_id,

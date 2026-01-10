@@ -2,15 +2,14 @@
  * Main Application Entry Point
  */
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import { logger } from './utils/logger';
 import { query, closePool } from './database/connection';
-
-// Load environment variables
-dotenv.config();
 
 // Import core engines (this initializes event subscriptions)
 import './core/engine/ruleEngine';

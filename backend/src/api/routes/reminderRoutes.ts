@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { query } from '../../database/connection-sqlite';
+import { query } from '../../database/connection';
 import { authenticate } from '../middleware/auth';
 import googleSheetsService from '../../services/googleSheetsService';
 import reminderSchedulerService from '../../services/reminderSchedulerService';
@@ -205,7 +205,7 @@ router.post('/', async (req, res) => {
             finalDataSourceId = uuidv4();
             await query(`
                 INSERT INTO data_sources (id, tenant_id, name, type, source_url, config, created_by, created_at)
-                VALUES (?, ?, ?, 'google_sheets', ?, '{}', ?, datetime('now'))
+                VALUES (?, ?, ?, 'google_sheets', ?, '{}', ?, CURRENT_TIMESTAMP)
             `, [finalDataSourceId, tenantId, `Data Source for ${name}`, googleSheetsUrl, userId]);
         }
         */
@@ -217,7 +217,7 @@ router.post('/', async (req, res) => {
                 schedule, timezone, is_active, target_type, target_id, 
                 data_source_id, pipeline_config, template_config, 
                 created_by, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, '{}', ?, ?, datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, '{}', ?, ?, CURRENT_TIMESTAMP)
         `, [
             reminderId,
             tenantId,
@@ -297,7 +297,7 @@ router.put('/:id', async (req, res) => {
         await query(`
             UPDATE reminders 
             SET name = ?, description = ?, bot_id = ?, target_type = ?, target_id = ?, 
-                schedule = ?, timezone = ?, data_source_id = ?, template_config = ?, updated_at = datetime('now')
+                schedule = ?, timezone = ?, data_source_id = ?, template_config = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `, [
             name,

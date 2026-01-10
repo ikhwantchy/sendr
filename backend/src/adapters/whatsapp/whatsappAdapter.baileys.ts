@@ -17,7 +17,7 @@ import { eventBus } from '../../core/events/eventBus';
 import { EventType, MessageReceivedPayload } from '../../core/events/types';
 import { logger } from '../../utils/logger';
 import { botRepository } from '../../database/repositories/botRepository';
-import { query } from '../../database/connection-sqlite';
+import { query } from '../../database/connection';
 import { v4 as uuidv4 } from 'uuid';
 
 class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
@@ -315,6 +315,32 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                     logger.debug('Logging own outbound message', { bot_id: botId });
                     await this.handleOutboundLog(msg, bot);
                     continue;
+                }
+
+                // Handle Protocol Messages (Revoke/Delete)
+                // Type 0 is REVOKE (Delete for Everyone)
+                // @ts-ignore - protocolMessage type definition might be loose
+                if (msg.message?.protocolMessage?.type === 0) {
+                    const key = msg.message.protocolMessage.key;
+                    if (key && key.id) {
+                        logger.info('🗑️ Message revoked (deleted for everyone)', {
+                            bot_id: botId,
+                            revoked_msg_id: key.id,
+                            remote_jid: key.remoteJid
+                        });
+
+                        try {
+                            // Mark message as deleted but KEEP content
+                            await query(
+                                'UPDATE messages SET is_deleted = 1 WHERE wa_message_id = ?',
+                                [key.id]
+                            );
+                            logger.info('✅ Message marked as deleted in DB', { message_id: key.id });
+                        } catch (err) {
+                            logger.error('Failed to mark message as deleted', { error: err, message_id: key.id });
+                        }
+                    }
+                    continue; // Skip processing as new message
                 }
 
                 await this.handleIncomingMessage(msg, bot);
@@ -645,6 +671,37 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                     bot_id: botId,
                     recipient: jid,
                     message_id: result?.key?.id
+                });
+            } else if (message.type === 'image') {
+                let media: any;
+
+                // Handle Base64 Data URI
+                if (message.media_url?.startsWith('data:image')) {
+                    // Extract base64 content
+                    const base64Data = message.media_url.split(';base64,').pop();
+                    if (base64Data) {
+                        media = Buffer.from(base64Data, 'base64');
+                    }
+                } else if (message.media_url) {
+                    // Handle normal URL
+                    media = { url: message.media_url };
+                }
+
+                if (!media) {
+                    throw new Error(`Invalid media configuration for image message`);
+                }
+
+                const payload: any = {
+                    image: media,
+                    caption: message.caption
+                };
+
+                const result = await sock.sendMessage(jid, payload);
+                logger.info('✅ Image message sent successfully', {
+                    bot_id: botId,
+                    recipient: jid,
+                    message_id: result?.key?.id,
+                    has_caption: !!message.caption
                 });
             } else {
                 throw new Error(`Unsupported message type: ${message.type}`);

@@ -5,7 +5,7 @@
  * ✅ Handle group activation via #enable_reminder
  */
 
-import { query } from '../../database/connection-sqlite';
+import { query } from '../../database/connection';
 import { whatsappAdapter } from '../../adapters/whatsapp/whatsappAdapter.baileys';
 import { logger } from '../../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
@@ -74,7 +74,7 @@ class GroupService {
                 // Update
                 await query(
                     `UPDATE wa_groups 
-                    SET group_name = ?, last_synced_at = datetime('now') 
+                    SET group_name = ?, last_synced_at = CURRENT_TIMESTAMP 
                     WHERE bot_id = ? AND group_jid = ?`,
                     [groupName, botId, groupId]
                 );
@@ -84,7 +84,7 @@ class GroupService {
                 await query(
                     `INSERT INTO wa_groups (
                         id, bot_id, group_jid, group_name, is_active, last_synced_at
-                    ) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+                    ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
                     [id, botId, groupId, groupName, 1]
                 );
             }
@@ -100,7 +100,7 @@ class GroupService {
         try {
             await query(
                 `UPDATE wa_groups 
-                SET is_active = 1, updated_at = datetime('now') 
+                SET is_active = 1, updated_at = CURRENT_TIMESTAMP 
                 WHERE bot_id = ? AND group_jid = ?`,
                 [botId, groupId]
             );
@@ -120,7 +120,7 @@ class GroupService {
         try {
             await query(
                 `UPDATE wa_groups 
-                SET is_active = 0, updated_at = datetime('now') 
+                SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
                 WHERE bot_id = ? AND group_jid = ?`,
                 [botId, groupId]
             );

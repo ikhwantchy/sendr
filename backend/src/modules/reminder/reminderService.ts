@@ -6,7 +6,7 @@
  * ❌ NO individual reminders
  */
 
-import { query } from '../../database/connection-sqlite';
+import { query } from '../../database/connection';
 import { messageQueue } from '../../queue/messageQueue';
 import { logger } from '../../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
@@ -268,7 +268,7 @@ class ReminderService {
     async toggleReminder(reminderId: string, isActive: boolean): Promise<void> {
         try {
             await query(
-                "UPDATE reminders SET is_active = ?, updated_at = datetime('now') WHERE id = ?",
+                "UPDATE reminders SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 [isActive ? 1 : 0, reminderId]
             );
 
@@ -303,7 +303,7 @@ class ReminderService {
         try {
             await query(
                 `UPDATE reminders 
-                SET last_run_at = datetime('now'), updated_at = datetime('now') 
+                SET last_run_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
                 WHERE id = ?`,
                 [reminderId]
             );

@@ -12,7 +12,8 @@ import { authenticate, requireRole } from '../middleware/auth';
 import { eventBus } from '../../core/events/eventBus';
 import { EventType } from '../../core/events/types';
 import { logger } from '../../utils/logger';
-import { logActivity } from '../../database/connection-sqlite';
+import { query } from '../../database/connection';
+import { logActivity } from '../../database/connection';
 
 const router = Router();
 
@@ -404,7 +405,7 @@ router.get('/:id/groups', async (req, res) => {
         }
 
         // Fetch groups from database
-        const { query } = await import('../../database/connection-sqlite');
+        const { query } = await import('../../database/connection');
 
         logger.info('Fetching groups from database', { bot_id: id });
 

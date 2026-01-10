@@ -2,7 +2,7 @@ import cron from 'node-cron';
 // Robust require for cron-parser
 const cronParser = require('cron-parser');
 const parseExpression = cronParser.parseExpression || cronParser.default?.parseExpression || cronParser;
-import { query } from '../database/connection-sqlite';
+import { query } from '../database/connection';
 import googleSheetsService from './googleSheetsService';
 import templateEngineService from './templateEngineService';
 
@@ -259,13 +259,13 @@ class ReminderSchedulerService {
         try {
             await query(`
                 INSERT INTO reminder_logs (id, reminder_id, status, executed_at, error_message)
-                VALUES (?, ?, ?, datetime('now'), ?)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
             `, [require('uuid').v4(), reminderId, status, details]);
 
             // Update reminder's last_run_at
             await query(`
                 UPDATE reminders 
-                SET last_run_at = datetime('now'), last_status = ?, run_count = run_count + 1
+                SET last_run_at = CURRENT_TIMESTAMP, last_status = ?, run_count = run_count + 1
                 WHERE id = ?
             `, [status, reminderId]);
         } catch (error) {

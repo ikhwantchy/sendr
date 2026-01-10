@@ -8,7 +8,7 @@
  */
 
 import cron from 'node-cron';
-import { query } from '../database/connection-sqlite';
+import { query } from '../database/connection';
 import { whatsappAdapter } from '../adapters/whatsapp/whatsappAdapter.baileys';
 import { logger } from '../utils/logger';
 
@@ -49,7 +49,7 @@ class ReminderScheduler {
             const result = await query(
                 `SELECT * FROM reminders 
                 WHERE is_active = 1 
-                AND datetime(next_run_at) <= datetime('now') 
+                AND datetime(next_run_at) <= CURRENT_TIMESTAMP 
                 ORDER BY next_run_at ASC`
             );
 
@@ -74,20 +74,55 @@ class ReminderScheduler {
      */
     private async processReminder(reminder: any): Promise<void> {
         try {
-            // ✅ Send message DIRECTLY via adapter (no queue!)
-            await whatsappAdapter.sendMessage(reminder.bot_id, reminder.recipient, {
-                type: 'text',
-                content: reminder.message,
-            });
+            // Parse template config to check for image
+            const templateConfig = JSON.parse(reminder.template_config || '{}');
+            const imageUrl = templateConfig.image_url;
 
-            logger.info('Reminder sent', {
+            // Split recipients by comma (support multiple groups/contacts)
+            const recipients = reminder.recipient.split(',').map((r: string) => r.trim()).filter((r: string) => r);
+
+            // Send to each recipient
+            for (const recipient of recipients) {
+                try {
+                    // ✅ Send message DIRECTLY via adapter (no queue!)
+                    if (imageUrl) {
+                        // Send with image
+                        await whatsappAdapter.sendMessage(reminder.bot_id, recipient, {
+                            type: 'image',
+                            content: reminder.message,
+                            media_url: imageUrl,
+                        });
+                    } else {
+                        // Send text only
+                        await whatsappAdapter.sendMessage(reminder.bot_id, recipient, {
+                            type: 'text',
+                            content: reminder.message,
+                        });
+                    }
+
+                    logger.info('Reminder sent to recipient', {
+                        reminder_id: reminder.id,
+                        recipient: recipient,
+                        has_image: !!imageUrl,
+                    });
+                } catch (sendError: any) {
+                    logger.error('Failed to send reminder to recipient', {
+                        reminder_id: reminder.id,
+                        recipient: recipient,
+                        error: sendError.message,
+                    });
+                }
+            }
+
+            logger.info('Reminder processing completed', {
                 reminder_id: reminder.id,
                 name: reminder.name,
+                recipients_count: recipients.length,
             });
 
             // Update last_run_at
             await query(
-                "UPDATE reminders SET last_run_at = datetime('now') WHERE id = ?",
+                "UPDATE reminders SET last_run_at = CURRENT_TIMESTAMP WHERE id = ?",
                 [reminder.id]
             );
 

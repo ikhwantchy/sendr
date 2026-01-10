@@ -11,7 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { whatsappAdapter } from '../adapters/whatsapp/whatsappAdapter.baileys';
 import { campaignService } from '../modules/campaign/campaignService';
 import { reminderService } from '../modules/reminder/reminderService';
-import { query } from '../database/connection-sqlite';
+import { query } from '../database/connection';
 import { logger } from '../utils/logger';
 
 /**
@@ -58,7 +58,7 @@ messageQueue.process('campaign-message', async (job) => {
                 INSERT INTO messages (
                     id, bot_id, direction, source,
                     message_type, content, created_at
-                ) VALUES (?, ?, 'outbound', 'campaign', 'text', ?, datetime('now'))
+                ) VALUES (?, ?, 'outbound', 'campaign', 'text', ?, CURRENT_TIMESTAMP)
             `, [uuidv4(), bot_id, message]);
         } catch (logError) {
             logger.warn('Failed to log campaign message', { error: logError });
@@ -146,7 +146,7 @@ messageQueue.process('reminder-message', async (job) => {
                 INSERT INTO messages (
                     id, bot_id, direction, source,
                     message_type, content, created_at
-                ) VALUES (?, ?, 'outbound', 'reminder', 'text', ?, datetime('now'))
+                ) VALUES (?, ?, 'outbound', 'reminder', 'text', ?, CURRENT_TIMESTAMP)
             `, [uuidv4(), reminder.bot_id, content]);
         } catch (logError) {
             logger.warn('Failed to log reminder message', { error: logError });

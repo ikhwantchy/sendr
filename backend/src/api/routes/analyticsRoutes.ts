@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
-import { query } from '../../database/connection-sqlite';
+import { query } from '../../database/connection';
 // Import Controller
 import { AnalyticsController } from '../controllers/analyticsController';
 
@@ -159,7 +159,7 @@ router.get('/activity-logs', async (req, res) => {
         // 4. Messages (Inbound & Outbound)
         try {
             const msgs = await query(`
-                SELECT m.id, m.content, m.created_at, m.source, m.direction, b.name as bot_name
+                SELECT m.id, m.content, m.created_at, m.source, m.direction, m.is_deleted, b.name as bot_name
                 FROM messages m JOIN bots b ON m.bot_id = b.id
                 WHERE b.created_by = ? ${getDateFilter('m.created_at')} ${getBotFilter('b')}
                 ORDER BY m.created_at DESC LIMIT ?
@@ -174,7 +174,8 @@ router.get('/activity-logs', async (req, res) => {
                     id: `msg-${m.id}`,
                     type: type,
                     direction: m.direction, // Pass direction to frontend
-                    message: `${m.direction === 'inbound' ? 'Received' : 'Sent'}: ${m.content?.substring(0, 30)}...`,
+                    message: `${m.direction === 'inbound' ? 'Received' : 'Sent'}: ${m.content || ''}`,
+                    is_deleted: !!m.is_deleted, // Pass deleted status
                     timestamp: m.created_at
                 });
             });

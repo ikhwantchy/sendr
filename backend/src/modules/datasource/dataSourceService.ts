@@ -78,7 +78,7 @@ class DataSourceService {
 
         // Update last_fetched_at
         await query(
-            "UPDATE data_sources SET last_fetched_at = datetime('now') WHERE id = ?",
+            "UPDATE data_sources SET last_fetched_at = CURRENT_TIMESTAMP WHERE id = ?",
             [dataSourceId]
         );
 

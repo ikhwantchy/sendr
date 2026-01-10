@@ -3,7 +3,7 @@
  * Checks if user has required permissions for bot operations
  */
 
-const { query } = require('../database/connection-sqlite');
+const { query } = require('../database/connection');
 
 /**
  * Check if user is owner

@@ -35,11 +35,18 @@ pool.on('error', (err) => {
 export async function query(text: string, params?: any[]) {
     const start = Date.now();
     try {
-        const result = await pool.query(text, params);
+        // Automatically convert '?' placeholders to '$n' for Postgres compatibility
+        let pgText = text;
+        if (params && params.length > 0) {
+            let index = 1;
+            pgText = text.replace(/\?/g, () => `$${index++}`);
+        }
+
+        const result = await pool.query(pgText, params);
         const duration = Date.now() - start;
 
         logger.debug('Query executed', {
-            text: text.substring(0, 100),
+            text: pgText.substring(0, 100),
             duration_ms: duration,
             rows: result.rowCount,
         });
@@ -69,6 +76,26 @@ export async function transaction<T>(
         throw error;
     } finally {
         client.release();
+    }
+}
+
+/**
+ * Log activity for audit trail
+ */
+export async function logActivity(type: string, message: string, metadata: any = {}) {
+    try {
+        await query(
+            `INSERT INTO event_logs (tenant_id, event_type, event_data, context) 
+             VALUES (?, ?, ?, ?)`,
+            [
+                metadata.tenant_id || '00000000-0000-0000-0000-000000000001',
+                type,
+                JSON.stringify({ message, ...metadata }),
+                JSON.stringify({ source: 'system' })
+            ]
+        );
+    } catch (error) {
+        logger.error('Failed to log activity to Postgres', { error });
     }
 }
 

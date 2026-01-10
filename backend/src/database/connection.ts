@@ -1,13 +1,12 @@
+import { logger } from '../utils/logger';
 import { query as queryPg, transaction as transactionPg, closePool as closePoolPg } from './connection-postgres';
 import { query as querySqlite, transaction as transactionSqlite, closePool as closePoolSqlite } from './connection-sqlite';
 
-const isSqlite = process.env.DATABASE_TYPE === 'sqlite';
+// Robust detection
+const dbType = (process.env.DATABASE_TYPE || 'sqlite').toLowerCase();
+const isSqlite = dbType === 'sqlite' || dbType !== 'postgres';
 
-// Re-export pool for legacy compatibility (Postgres only)
-export const pool = isSqlite ? ({} as any) : require('./connection-postgres').pool;
-
-// Re-export db for legacy compatibility (SQLite only) - Placeholder
-export const db = isSqlite ? (require('./connection-sqlite').db || {}) : ({} as any);
+logger.info(`🔌 Database Driver: ${isSqlite ? 'SQLite' : 'PostgreSQL'} (from ${process.env.DATABASE_TYPE || 'default'})`);
 
 export async function query(text: string, params?: any[]) {
     if (isSqlite) {

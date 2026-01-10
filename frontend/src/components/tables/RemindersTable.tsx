@@ -206,7 +206,7 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                                         <td className="py-4 px-4">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button
-                                                    onClick={() => router.push(`/dashboard/reminders/${reminder.id}/edit`)}
+                                                    onClick={() => router.push(`/dashboard/reminders/create?botId=${botId}&edit=${reminder.id}`)}
                                                     className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-blue-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-blue-400"
                                                     title="Edit reminder"
                                                 >
@@ -312,8 +312,8 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                                     </div>
 
                                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border flex-shrink-0 ${isActive
-                                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-                                            : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
+                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                                        : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
                                         }`}>
                                         <Circle className="w-2 h-2 fill-current" />
                                         <span>{isActive ? 'Active' : 'Paused'}</span>
@@ -350,7 +350,7 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                                 {/* Bottom: Actions */}
                                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800/50">
                                     <button
-                                        onClick={() => router.push(`/dashboard/reminders/${reminder.id}/edit`)}
+                                        onClick={() => router.push(`/dashboard/reminders/create?botId=${botId}&edit=${reminder.id}`)}
                                         className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-blue-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-blue-400"
                                     >
                                         <Edit className="w-4 h-4" />

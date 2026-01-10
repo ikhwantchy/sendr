@@ -26,8 +26,9 @@ interface KeywordRule {
     bot_id: string;
     name: string;
     keyword: string;
-    match_type: 'equals' | 'contains' | 'regex';
+    match_type: 'equals' | 'contains' | 'regex' | 'exact' | 'starts_with' | 'ends_with';
     scope: 'global' | 'group' | 'contact';
+    metadata?: any;
     scope_target: string | null;
     priority: number;
     is_active: boolean;
@@ -193,13 +194,44 @@ class RuleEngine {
 
             switch (rule.scope) {
                 case 'global':
+                    // Check metadata for granular control (Private vs Group)
+                    if (rule.metadata) {
+                        let meta = rule.metadata;
+                        // Handle potential stringified JSON
+                        if (typeof meta === 'string') {
+                            try { meta = JSON.parse(meta); } catch (e) {
+                                // If parsing fails, proceed with default behavior (allow all)
+                            }
+                        }
+
+                        const isGroup = !!context.group_id;
+                        // Default to true if not specified to maintain backward compatibility
+                        const allowPrivate = meta.reply_in_private !== false;
+                        const allowGroup = meta.reply_in_group !== false;
+
+                        if (isGroup && !allowGroup) return false;
+                        if (!isGroup && !allowPrivate) return false;
+                    }
                     return true;
 
                 case 'group':
-                    return context.group_id === rule.scope_target;
+                    if (!context.group_id) return false; // Only match if message is from a group
+                    if (!rule.scope_target) return false; // Rule must have a target
+
+                    // Support multiple targets separated by comma
+                    const allowedGroups = rule.scope_target.split(',');
+                    return allowedGroups.includes(context.group_id);
 
                 case 'contact':
-                    return context.contact_id === rule.scope_target;
+                    if (context.group_id) return false; // Don't match contact rules in groups (optional logic, usually safer)
+                    if (!context.contact_id) return false;
+                    if (!rule.scope_target) return false;
+
+                    // Support multiple targets
+                    const allowedContacts = rule.scope_target.split(',');
+                    // Handle format differences (e.g. with or without @s.whatsapp.net) if necessary
+                    // For now assuming exact ID match
+                    return allowedContacts.includes(context.contact_id);
 
                 default:
                     return false;
@@ -216,10 +248,17 @@ class RuleEngine {
 
         switch (rule.match_type) {
             case 'equals':
+            case 'exact': // Frontend sends 'exact'
                 return normalizedMessage === normalizedKeyword;
 
             case 'contains':
                 return normalizedMessage.includes(normalizedKeyword);
+
+            case 'starts_with':
+                return normalizedMessage.startsWith(normalizedKeyword);
+
+            case 'ends_with':
+                return normalizedMessage.endsWith(normalizedKeyword);
 
             case 'regex':
                 try {
