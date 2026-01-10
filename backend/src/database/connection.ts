@@ -3,6 +3,12 @@ import { query as querySqlite, transaction as transactionSqlite, closePool as cl
 
 const isSqlite = process.env.DATABASE_TYPE === 'sqlite';
 
+// Re-export pool for legacy compatibility (Postgres only)
+export const pool = isSqlite ? ({} as any) : require('./connection-postgres').pool;
+
+// Re-export db for legacy compatibility (SQLite only) - Placeholder
+export const db = isSqlite ? (require('./connection-sqlite').db || {}) : ({} as any);
+
 export async function query(text: string, params?: any[]) {
     if (isSqlite) {
         return querySqlite(text, params);
