@@ -134,6 +134,62 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
         </div>
     )
 
+    // Parse WhatsApp formatting for preview
+    const parseWhatsAppFormatting = (text: string) => {
+        if (!text) return null
+
+        const parts: React.ReactNode[] = []
+        let lastIndex = 0
+
+        // Regex patterns for WhatsApp formatting
+        const patterns = [
+            { regex: /\*([^*]+)\*/g, tag: 'strong' },      // *bold*
+            { regex: /_([^_]+)_/g, tag: 'em' },            // _italic_
+            { regex: /~([^~]+)~/g, tag: 'del' },           // ~strikethrough~
+            { regex: /```([^`]+)```/g, tag: 'code' },      // ```monospace```
+        ]
+
+        // Combine all matches
+        const allMatches: Array<{ index: number, length: number, text: string, tag: string }> = []
+
+        patterns.forEach(({ regex, tag }) => {
+            let match
+            const re = new RegExp(regex)
+            while ((match = re.exec(text)) !== null) {
+                allMatches.push({
+                    index: match.index,
+                    length: match[0].length,
+                    text: match[1],
+                    tag
+                })
+            }
+        })
+
+        // Sort by index
+        allMatches.sort((a, b) => a.index - b.index)
+
+        // Build formatted output
+        allMatches.forEach((match, i) => {
+            // Add text before this match
+            if (match.index > lastIndex) {
+                parts.push(text.substring(lastIndex, match.index))
+            }
+
+            // Add formatted text
+            const Tag = match.tag as keyof JSX.IntrinsicElements
+            parts.push(<Tag key={i}>{match.text}</Tag>)
+
+            lastIndex = match.index + match.length
+        })
+
+        // Add remaining text
+        if (lastIndex < text.length) {
+            parts.push(text.substring(lastIndex))
+        }
+
+        return parts.length > 0 ? parts : text
+    }
+
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 lg:p-10 animate-in fade-in duration-200">
             <div className="w-full max-w-7xl h-full max-h-[85vh] bg-[#09090b] rounded-2xl shadow-2xl border border-zinc-800 flex overflow-hidden ring-1 ring-white/10">
@@ -332,7 +388,7 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
                                     )}
 
                                     <div className="px-2 pt-1 pb-6 whitespace-pre-wrap leading-relaxed">
-                                        {formData.reply || <span className="text-white/30 italic">Type reply message...</span>}
+                                        {formData.reply ? parseWhatsAppFormatting(formData.reply) : <span className="text-white/30 italic">Type reply message...</span>}
                                     </div>
                                     <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">10:00</div>
                                 </div>
