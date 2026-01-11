@@ -6,13 +6,14 @@ import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { usePermissions } from '@/hooks/usePermissions'
-import { Bot, Plus, Trash2, Settings, Phone, Calendar, Circle, Search, ArrowRight, MoreHorizontal } from 'lucide-react'
+import { Bot, Plus, Trash2, Settings, Phone, Calendar, Circle, Search, ArrowRight } from 'lucide-react'
 
 export default function BotsPage() {
     const queryClient = useQueryClient()
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [newBotName, setNewBotName] = useState('')
     const [mounted, setMounted] = useState(false)
+    const [botToDelete, setBotToDelete] = useState<string | null>(null)
 
     useEffect(() => {
         setMounted(true)
@@ -55,10 +56,12 @@ export default function BotsPage() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['bots'] })
+            setBotToDelete(null)
             toast.success('Bot deleted successfully!')
         },
         onError: (error: any) => {
             toast.error(error.response?.data?.error || 'Failed to delete bot')
+            setBotToDelete(null)
         },
     })
 
@@ -70,9 +73,15 @@ export default function BotsPage() {
         createMutation.mutate(newBotName)
     }
 
-    const handleDelete = (id: string, name: string) => {
-        if (confirm(`Are you sure you want to delete "${name}"?`)) {
-            deleteMutation.mutate(id)
+    const handleDeleteClick = (e: React.MouseEvent, botId: string) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setBotToDelete(botId)
+    }
+
+    const handleConfirmDelete = () => {
+        if (botToDelete) {
+            deleteMutation.mutate(botToDelete)
         }
     }
 
@@ -106,38 +115,80 @@ export default function BotsPage() {
                 ) : bots.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
                         {bots.map((bot: any) => (
-                            <Link
+                            <div
                                 key={bot.id}
-                                href={`/dashboard/bots/${bot.id}`}
-                                className="group relative flex flex-col p-6 rounded-xl bg-[#0e0e11] border border-zinc-800/50 hover:border-zinc-700 transition-all hover:shadow-[0_0_20px_rgba(0,0,0,0.4)]"
+                                className="group relative flex flex-col p-6 rounded-xl bg-[#0e0e11] border border-zinc-800/50 hover:border-zinc-700 transition-all hover:shadow-[0_0_20px_rgba(0,0,0,0.4)] hover:scale-[1.02]"
                             >
                                 <div className="flex items-start justify-between mb-4">
-                                    <div className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:text-white transition-colors">
+                                    <Link
+                                        href={`/dashboard/bots/${bot.id}`}
+                                        className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:text-white transition-colors"
+                                    >
                                         <Bot className="w-6 h-6" />
+                                    </Link>
+                                    <div className="flex items-center gap-2">
+                                        <StatusBadge status={bot.status} />
+                                        {mounted && isOwner && (
+                                            botToDelete === bot.id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault()
+                                                            e.stopPropagation()
+                                                            handleConfirmDelete()
+                                                        }}
+                                                        disabled={deleteMutation.isPending}
+                                                        className="px-3 py-1.5 text-xs font-medium bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors disabled:opacity-50"
+                                                    >
+                                                        {deleteMutation.isPending ? 'Deleting...' : 'Confirm'}
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault()
+                                                            e.stopPropagation()
+                                                            setBotToDelete(null)
+                                                        }}
+                                                        disabled={deleteMutation.isPending}
+                                                        className="px-3 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors disabled:opacity-50"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={(e) => handleDeleteClick(e, bot.id)}
+                                                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-500 hover:text-red-400 transition-colors"
+                                                    title="Delete bot"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )
+                                        )}
                                     </div>
-                                    <StatusBadge status={bot.status} />
                                 </div>
 
-                                <div className="mb-4">
-                                    <h3 className="text-lg font-semibold text-white tracking-tight mb-1 group-hover:text-blue-400 transition-colors">
-                                        {bot.name}
-                                    </h3>
-                                    <p className="text-zinc-500 text-sm font-mono truncate">
-                                        {bot.phone_number ? `+${bot.phone_number}` : 'No number connected'}
-                                    </p>
-                                </div>
-
-                                <div className="mt-auto pt-4 border-t border-zinc-800/50 flex items-center justify-between text-xs text-zinc-500">
-                                    <span className="flex items-center gap-1.5">
-                                        <Calendar className="w-3.5 h-3.5" />
-                                        {new Date(bot.created_at).toLocaleDateString()}
-                                    </span>
-                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <span className="text-zinc-400 font-medium">Configure</span>
-                                        <ArrowRight className="w-3.5 h-3.5" />
+                                <Link href={`/dashboard/bots/${bot.id}`} className="flex-1">
+                                    <div className="mb-4">
+                                        <h3 className="text-lg font-semibold text-white tracking-tight mb-1 group-hover:text-blue-400 transition-colors">
+                                            {bot.name}
+                                        </h3>
+                                        <p className="text-zinc-500 text-sm font-mono truncate">
+                                            {bot.phone_number ? `+${bot.phone_number}` : 'No number connected'}
+                                        </p>
                                     </div>
-                                </div>
-                            </Link>
+
+                                    <div className="mt-auto pt-4 border-t border-zinc-800/50 flex items-center justify-between text-xs text-zinc-500">
+                                        <span className="flex items-center gap-1.5">
+                                            <Calendar className="w-3.5 h-3.5" />
+                                            {new Date(bot.created_at).toLocaleDateString()}
+                                        </span>
+                                        <div className="flex items-center gap-2 transition-colors">
+                                            <span className="text-zinc-400 font-medium group-hover:text-blue-400">Configure</span>
+                                            <ArrowRight className="w-3.5 h-3.5 group-hover:text-blue-400" />
+                                        </div>
+                                    </div>
+                                </Link>
+                            </div>
                         ))}
                     </div>
                 ) : (
