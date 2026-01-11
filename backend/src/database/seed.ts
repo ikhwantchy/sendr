@@ -41,11 +41,13 @@ async function seed() {
             await query(`
                 INSERT INTO users (id, tenant_id, email, password_hash, name, role, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-            `, [uuidv4(), tenantId, 'admin@example.com', hashedPassword, 'Admin User', 'OWNER']);
+            `, ['default-user-id', tenantId, 'admin@example.com', hashedPassword, 'Admin User', 'OWNER']);
 
             console.log('✅ Admin user created');
+            console.log('   Email: admin@example.com');
+            console.log('   Password: admin123');
         } else {
-            console.log('ℹ️ Admin user already exists');
+            console.log('ℹ️  Admin user already exists');
         }
 
         console.log('✅ Seed completed successfully');

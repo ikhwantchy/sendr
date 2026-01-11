@@ -22,7 +22,9 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        // Only redirect on 401 if it's NOT a login attempt
+        // This prevents the login page from reloading when invalid credentials are entered
+        if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
             localStorage.removeItem('token')
             window.location.href = '/login'
         }

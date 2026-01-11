@@ -10,10 +10,10 @@ async function updateOwnerAccount() {
     try {
         console.log('🔄 Updating owner account...\n');
 
-        // Your real credentials
-        const newEmail = 'your-email@example.com';  // ← GANTI INI!
-        const newName = 'Your Name';                 // ← GANTI INI!
-        const newPassword = 'your-password';         // ← GANTI INI!
+        // Default credentials (admin)
+        const newEmail = 'admin@example.com';
+        const newName = 'Admin User';
+        const newPassword = 'admin123';
 
         console.log('New owner details:');
         console.log(`  Email: ${newEmail}`);
@@ -27,10 +27,15 @@ async function updateOwnerAccount() {
 
         // Update owner account
         console.log('[2/3] Updating owner account...');
+
+        // DEBUG: Check users before
+        const beforeUsers = await query("SELECT id, email, role, status FROM users");
+        console.log('DEBUG: Users in DB:', JSON.stringify(beforeUsers.rows, null, 2));
+
         await query(
             `UPDATE users 
-             SET email = ?, name = ?, password_hash = ?, updated_at = datetime('now')
-             WHERE role = 'OWNER'`,
+             SET email = ?, name = ?, password_hash = ?, role = 'OWNER', status = 'active', updated_at = datetime('now')
+             WHERE role = 'OWNER' OR email = 'admin@example.com'`,
             [newEmail, newName, passwordHash]
         );
         console.log('✅ Owner account updated\n');

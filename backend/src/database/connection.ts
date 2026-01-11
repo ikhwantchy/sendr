@@ -1,6 +1,6 @@
 import { logger } from '../utils/logger';
 import { query as queryPg, transaction as transactionPg, closePool as closePoolPg } from './connection-postgres';
-import { query as querySqlite, transaction as transactionSqlite, closePool as closePoolSqlite } from './connection-sqlite';
+import { query as querySqlite, transaction as transactionSqlite, closePool as closePoolSqlite, logActivity as logActivitySqlite } from './connection-sqlite';
 
 // Robust detection
 const dbType = (process.env.DATABASE_TYPE || 'sqlite').toLowerCase();
@@ -29,4 +29,12 @@ export async function closePool(): Promise<void> {
         return closePoolSqlite();
     }
     return closePoolPg();
+}
+
+// Export logActivity (SQLite only for now)
+export async function logActivity(type: 'bot' | 'rule' | 'campaign' | 'message' | 'error', message: string, metadata: any = {}) {
+    if (isSqlite) {
+        return logActivitySqlite(type, message, metadata);
+    }
+    // For postgres, we can add implementation later if needed
 }

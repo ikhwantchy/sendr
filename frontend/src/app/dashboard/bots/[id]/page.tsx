@@ -390,7 +390,7 @@ export default function BotDetailPage() {
     const tabs = [
         { id: 'overview', name: 'Overview' },
         { id: 'rules', name: 'Rules' },
-        { id: 'campaigns', name: 'Campaigns' },
+        { id: 'campaigns', name: 'Campaigns', comingSoon: true },
         { id: 'reminders', name: 'Reminders' },
         { id: 'settings', name: 'Settings' },
     ]
@@ -468,6 +468,11 @@ export default function BotDetailPage() {
                                     }`}
                             >
                                 <span>{tab.name}</span>
+                                {tab.comingSoon && (
+                                    <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded uppercase tracking-wider">
+                                        Soon
+                                    </span>
+                                )}
                                 {activeTab === tab.id && (
                                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
                                 )}
@@ -1067,20 +1072,22 @@ export default function BotDetailPage() {
                 )}
 
                 {activeTab === 'campaigns' && (
-                    <div>
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Broadcast Campaigns</h2>
-                            <button
-                                onClick={() => setShowCreateCampaignModal(true)}
-                                className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 text-zinc-100 rounded-lg font-medium transition-all text-sm"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                                <span>New Campaign</span>
-                            </button>
+                    <div className="flex items-center justify-center min-h-[500px]">
+                        <div className="text-center max-w-md">
+                            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-2xl flex items-center justify-center border border-amber-500/20">
+                                <Megaphone className="w-10 h-10 text-amber-500" />
+                            </div>
+                            <h3 className="text-2xl font-bold text-zinc-100 mb-3 tracking-tight">
+                                Under Development
+                            </h3>
+                            <p className="text-zinc-400 mb-6 leading-relaxed">
+                                Broadcast Campaigns feature is currently being developed and will be available in the next release.
+                            </p>
+                            <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-sm text-amber-500 font-medium">
+                                <Clock className="w-4 h-4" />
+                                <span>Coming Soon in v0.2</span>
+                            </div>
                         </div>
-                        <CampaignsTable botId={botId} />
                     </div>
                 )}
 

@@ -205,19 +205,12 @@ async function initSchema(): Promise<void> {
       UNIQUE(bot_id, group_jid)
     );
 
-    -- Insert default tenant and user
+    -- Insert default tenant (user will be created by seed script)
     INSERT OR IGNORE INTO tenants (id, name, slug) 
     VALUES ('default-tenant-id', 'Default Tenant', 'default');
 
-    INSERT OR IGNORE INTO users (id, tenant_id, email, password_hash, name, role) 
-    VALUES (
-      'default-user-id',
-      'default-tenant-id',
-      'admin@example.com',
-      '$2a$10$rQZ9vZ9Z9Z9Z9Z9Z9Z9Z9OqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKq',
-      'Admin User',
-      'OWNER'
-    );
+    -- NOTE: Default user is created by seed.ts with proper password hash
+    -- Removed auto-insert here to prevent dummy hash issues
   `;
 
   db.run(schema);
