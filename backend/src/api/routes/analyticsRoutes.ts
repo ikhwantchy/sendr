@@ -188,7 +188,14 @@ router.get('/activity-logs', async (req, res) => {
                     timestamp: m.created_at
                 });
             });
-        } catch (e) { }
+        } catch (e: any) {
+            console.error('Message query error:', e);
+            console.error('Message query error details:', {
+                message: e?.message,
+                code: e?.code,
+                errno: e?.errno
+            });
+        }
 
         // 5. System Activity Logs (Persistent History) - ONLY if no botId is specified, or fetch specific?
         // Usually system logs are global. If filtering by bot, maybe skip or filter message content?
