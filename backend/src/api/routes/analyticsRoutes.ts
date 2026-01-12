@@ -113,7 +113,9 @@ router.get('/activity-logs', async (req, res) => {
                     });
                 }
             });
-        } catch (e) { }
+        } catch (e) {
+            console.error('Campaign query error:', e);
+        }
 
         // 2. Bots (Connections)
         try {
@@ -158,7 +160,9 @@ router.get('/activity-logs', async (req, res) => {
                     timestamp: r.created_at
                 });
             });
-        } catch (e) { }
+        } catch (e) {
+            console.error('Rule query error:', e);
+        }
 
         // 4. Messages (Inbound & Outbound)
         try {
@@ -205,7 +209,9 @@ router.get('/activity-logs', async (req, res) => {
                         timestamp: l.created_at
                     });
                 });
-            } catch (e) { }
+            } catch (e) {
+                console.error('System log query error:', e);
+            }
         }
 
         activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
