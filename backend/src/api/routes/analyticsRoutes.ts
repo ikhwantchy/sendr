@@ -168,7 +168,7 @@ router.get('/activity-logs', async (req, res) => {
         try {
             const msgParams: any[] = [userId];
             const msgs = await query(`
-                SELECT m.id, m.content, m.created_at, m.source, m.direction, m.is_deleted, b.name as bot_name
+                SELECT m.id, m.content, m.created_at, m.source, m.direction, b.name as bot_name
                 FROM messages m JOIN bots b ON m.bot_id = b.id
                 WHERE b.created_by = ? ${getDateFilter('m.created_at')} ${getBotFilter('b', msgParams)}
                 ORDER BY m.created_at DESC LIMIT ?
@@ -184,7 +184,6 @@ router.get('/activity-logs', async (req, res) => {
                     type: type,
                     direction: m.direction, // Pass direction to frontend
                     message: `${m.direction === 'inbound' ? 'Received' : 'Sent'}: ${m.content || ''}`,
-                    is_deleted: !!m.is_deleted, // Pass deleted status
                     timestamp: m.created_at
                 });
             });
