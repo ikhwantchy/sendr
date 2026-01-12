@@ -70,6 +70,7 @@ export interface WhatsAppIncomingMessage {
     media_url?: string;
     is_group: boolean;
     group_name?: string;
+    sender_id?: string;
     sender_name?: string;
     timestamp: string;
 }

@@ -53,7 +53,18 @@ export const api = {
         pause: (id: string) => apiClient.post(`/bots/${id}/pause`),
         resume: (id: string) => apiClient.post(`/bots/${id}/resume`),
         delete: (id: string) => apiClient.delete(`/bots/${id}`),
+        update: (id: string, data: any) => apiClient.put(`/bots/${id}`, data),
         getGroups: (id: string) => apiClient.get(`/bots/${id}/groups`),
+    },
+
+    // AI
+    ai: {
+        getProviders: () => apiClient.get('/ai/providers'),
+        testConnection: (data: any) => apiClient.post('/ai/test-connection', data),
+        getConversations: (botId: string) => apiClient.get(`/ai/conversations/${botId}`),
+        getMessages: (conversationId: string) => apiClient.get(`/ai/conversations/${conversationId}/messages`),
+        endConversation: (conversationId: string) => apiClient.post(`/ai/conversations/${conversationId}/end`),
+        getUsage: (botId: string) => apiClient.get(`/ai/usage/${botId}`),
     },
 
     // Rules

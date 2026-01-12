@@ -129,6 +129,30 @@ router.post('/', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
 });
 
 /**
+ * PUT /api/bots/:id
+ * Update bot details
+ */
+router.put('/:id', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const tenantId = req.user!.tenant_id;
+
+        const bot = await botRepository.update(id, req.body);
+
+        res.json({
+            success: true,
+            data: bot,
+        });
+    } catch (error: any) {
+        logger.error('Failed to update bot', { error, bot_id: req.params.id });
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
+/**
  * POST /api/bots/:id/connect
  * Initiate WhatsApp connection (request QR code)
  */

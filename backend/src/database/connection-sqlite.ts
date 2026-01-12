@@ -74,17 +74,49 @@ async function initSchema(): Promise<void> {
       tenant_id TEXT NOT NULL,
       name TEXT NOT NULL,
       phone_number TEXT,
+      lid TEXT,
       status TEXT DEFAULT 'disconnected' CHECK(status IN ('disconnected', 'connecting', 'connected', 'error')),
       qr_code TEXT,
       qr_expires_at TEXT,
       session_data TEXT,
       config TEXT,
+      ai_config TEXT DEFAULT '{"enabled":false}',
       last_connected_at TEXT,
       created_by TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (tenant_id) REFERENCES tenants(id),
       FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+
+    -- AI Conversations
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+        id TEXT PRIMARY KEY,
+        bot_id TEXT NOT NULL,
+        contact_id TEXT NOT NULL,
+        contact_name TEXT,
+        started_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        ended_at TEXT,
+        status TEXT DEFAULT 'active',
+        mode TEXT,
+        extracted_data TEXT DEFAULT '{}',
+        messages TEXT DEFAULT '[]',
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+    );
+
+    -- AI Usage Tracking
+    CREATE TABLE IF NOT EXISTS ai_usage (
+        id TEXT PRIMARY KEY,
+        bot_id TEXT NOT NULL,
+        conversation_id TEXT,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        tokens_input INTEGER DEFAULT 0,
+        tokens_output INTEGER DEFAULT 0,
+        cost REAL DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+        FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE SET NULL
     );
 
     -- Keyword Rules
@@ -205,6 +237,39 @@ async function initSchema(): Promise<void> {
       UNIQUE(bot_id, group_jid)
     );
 
+    -- Campaigns
+    CREATE TABLE IF NOT EXISTS campaigns (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        bot_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        message_template TEXT NOT NULL,
+        status TEXT DEFAULT 'draft',
+        total_contacts INTEGER DEFAULT 0,
+        sent_count INTEGER DEFAULT 0,
+        failed_count INTEGER DEFAULT 0,
+        started_at TEXT,
+        completed_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+        FOREIGN KEY (bot_id) REFERENCES bots(id)
+    );
+
+    -- Campaign Recipients
+    CREATE TABLE IF NOT EXISTS campaign_recipients (
+        id TEXT PRIMARY KEY,
+        campaign_id TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        name TEXT,
+        variables TEXT,
+        status TEXT DEFAULT 'pending',
+        sent_at TEXT,
+        error TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    );
+
     -- Insert default tenant (user will be created by seed script)
     INSERT OR IGNORE INTO tenants (id, name, slug) 
     VALUES ('default-tenant-id', 'Default Tenant', 'default');
@@ -230,9 +295,19 @@ async function initSchema(): Promise<void> {
   try {
     db.run("ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound'))");
     logger.info('✅ MIGRATION: Added source column to messages table');
-  } catch (e) {
-    // Column likely exists, ignore
-  }
+  } catch (e) { }
+
+  // MIGRATION: Add ai_config column to bots if it doesn't exist
+  try {
+    db.run("ALTER TABLE bots ADD COLUMN ai_config TEXT DEFAULT '{\"enabled\":false}'");
+    logger.info('✅ MIGRATION: Added ai_config column to bots table');
+  } catch (e) { }
+
+  // MIGRATION: Add lid column to bots if it doesn't exist
+  try {
+    db.run("ALTER TABLE bots ADD COLUMN lid TEXT");
+    logger.info('✅ MIGRATION: Added lid column to bots table');
+  } catch (e) { }
 
   // DATA REPAIR: Backfill messages from reminder_logs (for historical charts)
   try {

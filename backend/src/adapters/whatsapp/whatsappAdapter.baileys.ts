@@ -172,18 +172,24 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 logger.info('WhatsApp connected!', { bot_id: botId });
 
                 try {
-                    const phoneNumber = sock.user?.id.split(':')[0] || '';
+                    const fullId = sock.user?.id || '';
+                    const lid = (sock as any).authState?.creds?.me?.lid || '';
+                    const phoneNumber = fullId.split(':')[0] || '';
                     const deviceName = sock.user?.name || 'Unknown';
 
                     logger.info('Updating bot status to connected', {
                         bot_id: botId,
+                        full_id: fullId,
+                        lid: lid,
                         phone_number: phoneNumber,
-                        device_name: deviceName
+                        device_name: deviceName,
+                        me: (sock as any).authState?.creds?.me
                     });
 
                     await botRepository.update(botId, {
                         status: 'connected',
                         phone_number: phoneNumber,
+                        lid: lid.split(':')[0] || lid, // Store clean lid if possible
                         qr_code: null,
                         qr_expires_at: null,
                         last_connected_at: new Date().toISOString(),
@@ -220,18 +226,17 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 const disconnectReason = (lastDisconnect?.error as Boom)?.output?.statusCode;
                 const shouldReconnect = disconnectReason !== DisconnectReason.loggedOut;
 
-                // Map disconnect reason to readable message
-                const reasonMap: Record<number, string> = {
-                    [DisconnectReason.badSession]: 'Bad Session',
-                    [DisconnectReason.connectionClosed]: 'Connection Closed',
-                    [DisconnectReason.connectionLost]: 'Connection Lost',
-                    [DisconnectReason.connectionReplaced]: 'Connection Replaced (logged in elsewhere)',
-                    [DisconnectReason.loggedOut]: 'Logged Out from WhatsApp',
-                    [DisconnectReason.restartRequired]: 'Restart Required',
-                    [DisconnectReason.timedOut]: 'Connection Timed Out',
-                };
+                const reasonMap = new Map<number, string>([
+                    [DisconnectReason.badSession, 'Bad Session'],
+                    [DisconnectReason.connectionClosed, 'Connection Closed'],
+                    [DisconnectReason.connectionLost, 'Connection Lost'],
+                    [DisconnectReason.connectionReplaced, 'Connection Replaced'],
+                    [DisconnectReason.loggedOut, 'Logged Out'],
+                    [DisconnectReason.restartRequired, 'Restart Required'],
+                    [DisconnectReason.timedOut, 'Timed Out'],
+                ]);
 
-                const reasonText = disconnectReason ? reasonMap[disconnectReason] || `Unknown (${disconnectReason})` : 'Unknown';
+                const reasonText = disconnectReason ? reasonMap.get(disconnectReason) || `Unknown (${disconnectReason})` : 'Unknown';
 
                 logger.warn('WhatsApp disconnected', {
                     bot_id: botId,
@@ -414,14 +419,30 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 message_type: 'text',
                 content: messageContent,
                 is_group: msg.key.remoteJid?.endsWith('@g.us') || false,
+                sender_id: msg.key.participant || msg.key.remoteJid || undefined,
                 sender_name: msg.pushName || 'Unknown',
                 timestamp: new Date((msg.messageTimestamp as number) * 1000).toISOString(),
             };
+
+            // Extract mentions and quoted message info
+            const contextInfo = (msg.message?.extendedTextMessage ||
+                msg.message?.imageMessage ||
+                msg.message?.videoMessage ||
+                msg.message?.documentMessage)?.contextInfo;
+
+            const mentioned_jids = contextInfo?.mentionedJid || [];
+            const quoted_message = contextInfo?.quotedMessage ? {
+                participant: contextInfo.participant,
+                stanzaId: contextInfo.stanzaId,
+                content: contextInfo.quotedMessage.conversation || contextInfo.quotedMessage.extendedTextMessage?.text
+            } : undefined;
 
             logger.info('✅ Incoming message parsed', {
                 bot_id: bot.id,
                 from: incomingMessage.from,
                 content: incomingMessage.content,
+                mentions: mentioned_jids,
+                has_quote: !!quoted_message,
                 message_type: Object.keys(msg.message || {})[0],
             });
 
@@ -456,7 +477,11 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                     message: incomingMessage.content,
                     timestamp: incomingMessage.timestamp,
                 },
-                incomingMessage as MessageReceivedPayload
+                {
+                    ...incomingMessage,
+                    mentioned_jids,
+                    quoted_message
+                } as MessageReceivedPayload
             );
         } catch (error) {
             logger.error('Failed to handle incoming message', { error, bot_id: bot.id });

@@ -36,6 +36,30 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * GET /api/campaigns/bot/:botId
+ * List campaigns for a specific bot
+ */
+router.get('/bot/:botId', async (req, res) => {
+    try {
+        const tenantId = req.user?.tenant_id || '00000000-0000-0000-0000-000000000001';
+        const { botId } = req.params;
+
+        const campaigns = await campaignService.listCampaigns(tenantId, botId);
+
+        res.json({
+            success: true,
+            data: campaigns,
+        });
+    } catch (error: any) {
+        logger.error('Failed to list bot campaigns', { botId, error: error.message });
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+
+/**
  * POST /api/campaigns
  * Create a new campaign
  */

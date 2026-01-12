@@ -14,6 +14,7 @@ import { query, closePool } from './database/connection';
 // Import core engines (this initializes event subscriptions)
 import './core/engine/ruleEngine';
 import './core/engine/actionEngine';
+import './core/engine/aiEngine';
 
 // ✅ Import message worker (Bull queue)
 import './queue/messageWorker';
@@ -33,6 +34,7 @@ import usersRoutes from './api/routes/usersRoutes';
 import permissionsRoutes from './api/routes/permissionsRoutes';
 import invitationsRoutes from './api/routes/invitationsRoutes';
 import sheetsRoutes from './api/routes/sheetsRoutes';
+import aiRoutes from './api/routes/aiRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -84,12 +86,18 @@ app.use('/api/users', usersRoutes);
 app.use('/api/permissions', permissionsRoutes);
 app.use('/api/invitations', invitationsRoutes);
 app.use('/api/sheets', sheetsRoutes);
+app.use('/api/ai', aiRoutes);
 
 // 404 handler
 app.use((req, res) => {
+    logger.warn(`404 Not Found: ${req.method} ${req.path}`, {
+        ip: req.ip,
+        headers: req.headers,
+    });
     res.status(404).json({
         error: 'Not found',
         path: req.path,
+        method: req.method
     });
 });
 

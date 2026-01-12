@@ -87,19 +87,21 @@ router.get('/activity-logs', async (req, res) => {
         };
 
         // Helper for bot filtering
-        const getBotFilter = (tableAlias: string) => {
+        const getBotFilter = (tableAlias: string, params: any[]) => {
             if (!botId) return '';
-            return `AND ${tableAlias}.id = '${botId}'`; // Assuming botId is safe (UUID)
+            params.push(botId);
+            return `AND ${tableAlias}.id = ?`;
         };
 
         // 1. Campaigns
         try {
+            const campaignParams: any[] = [userId];
             const campaigns = await query(`
                 SELECT c.id, c.name, c.status, c.created_at, c.updated_at, b.name as bot_name
                 FROM campaigns c JOIN bots b ON c.bot_id = b.id
-                WHERE b.created_by = ? ${getDateFilter('c.updated_at')} ${getBotFilter('b')}
+                WHERE b.created_by = ? ${getDateFilter('c.updated_at')} ${getBotFilter('b', campaignParams)}
                 ORDER BY c.updated_at DESC LIMIT ?
-            `, [userId, limit]);
+            `, [...campaignParams, limit]);
 
             campaigns.rows.forEach(c => {
                 if (c.status === 'completed' || c.status === 'sending') {
@@ -115,11 +117,12 @@ router.get('/activity-logs', async (req, res) => {
 
         // 2. Bots (Connections)
         try {
+            const botParams: any[] = [userId];
             const bots = await query(`
                 SELECT id, name, status, updated_at FROM bots 
-                WHERE created_by = ? ${getDateFilter('updated_at')} ${getBotFilter('bots')}
+                WHERE created_by = ? ${getDateFilter('updated_at')} ${getBotFilter('bots', botParams)}
                 ORDER BY updated_at DESC LIMIT ?
-            `, [userId, limit]);
+            `, [...botParams, limit]);
 
             bots.rows.forEach(b => {
                 let statusText = b.status;
@@ -139,12 +142,13 @@ router.get('/activity-logs', async (req, res) => {
 
         // 3. Rules
         try {
+            const ruleParams: any[] = [userId];
             const rules = await query(`
                 SELECT r.id, r.keyword, r.created_at, b.name as bot_name 
                 FROM keyword_rules r JOIN bots b ON r.bot_id = b.id
-                WHERE b.created_by = ? ${getDateFilter('r.created_at')} ${getBotFilter('b')}
+                WHERE b.created_by = ? ${getDateFilter('r.created_at')} ${getBotFilter('b', ruleParams)}
                 ORDER BY r.created_at DESC LIMIT ?
-            `, [userId, limit]);
+            `, [...ruleParams, limit]);
 
             rules.rows.forEach(r => {
                 activities.push({
@@ -158,12 +162,13 @@ router.get('/activity-logs', async (req, res) => {
 
         // 4. Messages (Inbound & Outbound)
         try {
+            const msgParams: any[] = [userId];
             const msgs = await query(`
                 SELECT m.id, m.content, m.created_at, m.source, m.direction, m.is_deleted, b.name as bot_name
                 FROM messages m JOIN bots b ON m.bot_id = b.id
-                WHERE b.created_by = ? ${getDateFilter('m.created_at')} ${getBotFilter('b')}
+                WHERE b.created_by = ? ${getDateFilter('m.created_at')} ${getBotFilter('b', msgParams)}
                 ORDER BY m.created_at DESC LIMIT ?
-            `, [userId, limit]);
+            `, [...msgParams, limit]);
 
             msgs.rows.forEach(m => {
                 let type = 'message';

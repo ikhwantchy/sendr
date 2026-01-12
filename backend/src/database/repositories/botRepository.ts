@@ -10,11 +10,13 @@ export interface Bot {
     tenant_id: string;
     name: string;
     phone_number: string | null;
+    lid: string | null;
     status: 'connected' | 'disconnected' | 'connecting' | 'error';
     qr_code: string | null;
     qr_expires_at: string | null;
     session_data: any;
     config: any;
+    ai_config: any;
     last_connected_at: string | null;
     created_by: string | null;
     created_at: string;
@@ -35,12 +37,21 @@ class BotRepository {
 
         const bot = result.rows[0] || null;
 
-        // Parse config JSON
-        if (bot && bot.config) {
-            try {
-                bot.config = JSON.parse(bot.config);
-            } catch (e) {
-                bot.config = {};
+        // Parse JSON fields
+        if (bot) {
+            if (bot.config) {
+                try {
+                    bot.config = typeof bot.config === 'string' ? JSON.parse(bot.config) : bot.config;
+                } catch (e) {
+                    bot.config = {};
+                }
+            }
+            if (bot.ai_config) {
+                try {
+                    bot.ai_config = typeof bot.ai_config === 'string' ? JSON.parse(bot.ai_config) : bot.ai_config;
+                } catch (e) {
+                    bot.ai_config = { enabled: false };
+                }
             }
         }
 
@@ -56,13 +67,20 @@ class BotRepository {
             [tenantId]
         );
 
-        // Parse config JSON for each bot
+        // Parse JSON fields for each bot
         return result.rows.map((bot: Bot) => {
             if (bot.config) {
                 try {
-                    bot.config = JSON.parse(bot.config as any);
+                    bot.config = typeof bot.config === 'string' ? JSON.parse(bot.config as any) : bot.config;
                 } catch (e) {
                     bot.config = {};
+                }
+            }
+            if (bot.ai_config) {
+                try {
+                    bot.ai_config = typeof bot.ai_config === 'string' ? JSON.parse(bot.ai_config as any) : bot.ai_config;
+                } catch (e) {
+                    bot.ai_config = { enabled: false };
                 }
             }
             return bot;
@@ -116,13 +134,20 @@ class BotRepository {
     async update(id: string, data: Partial<Bot>): Promise<Bot> {
         const fields: string[] = [];
         const values: any[] = [];
-        let paramIndex = 1;
+
+        // Always update updated_at
+        data.updated_at = new Date().toISOString();
 
         for (const [key, value] of Object.entries(data)) {
             if (value !== undefined && key !== 'id' && key !== 'tenant_id') {
-                fields.push(`${key} = $${paramIndex}`);
-                values.push(value);
-                paramIndex++;
+                fields.push(`${key} = ?`);
+
+                // Stringify JSON fields if necessary
+                if ((key === 'config' || key === 'ai_config' || key === 'session_data') && typeof value === 'object') {
+                    values.push(JSON.stringify(value));
+                } else {
+                    values.push(value);
+                }
             }
         }
 
@@ -132,9 +157,8 @@ class BotRepository {
 
         values.push(id);
 
-        // SQLite doesn't support RETURNING *, so we update then fetch
         await query(
-            `UPDATE bots SET ${fields.join(', ')} WHERE id = $${paramIndex}`,
+            `UPDATE bots SET ${fields.join(', ')} WHERE id = ?`,
             values
         );
 

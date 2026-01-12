@@ -88,7 +88,14 @@ export interface MessageReceivedPayload {
     media_url?: string;
     is_group: boolean;
     group_name?: string;
+    sender_id?: string;
     sender_name?: string;
+    mentioned_jids?: string[];
+    quoted_message?: {
+        participant?: string;
+        stanzaId?: string;
+        content?: string;
+    };
 }
 
 export interface KeywordMatchedPayload {

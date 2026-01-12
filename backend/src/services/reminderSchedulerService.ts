@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 // Robust require for cron-parser
 const cronParser = require('cron-parser');
-const parseExpression = cronParser.parseExpression || cronParser.default?.parseExpression || cronParser;
+const parseExpression = cronParser.parseExpression || cronParser.default?.parseExpression || (typeof cronParser === 'function' ? cronParser : cronParser.parseExpression);
 import { query } from '../database/connection';
 import googleSheetsService from './googleSheetsService';
 import templateEngineService from './templateEngineService';

@@ -114,10 +114,8 @@ class RuleEngine {
                     message: payload.content,
                 });
 
-                // Emit KEYWORD_NO_MATCH event
-                await eventBus.emit(EventType.KEYWORD_NO_MATCH, context, {
-                    message: payload.content,
-                });
+                // Emit KEYWORD_NO_MATCH event with full payload for AI Engine
+                await eventBus.emit(EventType.KEYWORD_NO_MATCH, context, payload);
             }
         } catch (error) {
             logger.error('Rule Engine error', { error, context });

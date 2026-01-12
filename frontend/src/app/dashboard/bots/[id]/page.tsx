@@ -13,6 +13,7 @@ import DeleteConfirmationModal from '@/components/modals/DeleteConfirmationModal
 import CampaignsTable from '@/components/tables/CampaignsTable'
 import ActivityChart from '@/components/ActivityChart'
 import RecentActivityList from '@/components/RecentActivityList'
+import AIAssistantTab from '@/components/AIAssistantTab'
 import {
     ChevronLeft,
     MessageSquare,
@@ -57,7 +58,7 @@ export default function BotDetailPage() {
     // Handle URL hash for tab switching
     useEffect(() => {
         const hash = window.location.hash.replace('#', '')
-        if (hash && ['overview', 'rules', 'campaigns', 'reminders', 'settings'].includes(hash)) {
+        if (hash && ['overview', 'rules', 'ai-assistant', 'campaigns', 'reminders', 'settings'].includes(hash)) {
             setActiveTab(hash)
         }
     }, [])
@@ -390,6 +391,7 @@ export default function BotDetailPage() {
     const tabs = [
         { id: 'overview', name: 'Overview' },
         { id: 'rules', name: 'Rules' },
+        { id: 'ai-assistant', name: 'AI Assistant' },
         { id: 'campaigns', name: 'Campaigns', comingSoon: true },
         { id: 'reminders', name: 'Reminders' },
         { id: 'settings', name: 'Settings' },
@@ -1417,6 +1419,10 @@ export default function BotDetailPage() {
                             </div>
                         )}
                     </div>
+                )}
+
+                {activeTab === 'ai-assistant' && (
+                    <AIAssistantTab botId={botId} botData={bot} />
                 )}
 
                 {activeTab === 'settings' && (
