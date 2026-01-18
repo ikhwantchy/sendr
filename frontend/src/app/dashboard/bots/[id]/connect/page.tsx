@@ -6,6 +6,7 @@ import { api } from '@/lib/api'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { ArrowLeft, QrCode, RefreshCw } from 'lucide-react'
 
 export default function ConnectBotPage() {
     const params = useParams()
@@ -13,6 +14,7 @@ export default function ConnectBotPage() {
     const botId = params.id as string
     const [qrCode, setQrCode] = useState<string | null>(null)
     const [isConnecting, setIsConnecting] = useState(false)
+    const [countdown, setCountdown] = useState(30)
 
     // Fetch bot details
     const { data: bot } = useQuery({
@@ -33,6 +35,7 @@ export default function ConnectBotPage() {
             if (data.data?.qr_code || data.data?.qr) {
                 setQrCode(data.data.qr_code || data.data.qr)
                 setIsConnecting(true)
+                setCountdown(30)
                 toast.success('QR Code generated! Scan with WhatsApp')
 
                 // Poll for connection status
@@ -67,112 +70,120 @@ export default function ConnectBotPage() {
         setTimeout(() => clearInterval(interval), 300000)
     }
 
+    // Countdown timer
+    useEffect(() => {
+        if (qrCode && countdown > 0) {
+            const timer = setInterval(() => {
+                setCountdown(prev => prev - 1)
+            }, 1000)
+            return () => clearInterval(timer)
+        }
+    }, [qrCode, countdown])
+
     const handleConnect = () => {
         connectMutation.mutate()
     }
 
+    const handleCancel = () => {
+        router.push(`/dashboard/bots/${botId}`)
+    }
+
     return (
-        <div className="min-h-screen p-8">
-            {/* Header */}
-            <div className="mb-8">
-                <Link
-                    href={`/dashboard/bots/${botId}`}
-                    className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-4 transition-colors"
+        <div className="min-h-screen bg-[#09090b] flex items-center justify-center p-8">
+            {/* Centered Modal */}
+            <div className="w-full max-w-md">
+                {/* Cancel Button */}
+                <button
+                    onClick={handleCancel}
+                    className="flex items-center gap-2 text-zinc-500 hover:text-zinc-300 mb-6 transition-colors text-sm"
                 >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Back to Bot
-                </Link>
+                    <ArrowLeft className="w-4 h-4" />
+                    CANCEL
+                </button>
 
-                <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
-                    <span className="w-1.5 h-10 bg-gradient-to-b from-cyan-400 to-blue-600 rounded-full"></span>
-                    Connect WhatsApp
-                </h1>
-                <p className="text-gray-400 text-lg">
-                    {bot?.name || 'Bot'}
-                </p>
-            </div>
-
-            {/* Content */}
-            <div className="max-w-2xl mx-auto">
-                <div className="glass rounded-2xl border border-white/10 overflow-hidden">
+                {/* Modal Card */}
+                <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl overflow-hidden">
                     {!qrCode ? (
-                        // Initial state - Show connect button
-                        <div className="p-12 text-center">
-                            <div className="w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                </svg>
+                        // Initial state - Show instructions
+                        <div className="p-8 text-center">
+                            {/* Icon */}
+                            <div className="w-16 h-16 mx-auto mb-6 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                                <QrCode className="w-8 h-8 text-zinc-400" />
                             </div>
 
-                            <h2 className="text-2xl font-bold text-white mb-4">
-                                Ready to Connect
+                            {/* Title */}
+                            <h2 className="text-xl font-semibold text-white mb-2">
+                                Connect WhatsApp
                             </h2>
-                            <p className="text-gray-400 mb-8 max-w-md mx-auto">
-                                Click the button below to generate a QR code. Then scan it with your WhatsApp to connect this bot.
+                            <p className="text-sm text-zinc-500 mb-8">
+                                Link your device to start automating messages.
                             </p>
 
-                            <button
-                                onClick={handleConnect}
-                                disabled={connectMutation.isPending}
-                                className="group px-8 py-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-bold hover:shadow-2xl hover:shadow-cyan-500/50 transition-all disabled:opacity-50 relative overflow-hidden"
-                            >
-                                <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100"></div>
-                                <span className="relative z-10 flex items-center gap-2">
-                                    {connectMutation.isPending ? (
-                                        <>
-                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                            Generating QR Code...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                            </svg>
-                                            Generate QR Code
-                                        </>
-                                    )}
-                                </span>
-                            </button>
-
                             {/* Instructions */}
-                            <div className="mt-12 pt-8 border-t border-white/10">
-                                <h3 className="text-lg font-bold text-white mb-4">How to Connect:</h3>
-                                <div className="space-y-3 text-left max-w-md mx-auto">
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-sm font-bold">1</div>
-                                        <p className="text-gray-400">Click "Generate QR Code" button</p>
+                            <div className="mb-8">
+                                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+                                    HOW TO CONNECT
+                                </h3>
+                                <div className="space-y-3 text-left">
+                                    <div className="flex items-start gap-3 text-sm text-zinc-400">
+                                        <div className="flex-shrink-0 w-5 h-5 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-xs text-zinc-500">
+                                            1
+                                        </div>
+                                        <span>Open WhatsApp on your phone</span>
                                     </div>
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-sm font-bold">2</div>
-                                        <p className="text-gray-400">Open WhatsApp on your phone</p>
+                                    <div className="flex items-start gap-3 text-sm text-zinc-400">
+                                        <div className="flex-shrink-0 w-5 h-5 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-xs text-zinc-500">
+                                            2
+                                        </div>
+                                        <span>Go to Settings → Linked Devices</span>
                                     </div>
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-sm font-bold">3</div>
-                                        <p className="text-gray-400">Go to Settings → Linked Devices → Link a Device</p>
+                                    <div className="flex items-start gap-3 text-sm text-zinc-400">
+                                        <div className="flex-shrink-0 w-5 h-5 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-xs text-zinc-500">
+                                            3
+                                        </div>
+                                        <span>Tap on Link a Device</span>
                                     </div>
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-sm font-bold">4</div>
-                                        <p className="text-gray-400">Scan the QR code shown on this page</p>
+                                    <div className="flex items-start gap-3 text-sm text-zinc-400">
+                                        <div className="flex-shrink-0 w-5 h-5 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-xs text-zinc-500">
+                                            4
+                                        </div>
+                                        <span>Scan the QR code shown here</span>
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Generate Button */}
+                            <button
+                                onClick={handleConnect}
+                                disabled={connectMutation.isPending}
+                                className="w-full px-4 py-3 bg-white hover:bg-zinc-100 text-black font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {connectMutation.isPending ? (
+                                    <>
+                                        <RefreshCw className="w-4 h-4 animate-spin" />
+                                        Generating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <QrCode className="w-4 h-4" />
+                                        Generate QR Code
+                                    </>
+                                )}
+                            </button>
                         </div>
                     ) : (
                         // QR Code display
-                        <div className="p-12">
-                            <div className="text-center mb-8">
-                                <h2 className="text-2xl font-bold text-white mb-2">
-                                    Scan QR Code
-                                </h2>
-                                <p className="text-gray-400">
-                                    Open WhatsApp and scan this code
-                                </p>
-                            </div>
+                        <div className="p-8 text-center">
+                            {/* Title */}
+                            <h2 className="text-xl font-semibold text-white mb-2">
+                                Scan QR Code
+                            </h2>
+                            <p className="text-sm text-zinc-500 mb-8">
+                                Point your camera at the code below
+                            </p>
 
                             {/* QR Code */}
-                            <div className="bg-white p-8 rounded-2xl mx-auto w-fit mb-8">
+                            <div className="bg-white p-6 rounded-xl mx-auto w-fit mb-6">
                                 <img
                                     src={qrCode}
                                     alt="QR Code"
@@ -180,26 +191,30 @@ export default function ConnectBotPage() {
                                 />
                             </div>
 
-                            {/* Status */}
-                            <div className="text-center">
-                                <div className="inline-flex items-center gap-3 px-6 py-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
-                                    <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></div>
-                                    <span className="text-cyan-400 font-medium">
-                                        Waiting for scan...
-                                    </span>
-                                </div>
+                            {/* Countdown */}
+                            <div className="flex items-center justify-center gap-2 text-sm text-zinc-500 mb-6">
+                                <RefreshCw className="w-4 h-4" />
+                                <span>Refresh in {countdown}s</span>
                             </div>
 
-                            {/* Instructions */}
-                            <div className="mt-8 pt-8 border-t border-white/10">
-                                <h3 className="text-sm font-bold text-white mb-3 text-center">On your phone:</h3>
-                                <div className="space-y-2 text-sm text-gray-400 max-w-md mx-auto">
-                                    <p>1. Open WhatsApp</p>
-                                    <p>2. Tap Menu (⋮) or Settings</p>
-                                    <p>3. Tap Linked Devices → Link a Device</p>
-                                    <p>4. Point your phone at this screen to scan the code</p>
-                                </div>
-                            </div>
+                            {/* Refresh Button */}
+                            <button
+                                onClick={handleConnect}
+                                disabled={connectMutation.isPending}
+                                className="w-full px-4 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {connectMutation.isPending ? (
+                                    <>
+                                        <RefreshCw className="w-4 h-4 animate-spin" />
+                                        Generating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw className="w-4 h-4" />
+                                        Refresh QR Code
+                                    </>
+                                )}
+                            </button>
                         </div>
                     )}
                 </div>

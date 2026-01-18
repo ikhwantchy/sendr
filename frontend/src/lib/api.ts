@@ -26,8 +26,16 @@ apiClient.interceptors.response.use(
         // This prevents the login page from reloading when invalid credentials are entered
         if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
             localStorage.removeItem('token')
+            localStorage.removeItem('user')
             window.location.href = '/login'
         }
+
+        // Don't show toast for 404 errors - let components handle them
+        // This prevents "Endpoint not found" toasts on page load
+        if (error.response?.status === 404) {
+            console.warn('API endpoint not found:', error.config?.url)
+        }
+
         return Promise.reject(error)
     }
 )
@@ -55,6 +63,29 @@ export const api = {
         delete: (id: string) => apiClient.delete(`/bots/${id}`),
         update: (id: string, data: any) => apiClient.put(`/bots/${id}`, data),
         getGroups: (id: string) => apiClient.get(`/bots/${id}/groups`),
+        syncGroups: (id: string) => apiClient.post(`/bots/${id}/sync-groups`),
+
+        // LLM Targets
+        llmTargets: {
+            list: (botId: string) => apiClient.get(`/bots/${botId}/llm-targets`),
+            add: (botId: string, data: {
+                config_name?: string,
+                target_type: 'group' | 'contact',
+                target_jid: string,
+                target_name?: string,
+                is_enabled?: number,
+                llm_config?: string
+            }) =>
+                apiClient.post(`/bots/${botId}/llm-targets`, data),
+            update: (botId: string, targetId: string, data: any) =>
+                apiClient.put(`/bots/${botId}/llm-targets/${targetId}`, data),
+            toggle: (botId: string, targetId: string) =>
+                apiClient.patch(`/bots/${botId}/llm-targets/${targetId}/toggle`),
+            remove: (botId: string, targetId: string) =>
+                apiClient.delete(`/bots/${botId}/llm-targets/${targetId}`),
+            bulkAdd: (botId: string, targets: Array<{ target_type: 'group' | 'contact', target_jid: string, target_name?: string }>) =>
+                apiClient.post(`/bots/${botId}/llm-targets/bulk`, { targets }),
+        },
     },
 
     // AI

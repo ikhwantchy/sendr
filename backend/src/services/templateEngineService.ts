@@ -30,13 +30,70 @@ class TemplateEngineService {
     processTemplate(template: string, variables: Record<string, any>): string {
         let processed = template;
 
-        // Replace all {VARIABLE_NAME} with actual values
+        // Replace all {VARIABLE_NAME} or {{VARIABLE_NAME}} with actual values
         Object.entries(variables).forEach(([key, value]) => {
-            const regex = new RegExp(`{${key}}`, 'g');
+            // Handle both {VAR} and {{VAR}} formats
+            const regex = new RegExp(`{+${key}}+`, 'g');
             processed = processed.replace(regex, String(value));
         });
 
+        // Basic global variables
+        const now = new Date();
+        const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        processed = processed.replace(/{TODAY}/g, format(now, 'dd/MM/yyyy'));
+        processed = processed.replace(/{TODAY_DATE}/g, format(now, 'dd/MM/yyyy'));
+        processed = processed.replace(/{TODAY_NAME}/g, dayNames[now.getDay()]);
+
         return processed;
+    }
+
+    /**
+     * Render a general template with loop support
+     * Format: 
+     * Header text
+     * {{#LOOP}}
+     * {{index}}. {{Nama}} - {{Status}}
+     * {{/LOOP}}
+     * Footer text
+     */
+    renderGeneralTemplate(template: string, items: any[], globalVars: Record<string, any> = {}): string {
+        let processed = template;
+
+        // 1. Process Global Variables first
+        processed = this.processTemplate(processed, globalVars);
+
+        // 2. Handle Loops: {{#LOOP}} ... {{/LOOP}}
+        const loopRegex = /{{#LOOP}}([\s\S]*?){{\/LOOP}}/g;
+
+        processed = processed.replace(loopRegex, (_, loopContent) => {
+            if (!items || items.length === 0) return '';
+
+            return items.map((item, index) => {
+                let renderedItem = loopContent;
+
+                // Replace {{index}} (1-based)
+                renderedItem = renderedItem.replace(/{{index}}/g, String(index + 1));
+
+                // Replace all {{ColumnName}} with item values
+                Object.keys(item).forEach(key => {
+                    const regex = new RegExp(`{{${key}}}`, 'g');
+                    renderedItem = renderedItem.replace(regex, String(item[key] || ''));
+                });
+
+                // Also support {ColumnName} format
+                Object.keys(item).forEach(key => {
+                    const regex = new RegExp(`{${key}}`, 'g');
+                    renderedItem = renderedItem.replace(regex, String(item[key] || ''));
+                });
+
+                return renderedItem;
+            }).join('\n');
+        });
+
+        // 3. Cleanup: Remove any remaining LOOP tags if regex failed or multiple loops
+        processed = processed.replace(/{{#?LOOP}}/g, '').replace(/{{\/?LOOP}}/g, '');
+
+        return processed.trim();
     }
 
     /**

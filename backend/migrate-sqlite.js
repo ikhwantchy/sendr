@@ -67,6 +67,11 @@ async function runMigrations() {
             console.log('  ✅ Added completed_at');
         }
 
+        if (!(await checkColumn('campaigns', 'scheduled_at'))) {
+            await query(`ALTER TABLE campaigns ADD COLUMN scheduled_at TEXT`);
+            console.log('  ✅ Added scheduled_at');
+        }
+
         console.log('✅ Campaigns columns updated');
 
         // Migration 3: Create indexes
@@ -173,6 +178,50 @@ async function runMigrations() {
 
         console.log('✅ User invitations table created');
 
+        // Migration 8: Create llm_allowed_targets table
+        console.log('[8/8] Creating llm_allowed_targets table...');
+
+        await query(`
+            CREATE TABLE IF NOT EXISTS llm_allowed_targets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bot_id TEXT NOT NULL,
+                target_type TEXT NOT NULL CHECK(target_type IN ('group', 'contact')),
+                target_jid TEXT NOT NULL,
+                target_name TEXT,
+                config_name TEXT,
+                is_enabled INTEGER DEFAULT 1,
+                llm_config TEXT DEFAULT '{}',
+                last_used_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+                UNIQUE(bot_id, target_jid)
+            )
+        `);
+
+        // Ensure columns exist (for existing tables)
+        if (!(await checkColumn('llm_allowed_targets', 'config_name'))) {
+            await query(`ALTER TABLE llm_allowed_targets ADD COLUMN config_name TEXT`);
+            console.log('  ✅ Added config_name');
+        }
+
+        if (!(await checkColumn('llm_allowed_targets', 'is_enabled'))) {
+            await query(`ALTER TABLE llm_allowed_targets ADD COLUMN is_enabled INTEGER DEFAULT 1`);
+            console.log('  ✅ Added is_enabled');
+        }
+
+        if (!(await checkColumn('llm_allowed_targets', 'llm_config'))) {
+            await query(`ALTER TABLE llm_allowed_targets ADD COLUMN llm_config TEXT DEFAULT '{}'`);
+            console.log('  ✅ Added llm_config');
+        }
+
+        if (!(await checkColumn('llm_allowed_targets', 'last_used_at'))) {
+            await query(`ALTER TABLE llm_allowed_targets ADD COLUMN last_used_at TEXT`);
+            console.log('  ✅ Added last_used_at');
+        }
+
+        console.log('✅ LLM allowed targets table updated');
+
         // Save database
         saveDatabase();
         console.log('✅ Database saved');
@@ -184,11 +233,13 @@ async function runMigrations() {
         console.log('   - users.role column added');
         console.log('   - bot_permissions table created');
         console.log('   - user_invitations table created');
+        console.log('✅ AI Configuration System migrations:');
+        console.log('   - llm_allowed_targets table created/updated');
         console.log('');
         console.log('Next steps:');
         console.log('1. Ensure Redis is running');
         console.log('2. Restart backend: npm run dev');
-        console.log('3. Test multi-user features');
+        console.log('3. Test multi-user features & AI Config');
         console.log('');
 
         process.exit(0);

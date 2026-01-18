@@ -491,11 +491,12 @@ router.post('/:id/sync-groups', async (req, res) => {
 
         // Trigger group sync
         const { groupService } = await import('../../modules/group/groupService');
-        await groupService.syncGroupsForBot(id);
+        const count = await groupService.syncGroupsForBot(id);
 
         res.json({
             success: true,
-            message: 'Group sync triggered successfully',
+            message: `Group sync completed. Found ${count} groups.`,
+            count
         });
     } catch (error: any) {
         logger.error('Failed to sync groups', { error });

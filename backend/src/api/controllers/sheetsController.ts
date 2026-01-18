@@ -1,13 +1,14 @@
 /**
  * Google Sheets Utility Controller
- * Uses Google Sheets API v4 to fetch sheet metadata
+ * Uses public CSV export (no API key required!)
  */
 
 import { Request, Response } from 'express';
+import googleSheetsService from '../../services/googleSheetsService';
 
 /**
  * GET /api/sheets/tabs
- * Detects all available tabs in a Google Sheets document using Google Sheets API
+ * Detects all available tabs in a Google Sheets document using HTML scraping
  * 
  * Query params:
  *   - url: Google Sheets URL (required)
@@ -17,9 +18,6 @@ import { Request, Response } from 'express';
  */
 export const getSheetTabs = async (req: Request, res: Response) => {
     try {
-        // Read API key at runtime (not at import time) to ensure dotenv has loaded
-        const GOOGLE_SHEETS_API_KEY = process.env.GOOGLE_SHEETS_API_KEY;
-
         const { url } = req.query;
 
         if (!url || typeof url !== 'string') {
@@ -30,61 +28,32 @@ export const getSheetTabs = async (req: Request, res: Response) => {
         }
 
         // Extract spreadsheet ID from URL
-        const match = url.match(/\/d\/([\w-]+)/);
-        if (!match || !match[1]) {
+        const spreadsheetId = googleSheetsService.extractSpreadsheetId(url);
+        if (!spreadsheetId) {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid Google Sheets URL'
             });
         }
 
-        const spreadsheetId = match[1];
+        console.log('[Sheets] Fetching tabs for spreadsheet:', spreadsheetId);
 
-        if (!GOOGLE_SHEETS_API_KEY) {
-            console.error('[Sheets] GOOGLE_SHEETS_API_KEY not configured');
-            return res.status(500).json({
-                success: false,
-                message: 'Google Sheets API is not configured on the server'
+        // Use new public sheets service (no API key needed!)
+        const sheetNames = await googleSheetsService.getSheetNames(spreadsheetId);
+
+        if (sheetNames.length === 0) {
+            // Return success but with empty array - user can input manually
+            return res.json({
+                success: true,
+                tabs: [],
+                message: 'Could not auto-detect tabs. Please enter tab name manually.'
             });
         }
 
-        // Use Google Sheets API v4 to get spreadsheet metadata
-        const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?key=${GOOGLE_SHEETS_API_KEY}&fields=sheets.properties`;
-
-        console.log('[Sheets] Fetching from API');
-
-        const response = await fetch(apiUrl);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[Sheets] API error:', response.status, errorText);
-
-            if (response.status === 403) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Sheet is private or API key is invalid. Ensure the sheet is set to "Anyone with the link can view".'
-                });
-            }
-
-            return res.status(400).json({
-                success: false,
-                message: `Failed to fetch sheet metadata (HTTP ${response.status})`
-            });
-        }
-
-        const data: any = await response.json();
-
-        if (!data.sheets || !Array.isArray(data.sheets)) {
-            return res.status(404).json({
-                success: false,
-                message: 'No sheets found in the spreadsheet'
-            });
-        }
-
-        // Extract tab names and IDs
-        const tabs = data.sheets.map((sheet: any) => ({
-            gid: String(sheet.properties.sheetId),
-            name: sheet.properties.title
+        // Convert to expected format (gid is not available without API, use index)
+        const tabs = sheetNames.map((name, index) => ({
+            gid: String(index),
+            name: name
         }));
 
         console.log('[Sheets] Successfully extracted tabs:', tabs);
@@ -96,9 +65,13 @@ export const getSheetTabs = async (req: Request, res: Response) => {
 
     } catch (error: any) {
         console.error('[Sheets] Error fetching sheet tabs:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error while fetching tabs',
+
+        // Return success with empty array instead of error
+        // This allows user to input tab name manually
+        res.json({
+            success: true,
+            tabs: [],
+            message: 'Could not auto-detect tabs. Please enter tab name manually.',
             error: error.message
         });
     }
@@ -114,12 +87,24 @@ export const getSheetTabs = async (req: Request, res: Response) => {
  *   - template: string
  *   - timezone: string (optional)
  */
-import googleSheetsService from '../../services/googleSheetsService';
+import { format } from 'date-fns';
 import templateEngineService from '../../services/templateEngineService';
+import smartSheetsProcessor from '../../services/smartSheetsProcessor';
+import enhancedTemplateRenderer from '../../services/enhancedTemplateRenderer';
 
 export const previewDigest = async (req: Request, res: Response) => {
     try {
-        const { url, selectedSheets, template, timezone = 'Asia/Jakarta' } = req.body;
+        const {
+            url,
+            selectedSheets,
+            template,
+            timezone = 'Asia/Jakarta',
+            triggerColumn,
+            triggerValue,
+            filters,
+            sort,
+            useEnhancedRenderer = true // Flag to use new renderer
+        } = req.body;
 
         if (!url || !selectedSheets || !Array.isArray(selectedSheets) || !template) {
             return res.status(400).json({
@@ -142,7 +127,68 @@ export const previewDigest = async (req: Request, res: Response) => {
             data: googleSheetsService.convertToObjects(sheet),
         }));
 
-        // Find schedule and tasks sheets
+        let items = dataObjects[0]?.data || [];
+
+        // Apply legacy trigger filtering if provided (backward compatibility)
+        if (triggerColumn && triggerValue) {
+            const val = String(triggerValue).toLowerCase();
+            items = items.filter(item => String(item[triggerColumn] || '').toLowerCase() === val);
+        }
+
+        // Apply new filters if provided
+        if (filters && Array.isArray(filters) && filters.length > 0) {
+            items = smartSheetsProcessor.processData(items, {
+                filters,
+                sort
+            });
+        }
+
+        // Use enhanced renderer if flag is set and template uses new syntax (flexible regex)
+        const hasEnhancedSyntax = /{{\s*#each/.test(template) ||
+            /{{\s*#if/.test(template) ||
+            /{{\s*#group/.test(template);
+
+        if (useEnhancedRenderer && hasEnhancedSyntax) {
+            console.log(`🚀 [Preview] Render started. Items: ${items.length}, Template Length: ${template.length}`);
+            if (items.length > 0) {
+                console.log(`📊 [Preview] Sample Entry Keys: ${Object.keys(items[0]).join(', ')}`);
+            }
+
+            const preview = enhancedTemplateRenderer.render(template, {
+                data: items,
+                globalVars: {
+                    '@today': format(new Date(), 'dd/MM/yyyy'),
+                    '@today_name': ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][new Date().getDay()]
+                },
+                timezone
+            });
+
+            console.log(`✅ [Preview] Render complete. Result length: ${preview.length}`);
+
+            return res.json({
+                success: true,
+                preview,
+                itemsCount: items.length,
+                renderer: 'enhanced'
+            });
+        }
+
+        // Legacy rendering (backward compatibility)
+        // 1. Process as General Template with Loops if needed
+        if (template.includes('{{#LOOP}}') || template.includes('{{')) {
+            const preview = templateEngineService.renderGeneralTemplate(template, items, {
+                TODAY: new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })
+            });
+
+            return res.json({
+                success: true,
+                preview,
+                itemsCount: items.length,
+                renderer: 'legacy'
+            });
+        }
+
+        // 2. Fallback: Academic Digest (Legacy)
         const scheduleSheet = dataObjects.find(s =>
             s.name.toLowerCase().includes('jadwal') || s.name.toLowerCase().includes('schedule')
         );
@@ -150,20 +196,19 @@ export const previewDigest = async (req: Request, res: Response) => {
             s.name.toLowerCase().includes('tugas') || s.name.toLowerCase().includes('task')
         );
 
-        // Generate variables
         const variables = templateEngineService.generateAcademicDigestVariables(
             scheduleSheet?.data || [],
             tasksSheet?.data || [],
             timezone
         );
 
-        // Process template
         const preview = templateEngineService.processTemplate(template, variables);
 
         res.json({
             success: true,
             preview,
-            variables // Return raw variables too if needed for debugging
+            variables,
+            renderer: 'academic'
         });
 
     } catch (error: any) {

@@ -298,6 +298,19 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
         // Credentials update
         sock.ev.on('creds.update', saveCreds);
 
+        // ✅ AUTO-DETECT GROUPS ON UPSERT
+        sock.ev.on('groups.upsert', async (groups) => {
+            logger.info('👥 Groups upsert event', { bot_id: botId, count: groups.length });
+            try {
+                const { groupService } = await import('../../modules/group/groupService');
+                for (const group of groups) {
+                    await (groupService as any).upsertGroup(botId, group.id, group.subject);
+                }
+            } catch (err) {
+                logger.error('Failed to auto-upsert groups', { error: err });
+            }
+        });
+
         // ✅ MESSAGES EVENT - PROPERLY BOUND VIA STORE
         sock.ev.on('messages.upsert', async ({ messages, type }) => {
             logger.info('✅ Messages upsert event triggered!', {

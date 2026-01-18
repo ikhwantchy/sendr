@@ -16,7 +16,9 @@ class LLMService {
 
     constructor() {
         // Register available providers
-        this.providers.set('google', new GoogleGeminiProvider());
+        const googleProvider = new GoogleGeminiProvider();
+        this.providers.set('google', googleProvider);
+        this.providers.set('gemini', googleProvider); // Alias for consistency
         this.providers.set('openai', new OpenAIProvider());
         this.providers.set('groq', new GroqProvider());
     }
@@ -44,8 +46,39 @@ class LLMService {
             }
 
             const aiConfig = JSON.parse(botResult.rows[0].ai_config || '{}');
-            if (!aiConfig.enabled) {
-                throw new Error('AI not enabled for this bot');
+
+            // Check for per-target override config (Whitelist + Custom Config)
+            const targetConfigResult = await query(
+                'SELECT llm_config FROM llm_allowed_targets WHERE bot_id = ? AND target_jid = ? AND is_enabled = 1 ORDER BY updated_at DESC LIMIT 1',
+                [botId, contactId]
+            );
+
+            const hasGranularConfig = targetConfigResult.rows.length > 0;
+
+            if (!aiConfig.enabled && !hasGranularConfig) {
+                throw new Error('AI not enabled for this bot and no target-specific configuration found');
+            }
+
+            let activeConfig = {
+                provider: aiConfig.provider || 'gemini', // Default to gemini if global is empty
+                apiKey: aiConfig.apiKey,
+                model: aiConfig.model || 'gemini-2.0-flash',
+                systemPrompt: aiConfig.systemPrompt,
+                temperature: aiConfig.temperature || 0.7,
+                maxTokens: aiConfig.maxTokens || 1024
+            };
+
+            if (targetConfigResult.rows.length > 0) {
+                const override = JSON.parse(targetConfigResult.rows[0].llm_config || '{}');
+                logger.info('Using per-target LLM override', { botId, contactId });
+
+                // Safe merge: only override if value exists in override object
+                if (override.provider) activeConfig.provider = override.provider;
+                if (override.model) activeConfig.model = override.model;
+                if (override.api_key || override.apiKey) activeConfig.apiKey = override.api_key || override.apiKey;
+                if (override.system_prompt || override.systemPrompt) activeConfig.systemPrompt = override.system_prompt || override.systemPrompt;
+                if (override.temperature !== undefined) activeConfig.temperature = override.temperature;
+                if (override.maxTokens !== undefined) activeConfig.maxTokens = override.maxTokens;
             }
 
             // Get or create conversation
@@ -53,7 +86,7 @@ class LLMService {
 
             // Build messages with context
             const messages: LLMMessage[] = [
-                { role: 'system', content: aiConfig.systemPrompt || 'You are a helpful assistant.' }
+                { role: 'system', content: activeConfig.systemPrompt || 'You are a helpful assistant.' }
             ];
 
             // Add conversation history (last 10 messages)
@@ -63,15 +96,17 @@ class LLMService {
             // Add current user message
             messages.push({ role: 'user', content: userMessage });
 
-            // Get provider and call AI
-            const provider = this.getProvider(aiConfig.provider || 'google');
+            // Ensure provider exists (use 'gemini' as safe default alias)
+            const providerName = activeConfig.provider || 'gemini';
+            const provider = this.getProvider(providerName);
+
             const config: LLMConfig = {
-                provider: aiConfig.provider,
-                model: aiConfig.model || 'gemini-2.0-flash',
-                apiKey: aiConfig.apiKey,
-                systemPrompt: aiConfig.systemPrompt,
-                temperature: aiConfig.temperature || 0.7,
-                maxTokens: aiConfig.maxTokens || 1024
+                provider: providerName,
+                model: activeConfig.model || 'gemini-1.5-flash',
+                apiKey: activeConfig.apiKey,
+                systemPrompt: activeConfig.systemPrompt,
+                temperature: activeConfig.temperature || 0.7,
+                maxTokens: activeConfig.maxTokens || 1024
             };
 
             const response = await provider.chat(messages, config);
@@ -79,13 +114,17 @@ class LLMService {
             // Save conversation history
             await this.saveConversationMessage(conversation.id, userMessage, response.content);
 
-            // Track usage
-            await this.trackUsage(botId, conversation.id, aiConfig.provider, aiConfig.model, response);
+            // Track usage (use resolved model from config)
+            await this.trackUsage(botId, conversation.id, providerName, config.model!, response);
 
             return response.content;
         } catch (error: any) {
-            logger.error('LLM chat error', { error: error.message, botId });
-            throw error;
+            let errorMsg = error.message;
+            if (errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('quota') || errorMsg.includes('429')) {
+                errorMsg = 'QUOTA_EXCEEDED: Your Gemini API Key has reached its daily/minute limit. Please wait or try switching the model to gemini-1.5-flash in your AI configuration.';
+            }
+            logger.error('LLM chat error', { error: errorMsg, botId });
+            throw new Error(errorMsg);
         }
     }
 
@@ -109,15 +148,36 @@ class LLMService {
                 return { extracted: {}, isComplete: false, missingFields: [] };
             }
 
+            // Check for per-target override
+            const targetConfigResult = await query(
+                'SELECT llm_config FROM llm_allowed_targets WHERE bot_id = ? AND target_jid = ? AND is_enabled = 1 ORDER BY updated_at DESC LIMIT 1',
+                [botId, contactId]
+            );
+
+            let activeConfig = {
+                provider: aiConfig.provider || 'gemini',
+                apiKey: aiConfig.apiKey,
+                model: aiConfig.model || 'gemini-1.5-flash'
+            };
+
+            if (targetConfigResult.rows.length > 0) {
+                const override = JSON.parse(targetConfigResult.rows[0].llm_config || '{}');
+                activeConfig = {
+                    ...activeConfig,
+                    ...override,
+                    apiKey: override.api_key || override.apiKey || activeConfig.apiKey
+                };
+            }
+
             // Get or create conversation
             const conversation = await this.getOrCreateConversation(botId, contactId, 'data_collection');
 
             // Get provider
-            const provider = this.getProvider(aiConfig.provider || 'google');
+            const provider = this.getProvider(activeConfig.provider || 'google');
             const config: LLMConfig = {
-                provider: aiConfig.provider,
-                model: aiConfig.model || 'gemini-1.5-flash',
-                apiKey: aiConfig.apiKey
+                provider: activeConfig.provider,
+                model: activeConfig.model,
+                apiKey: activeConfig.apiKey
             };
 
             // Extract data

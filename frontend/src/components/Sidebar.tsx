@@ -24,6 +24,8 @@ export default function Sidebar() {
     const [user, setUser] = useState<any>(null)
     const [isExpanded, setIsExpanded] = useState(true)
     const [isMobileOpen, setIsMobileOpen] = useState(false)
+    const [showUserMenu, setShowUserMenu] = useState(false)
+    const [showSettingsSubmenu, setShowSettingsSubmenu] = useState(false)
 
     useEffect(() => {
         const userData = localStorage.getItem('user')
@@ -167,13 +169,16 @@ export default function Sidebar() {
                 })}
             </nav>
 
-            {/* User Info */}
+            {/* User Info with Dropdown Menu */}
             {user && (
-                <div className="p-4 border-t border-zinc-900 bg-zinc-950">
-                    <div className={`flex items-center ${isExpanded ? 'justify-between' : 'justify-center'}`}>
+                <div className="p-4 border-t border-zinc-900 bg-zinc-950 relative">
+                    <button
+                        onClick={() => setShowUserMenu(!showUserMenu)}
+                        className={`w-full flex items-center ${isExpanded ? 'justify-between' : 'justify-center'} hover:bg-zinc-900/50 rounded-lg p-2 transition-colors`}
+                    >
                         <div className="flex items-center gap-3 overflow-hidden">
                             {/* Avatar */}
-                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 text-zinc-500">
+                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 text-zinc-500 border border-zinc-700">
                                 {user.name ? (
                                     <span className="font-medium text-sm text-zinc-300">{user.name.charAt(0)}</span>
                                 ) : (
@@ -188,32 +193,126 @@ export default function Sidebar() {
                                         {user.name || 'Admin'}
                                     </h4>
                                     <p className="text-xs text-zinc-500 truncate font-medium">
-                                        Pro Plan
+                                        {user.email}
                                     </p>
                                 </div>
                             )}
                         </div>
+                    </button>
 
-                        {/* Actions */}
-                        {isExpanded && (
-                            <div className="flex items-center gap-1">
-                                <button
-                                    className="text-zinc-600 hover:text-white transition-colors p-1.5 rounded-md hover:bg-zinc-900"
-                                    onClick={() => router.push('/dashboard/settings')}
-                                    title="Settings"
-                                >
-                                    <Settings className="w-4 h-4" />
-                                </button>
-                                <button
-                                    className="text-zinc-600 hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-red-500/10"
-                                    onClick={handleLogout}
-                                    title="Logout"
-                                >
-                                    <LogOut className="w-4 h-4" />
-                                </button>
+                    {/* Dropdown Menu */}
+                    {showUserMenu && (
+                        <>
+                            {/* Backdrop */}
+                            <div
+                                className="fixed inset-0 z-40"
+                                onClick={() => setShowUserMenu(false)}
+                            />
+
+                            {/* Menu Popup */}
+                            <div className="absolute bottom-full left-4 right-4 mb-2 bg-[#0e0e11] border border-zinc-800/50 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                                <div className="py-2">
+                                    <button
+                                        onClick={() => {
+                                            setShowUserMenu(false);
+                                            router.push('/dashboard/settings/profile');
+                                        }}
+                                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-800/50 transition-colors"
+                                    >
+                                        <User className="w-5 h-5 text-zinc-100" />
+                                        <span className="text-[15px] font-normal text-zinc-100">Profile</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setShowSettingsSubmenu(!showSettingsSubmenu)}
+                                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-800/50 transition-colors"
+                                    >
+                                        <Settings className="w-5 h-5 text-zinc-100" />
+                                        <span className="flex-1 text-[15px] font-normal text-zinc-100">Settings</span>
+                                        <ChevronRight className={`w-4 h-4 text-zinc-500 transition-transform ${showSettingsSubmenu ? 'rotate-90' : ''}`} />
+                                    </button>
+
+                                    {/* Settings Submenu */}
+                                    <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showSettingsSubmenu ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+                                        }`}>
+                                        <div className="bg-zinc-900/30">
+                                            <button
+                                                onClick={() => {
+                                                    setShowUserMenu(false);
+                                                    setShowSettingsSubmenu(false);
+                                                    router.push('/dashboard/settings/profile');
+                                                }}
+                                                className="w-full flex items-center gap-3 pl-12 pr-4 py-2.5 text-left hover:bg-zinc-800/50 transition-colors"
+                                            >
+                                                <span className="text-[14px] font-normal text-zinc-300">General Settings</span>
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setShowUserMenu(false);
+                                                    setShowSettingsSubmenu(false);
+                                                    router.push('/dashboard/settings/security');
+                                                }}
+                                                className="w-full flex items-center gap-3 pl-12 pr-4 py-2.5 text-left hover:bg-zinc-800/50 transition-colors"
+                                            >
+                                                <span className="text-[14px] font-normal text-zinc-300">Security Settings</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        disabled
+                                        className="w-full flex items-center gap-3 px-4 py-3 text-left opacity-50 cursor-not-allowed"
+                                    >
+                                        <svg className="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                                        </svg>
+                                        <span className="flex-1 text-[15px] font-normal text-zinc-100">Theme</span>
+                                        <ChevronRight className="w-4 h-4 text-zinc-500" />
+                                    </button>
+
+                                    <button
+                                        disabled
+                                        className="w-full flex items-center gap-3 px-4 py-3 text-left opacity-50 cursor-not-allowed"
+                                    >
+                                        <svg className="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                        <span className="text-[15px] font-normal text-zinc-100">Upgrade</span>
+                                    </button>
+
+                                    <div className="border-t border-zinc-800 my-2" />
+
+                                    <button
+                                        disabled
+                                        className="w-full flex items-center gap-3 px-4 py-3 text-left opacity-50 cursor-not-allowed"
+                                    >
+                                        <svg className="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                        </svg>
+                                        <span className="text-[15px] font-normal text-zinc-100">Keyboard shortcuts</span>
+                                    </button>
+
+                                    <button
+                                        disabled
+                                        className="w-full flex items-center gap-3 px-4 py-3 text-left opacity-50 cursor-not-allowed"
+                                    >
+                                        <svg className="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span className="text-[15px] font-normal text-zinc-100">Help center</span>
+                                    </button>
+
+                                    <button
+                                        onClick={handleLogout}
+                                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-800/50 transition-colors"
+                                    >
+                                        <LogOut className="w-5 h-5 text-zinc-100" />
+                                        <span className="text-[15px] font-normal text-zinc-100">Log out</span>
+                                    </button>
+                                </div>
                             </div>
-                        )}
-                    </div>
+                        </>
+                    )}
                 </div>
             )}
         </>

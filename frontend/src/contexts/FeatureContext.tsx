@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { api } from '@/lib/api';
+import { apiClient } from '@/lib/api';
 
 // Types
 export interface FeaturePermission {
@@ -41,11 +41,19 @@ export function FeatureProvider({ children }: { children: React.ReactNode }) {
     const [error, setError] = useState<string | null>(null);
 
     const fetchFeatures = useCallback(async () => {
+        // Don't fetch if user is not authenticated
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        if (!token) {
+            setLoading(false);
+            setBotFeatures([]);
+            return;
+        }
+
         try {
             setLoading(true);
             setError(null);
 
-            const response = await api.get('/users/me/features');
+            const response = await apiClient.get('/users/me/features');
 
             if (response.data.success) {
                 setBotFeatures(response.data.data || []);
@@ -54,9 +62,9 @@ export function FeatureProvider({ children }: { children: React.ReactNode }) {
             }
         } catch (err: any) {
             console.error('Failed to fetch features:', err);
-            setError(err.response?.data?.error || 'Failed to fetch features');
-            // Don't throw - just set empty features
+            // Silently fail - features are optional
             setBotFeatures([]);
+            setError(null); // Don't show error to user
         } finally {
             setLoading(false);
         }

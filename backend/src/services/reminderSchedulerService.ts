@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import cron from 'node-cron';
 // Robust require for cron-parser
 const cronParser = require('cron-parser');
@@ -5,6 +6,8 @@ const parseExpression = cronParser.parseExpression || cronParser.default?.parseE
 import { query } from '../database/connection';
 import googleSheetsService from './googleSheetsService';
 import templateEngineService from './templateEngineService';
+import smartSheetsProcessor from './smartSheetsProcessor';
+import enhancedTemplateRenderer from './enhancedTemplateRenderer';
 
 interface ScheduledReminder {
     id: string;
@@ -120,40 +123,114 @@ class ReminderSchedulerService {
             }
 
             const reminder = result.rows[0];
-
-            // Get data source if exists
-            let variables: Record<string, any> = {};
-
-            if (reminder.data_source_id) {
-                const dsResult = await query(
-                    'SELECT * FROM data_sources WHERE id = ?',
-                    [reminder.data_source_id]
-                );
-
-                if (dsResult.rows.length > 0) {
-                    const dataSource = dsResult.rows[0];
-                    variables = await this.fetchDataAndGenerateVariables(dataSource, reminder.timezone);
-                }
-            }
-
-            // Process template
             const templateConfig = JSON.parse(reminder.template_config || '{}');
             const templateText = templateConfig.body || templateConfig.template || '';
-            const message = templateEngineService.processTemplate(templateText, variables);
 
-            // Send message via WhatsApp
-            const targetIds = reminder.target_id.split(',');
-            for (const targetJid of targetIds) {
-                if (!targetJid.trim()) continue;
+            // 1. Data Source Logic
+            let sheetRows: any[] = [];
+            let isFromSheet = false;
+
+            // Handle both legacy dataSourceId and new direct googleSheetsUrl in templateConfig
+            const googleSheetsUrl = templateConfig.googleSheetsUrl || reminder.google_sheets_url;
+            const spreadsheetId = googleSheetsUrl ? googleSheetsService.extractSpreadsheetId(googleSheetsUrl) : null;
+
+            if (reminder.data_source_id || (googleSheetsUrl && spreadsheetId)) {
+                isFromSheet = true;
                 try {
-                    await this.sendMessageWithRetry(reminder.bot_id, targetJid.trim(), message, templateConfig.image_url);
-                } catch (sendError: any) {
-                    console.error(`❌ Permanent failure sending message to ${targetJid}:`, sendError);
+                    sheetRows = await this.fetchAndFilterSheetData(reminder, templateConfig);
+                    console.log(`📊 Fetched ${sheetRows.length} relevant rows from sheet`);
+                } catch (err: any) {
+                    console.error('Error in data source pipeline:', err.message);
+                    await this.logExecution(reminderId, 'failed', `Data Source Error: ${err.message}`);
+                    return;
                 }
             }
 
-            // Log execution
-            await this.logExecution(reminderId, 'success', message);
+            // 2. Messaging Logic
+            if (isFromSheet && !templateConfig.isDigestMode && reminder.target_type === 'contact' && googleSheetsUrl === reminder.target_id) {
+                // --- CASE A: Individual Blast from Sheet ---
+                console.log('🚀 Starting Individual Blast from Sheet...');
+                let successCount = 0;
+                let failCount = 0;
+
+                for (const row of sheetRows) {
+                    const phone = this.extractPhoneNumber(row);
+                    if (!phone) {
+                        console.warn('⚠️ No phone number found in row, skipping...', row);
+                        continue;
+                    }
+
+                    const targetJid = phone.includes('@') ? phone : `${phone.replace(/\D/g, '')}@s.whatsapp.net`;
+                    const message = templateEngineService.processTemplate(templateText, row);
+
+                    try {
+                        await this.sendMessageWithRetry(reminder.bot_id, targetJid, message, templateConfig.image_url);
+                        successCount++;
+                    } catch (err: any) {
+                        console.error(`❌ Failed to send to ${targetJid}:`, err.message);
+                        failCount++;
+                    }
+                }
+
+                await this.logExecution(reminderId, 'success', `Blast completed. Success: ${successCount}, Failed: ${failCount}`);
+            } else {
+                // --- CASE B: Group Message or Single Contact (Standard) ---
+                let finalMessage = '';
+
+                if (isFromSheet && templateConfig.isDigestMode) {
+                    // Check if template uses new syntax (flexible regex to handle optional whitespace)
+                    const usesNewSyntax = /{{\s*#each/.test(templateText) ||
+                        /{{\s*#if/.test(templateText) ||
+                        /{{\s*#group/.test(templateText);
+
+                    if (usesNewSyntax) {
+                        // Use enhanced renderer
+                        console.log('🎨 Using enhanced template renderer');
+                        finalMessage = enhancedTemplateRenderer.render(templateText, {
+                            data: sheetRows,
+                            globalVars: {
+                                RUN_TIME: new Date().toLocaleTimeString(),
+                                TODAY: new Date().toLocaleDateString('id-ID', {
+                                    weekday: 'long',
+                                    day: 'numeric',
+                                    month: 'long'
+                                })
+                            },
+                            timezone: reminder.timezone || 'Asia/Jakarta'
+                        });
+                    } else {
+                        // Use legacy loop-supporting renderer
+                        console.log('📝 Using legacy template renderer');
+                        finalMessage = templateEngineService.renderGeneralTemplate(templateText, sheetRows, {
+                            RUN_TIME: new Date().toLocaleTimeString()
+                        });
+                    }
+                } else if (isFromSheet && sheetRows.length > 0) {
+                    // Just use the first matching row if not in digest mode but from sheet
+                    finalMessage = templateEngineService.processTemplate(templateText, sheetRows[0]);
+                } else {
+                    // Static message
+                    finalMessage = templateEngineService.processTemplate(templateText, {});
+                }
+
+                if (!finalMessage) {
+                    console.log(`⏭️ Skipping reminder ${reminderId}: Final message is empty (no matching rows?)`);
+                    await this.logExecution(reminderId, 'skipped', 'No matching rows found in sheet');
+                    return;
+                }
+
+                const targetIds = reminder.target_id.split(',');
+                for (const targetJid of targetIds) {
+                    if (!targetJid.trim()) continue;
+                    try {
+                        await this.sendMessageWithRetry(reminder.bot_id, targetJid.trim(), finalMessage, templateConfig.image_url);
+                    } catch (sendError: any) {
+                        console.error(`❌ Permanent failure sending message to ${targetJid}:`, sendError);
+                    }
+                }
+
+                await this.logExecution(reminderId, 'success', finalMessage);
+            }
 
             console.log(`✅ Reminder processed successfully: ${reminderId}`);
         } catch (error: any) {
@@ -163,7 +240,127 @@ class ReminderSchedulerService {
     }
 
     /**
-     * Fetch data from Google Sheets and generate variables
+     * Fetch and filter data from Google Sheets
+     */
+    private async fetchAndFilterSheetData(reminder: any, templateConfig: any): Promise<any[]> {
+        const googleSheetsUrl = templateConfig.googleSheetsUrl || reminder.google_sheets_url;
+        const spreadsheetId = googleSheetsService.extractSpreadsheetId(googleSheetsUrl);
+        if (!spreadsheetId) return [];
+
+        const sheetName = templateConfig.selectedSheets?.[0] || templateConfig.sheetName || 'Sheet1';
+        const sheetData = await googleSheetsService.fetchSheetData(spreadsheetId, sheetName);
+        if (!sheetData) return [];
+
+        let items = googleSheetsService.convertToObjects(sheetData);
+        const now = new Date();
+        const todayStr = format(now, 'dd/MM/yyyy');
+        const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const todayDay = dayNames[now.getDay()];
+
+        // If it's a Daily Digest AND no Advanced Filters, apply legacy "today" filtering
+        // If Advanced Filters are enabled, skip this and let Advanced Filters handle everything
+        const hasAdvancedFilters = templateConfig.filters && Array.isArray(templateConfig.filters) && templateConfig.filters.length > 0;
+
+        if (templateConfig.isDigestMode && !hasAdvancedFilters) {
+            console.log(`📅 [Digest Filter] Today is: ${todayDay} (${todayStr})`);
+
+            const filteredItems = items.filter(item => {
+                const tipe = String(item.tipe || '').toLowerCase();
+                const itemName = String(item.nama || item.name || 'Unknown');
+
+                // 1. Check for Day Name match (for JADWAL KULIAH)
+                if (tipe.includes('jadwal')) {
+                    const dayKeys = ['hari', 'day', 'jadwal'];
+                    for (const key of dayKeys) {
+                        const val = String(item[key] || '').toLowerCase().trim();
+                        const todayLower = todayDay.toLowerCase();
+                        if (val && (val === todayLower || val.includes(todayLower) || todayLower.includes(val))) {
+                            console.log(`✅ [Filter] JADWAL "${itemName}" (${val}) → Matches today (${todayDay}) → INCLUDED`);
+                            return true;
+                        }
+                    }
+                    console.log(`❌ [Filter] JADWAL "${itemName}" → Doesn't match today → EXCLUDED`);
+                    return false;
+                }
+
+                // 2. For other types (including DEADLINE), check if it has a date that matches today
+                // NOTE: Advanced date filtering (like "within N days") should be done via Advanced Filters
+                const dateKeys = ['tanggal', 'date', 'deadline', 'waktu'];
+                for (const key of dateKeys) {
+                    const val = String(item[key] || '').trim();
+                    if (!val) continue;
+
+                    if (val.includes(todayStr)) {
+                        console.log(`✅ [Filter] "${itemName}" → Date matches today → INCLUDED`);
+                        return true;
+                    }
+                    const usToday = format(now, 'M/d/yyyy');
+                    const usToday2 = format(now, 'MM/dd/yyyy');
+                    if (val.includes(usToday) || val.includes(usToday2)) {
+                        console.log(`✅ [Filter] "${itemName}" → Date matches today (US format) → INCLUDED`);
+                        return true;
+                    }
+                }
+
+                console.log(`❌ [Filter] "${itemName}" (type: ${tipe}) → No match → EXCLUDED`);
+                return false;
+            });
+            console.log(`✅ [Digest Filter] Sheets has ${items.length} rows. Filtered down to ${filteredItems.length} valid rows for today.`);
+            items = filteredItems;
+        }
+
+        // Apply Advanced Filters (New System)
+        if (hasAdvancedFilters) {
+            console.log(`🔍 Applying ${templateConfig.filters.length} advanced filters...`);
+
+            items = smartSheetsProcessor.processData(items, {
+                filters: templateConfig.filters,
+                sort: templateConfig.sort,
+                limit: templateConfig.limit,
+                offset: templateConfig.offset
+            });
+
+            console.log(`✅ Filtered to ${items.length} rows`);
+            return items;
+        }
+
+        // 3. Legacy Filter by Trigger Logic (Backward Compatibility)
+        if (templateConfig.triggerColumn && templateConfig.triggerValue) {
+            const col = templateConfig.triggerColumn;
+            const val = templateConfig.triggerValue.toLowerCase();
+
+            items = items.filter(row => {
+                const cellVal = String(row[col] || '').toLowerCase();
+                return cellVal === val;
+            });
+
+            console.log(`✅ Legacy trigger filter applied: ${items.length} rows`);
+        }
+
+        return items;
+    }
+
+    /**
+     * Extract phone number from a row object with fuzzy matching
+     */
+    private extractPhoneNumber(row: any): string | null {
+        const possibleColumns = ['phone', 'telp', 'whatsapp', 'number', 'no hp', 'kontak', 'jid'];
+        const keys = Object.keys(row);
+
+        for (const col of possibleColumns) {
+            // Case-insensitive match or contains
+            const key = keys.find(k => k.toLowerCase().includes(col));
+            if (key && row[key]) {
+                const val = String(row[key]).trim();
+                // Basic validation: should have digits
+                if (/\d/.test(val)) return val;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Fetch data from Google Sheets and generate variables (Legacy support)
      */
     private async fetchDataAndGenerateVariables(dataSource: any, timezone: string): Promise<Record<string, any>> {
         try {
@@ -255,7 +452,7 @@ class ReminderSchedulerService {
     /**
      * Log reminder execution
      */
-    private async logExecution(reminderId: string, status: 'success' | 'failed', details: string) {
+    private async logExecution(reminderId: string, status: 'success' | 'failed' | 'skipped', details: string) {
         try {
             await query(`
                 INSERT INTO reminder_logs (id, reminder_id, status, executed_at, error_message)

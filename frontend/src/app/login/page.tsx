@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { Mail, Lock, ArrowRight, Loader2, Github } from 'lucide-react'
 import Link from 'next/link'
+import { getErrorMessage } from '@/lib/errorUtils'
 
 export default function LoginPage() {
     const [email, setEmail] = useState('')
@@ -28,7 +29,7 @@ export default function LoginPage() {
                 }, 800)
             }
         } catch (error: any) {
-            toast.error(error.response?.data?.error || 'Invalid credentials')
+            toast.error(getErrorMessage(error, 'Invalid credentials'))
             setLoading(false)
         }
     }
@@ -82,7 +83,7 @@ export default function LoginPage() {
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between ml-1">
                                         <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Password</label>
-                                        <Link href="/forgot-password" acceleration-none="true" className="text-[10px] font-medium text-zinc-500 hover:text-white transition-colors">
+                                        <Link href="/forgot-password" prefetch={false} className="text-[10px] font-medium text-zinc-500 hover:text-white transition-colors">
                                             Forgot?
                                         </Link>
                                     </div>

@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { EMOJI_CATEGORIES } from '@/lib/emojiList'
+import AdvancedFilters from './AdvancedFilters'
 
 // --- Types ---
 type TargetType = 'group' | 'contact'
@@ -40,6 +41,18 @@ interface FormData {
     sheetContactCount: number
     triggerColumn: string
     triggerValue: string
+    useAdvancedFilters: boolean // NEW: Toggle between legacy and advanced mode
+    filters: Array<{
+        column: string
+        operator: string
+        value: any
+        value2?: any
+        caseInsensitive?: boolean
+    }> // NEW: Advanced filters
+    sort: {
+        column: string
+        order: 'asc' | 'desc'
+    } | null // NEW: Sorting
     isDigestMode: boolean // Logic for grouping messages
     frequency: Frequency
     startDate: string // YYYY-MM-DD
@@ -107,7 +120,11 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         sheetContactCount: 0,
         triggerColumn: '',
         triggerValue: '',
+        useAdvancedFilters: false,
+        filters: [],
+        sort: null,
         isDigestMode: false,
+
         frequency: 'once',
         startDate: today,
         hasEndDate: false,
@@ -191,7 +208,11 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         sheetContactCount: 0,
                         triggerColumn: templateConfig.triggerColumn || '',
                         triggerValue: templateConfig.triggerValue || '',
+                        useAdvancedFilters: !!(templateConfig.filters && templateConfig.filters.length > 0),
+                        filters: templateConfig.filters || [],
+                        sort: templateConfig.sort || null,
                         isDigestMode: templateConfig.isDigestMode || false,
+
                         frequency: frequency,
                         startDate: startDate,
                         hasEndDate: false,
@@ -342,7 +363,9 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         url: formData.contactSheetUrl,
                         selectedSheets: [formData.sheetName],
                         template: formData.message,
-                        timezone: 'Asia/Jakarta'
+                        timezone: 'Asia/Jakarta',
+                        triggerColumn: formData.triggerColumn,
+                        triggerValue: formData.triggerValue
                     })
                 })
                 const data = await response.json()
@@ -420,6 +443,16 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                 templateConfig.sheetName = formData.sheetName;
                 templateConfig.triggerColumn = formData.triggerColumn;
                 templateConfig.triggerValue = formData.triggerValue;
+
+                // Add advanced filters if enabled
+                if (formData.useAdvancedFilters && formData.filters.length > 0) {
+                    templateConfig.filters = formData.filters;
+                }
+
+                // Add sort configuration if present
+                if (formData.sort) {
+                    templateConfig.sort = formData.sort;
+                }
             }
 
 
@@ -432,12 +465,15 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                 targetId: targetId,
                 schedule: schedule,
                 timezone: 'Asia/Jakarta',
+                dataSourceId: null, // Always null for now (Google Sheets config is in templateConfig)
                 googleSheetsUrl: formData.dataSource === 'google_sheets' ? formData.contactSheetUrl : undefined,
                 templateConfig: templateConfig,
+
             };
 
             // Use PUT for edit mode, POST for create mode
             if (reminderId) {
+                console.log('[EDIT MODE] Updating reminder:', reminderId, 'with payload:', payload)
                 const token = localStorage.getItem('token')
                 const response = await fetch(`http://localhost:3001/api/reminders/${reminderId}`, {
                     method: 'PUT',
@@ -447,13 +483,17 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                     },
                     body: JSON.stringify(payload)
                 })
-                return await response.json()
+
+                const result = await response.json()
+                console.log('[EDIT MODE] Update response:', result)
+                return result
             } else {
                 return await api.reminders.create(payload);
             }
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['reminders', effectiveBotId] })
+            // Invalidate all reminders queries to ensure table refreshes
+            queryClient.invalidateQueries({ queryKey: ['reminders'] })
             toast.success(reminderId ? 'Reminder updated successfully' : 'Reminder created successfully')
             onClose()
         },
@@ -540,9 +580,10 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
             .replace(/\*\*+/g, '*')
             .replace(/__+/g, '_')
             .replace(/~~+/g, '~')
-            .replace(/\n\n+/g, '\n')
+            // Don't collapse newlines - preserve them for WhatsApp formatting
+            .replace(/\n{3,}/g, '\n\n')  // Only collapse 3+ newlines to 2
             .replace(/^\n+/, '')
-            .trim();
+            .trimEnd();  // Use trimEnd instead of trim to preserve leading spaces
     }
 
     const insertText = (str: string) => {
@@ -930,6 +971,20 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                 {formData.dataSource === 'google_sheets' && (
                                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-6 space-y-6 animate-in fade-in slide-in-from-top-2">
 
+                                        {/* Info Box - No API Key Required */}
+                                        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 flex items-start gap-3">
+                                            <Globe className="text-blue-400 shrink-0 mt-0.5" size={18} />
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-medium text-blue-300">
+                                                    ✨ No API Key Required!
+                                                </p>
+                                                <p className="text-xs text-blue-200/80 leading-relaxed">
+                                                    Just make your Google Sheet <strong>public</strong> (Share → Anyone with the link can <strong>view</strong>).
+                                                    No service account or API configuration needed. Works for everyone! 🎉
+                                                </p>
+                                            </div>
+                                        </div>
+
                                         {/* 1. Connection Inputs */}
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div className="md:col-span-2 space-y-2">
@@ -1113,33 +1168,96 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                             </div>
                                         </div>
 
-                                        {/* 5. Trigger Inputs */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Trigger Column Header</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={formData.triggerColumn}
-                                                        onChange={e => setFormData({ ...formData, triggerColumn: e.target.value })}
-                                                        placeholder="Status"
-                                                        className="w-full pl-4 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all font-medium"
-                                                    />
+                                        {/* 5. Filter Mode Toggle */}
+                                        <div className="pt-2 space-y-4">
+                                            <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg border border-zinc-800">
+                                                <div>
+                                                    <div className="font-medium text-white text-sm">Advanced Filters</div>
+                                                    <div className="text-xs text-zinc-500">Use multiple filters with operators (H-3, date ranges, etc.)</div>
                                                 </div>
-                                                <p className="text-[10px] text-zinc-500">Column to check (e.g. "Status")</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData({ ...formData, useAdvancedFilters: !formData.useAdvancedFilters })}
+                                                    className={`w-11 h-6 rounded-full p-0.5 transition-colors ${formData.useAdvancedFilters ? 'bg-emerald-600' : 'bg-zinc-700'}`}
+                                                >
+                                                    <div className={`w-5 h-5 bg-white rounded-full transition-transform ${formData.useAdvancedFilters ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </button>
                                             </div>
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Trigger Value</label>
-                                                <input
-                                                    type="text"
-                                                    value={formData.triggerValue}
-                                                    onChange={e => setFormData({ ...formData, triggerValue: e.target.value })}
-                                                    placeholder="SEND"
-                                                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-emerald-400 placeholder-zinc-700 font-bold focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
-                                                />
-                                                <p className="text-[10px] text-zinc-500">Value to match (e.g. "SEND")</p>
-                                            </div>
+
+                                            {formData.useAdvancedFilters ? (
+                                                /* Advanced Filters Mode */
+                                                <div className="animate-in fade-in slide-in-from-top-2">
+                                                    <AdvancedFilters
+                                                        filters={formData.filters}
+                                                        onChange={(filters) => setFormData({ ...formData, filters })}
+                                                        availableColumns={formData.csvPreview.length > 0 ? formData.csvPreview[0].split(',').map(c => c.trim()) : []}
+                                                    />
+
+                                                    {/* Sorting */}
+                                                    <div className="mt-4 p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg">
+                                                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 block">Sort Results (Optional)</label>
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <input
+                                                                type="text"
+                                                                value={formData.sort?.column || ''}
+                                                                onChange={e => setFormData({
+                                                                    ...formData,
+                                                                    sort: e.target.value ? { column: e.target.value, order: formData.sort?.order || 'asc' } : null
+                                                                })}
+                                                                placeholder="Column name (e.g. waktu)"
+                                                                className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-white text-sm focus:ring-1 focus:ring-emerald-500/50 outline-none"
+                                                            />
+                                                            <select
+                                                                value={formData.sort?.order || 'asc'}
+                                                                onChange={e => setFormData({
+                                                                    ...formData,
+                                                                    sort: formData.sort ? { ...formData.sort, order: e.target.value as 'asc' | 'desc' } : null
+                                                                })}
+                                                                className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-white text-sm focus:ring-1 focus:ring-emerald-500/50 outline-none"
+                                                                disabled={!formData.sort?.column}
+                                                            >
+                                                                <option value="asc">Ascending</option>
+                                                                <option value="desc">Descending</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                /* Legacy Trigger Mode */
+                                                <div className="animate-in fade-in slide-in-from-top-2">
+
+                                                    {/* 5. Trigger Inputs */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                                                        <div className="space-y-2">
+                                                            <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Trigger Column Header</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="text"
+                                                                    value={formData.triggerColumn}
+                                                                    onChange={e => setFormData({ ...formData, triggerColumn: e.target.value })}
+                                                                    placeholder="Status"
+                                                                    className="w-full pl-4 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all font-medium"
+                                                                />
+                                                            </div>
+                                                            <p className="text-[10px] text-zinc-500">Column to check (e.g. "Status")</p>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Trigger Value</label>
+                                                            <input
+                                                                type="text"
+                                                                value={formData.triggerValue}
+                                                                onChange={e => setFormData({ ...formData, triggerValue: e.target.value })}
+                                                                placeholder="SEND"
+                                                                className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-emerald-400 placeholder-zinc-700 font-bold focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
+                                                            />
+                                                            <p className="text-[10px] text-zinc-500">Value to match (e.g. "SEND")</p>
+                                                        </div>
+                                                    </div>
+
+                                                </div>
+                                            )}
                                         </div>
+                                        {/* End Filter Mode Toggle */}
 
                                     </div>
                                 )}
@@ -1402,7 +1520,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                 <div className="px-3 py-2 bg-[#18181b] border-t border-zinc-800 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-2 overflow-x-auto flex-1">
                                         <span className="text-zinc-500 uppercase mr-2 font-bold flex-shrink-0">Variables:</span>
-                                        {['{NAME}', '{PHONE}', '{{Deadline}}', '{{Tugas}}', '{TODAY}'].map(tag => (
+                                        {['{{#LOOP}}', '{{/LOOP}}', '{{Nama}}', '{{Status}}', '{{index}}', '{TODAY}'].map(tag => (
                                             <button key={tag} onClick={() => insertText(tag)} className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-blue-400 rounded hover:bg-zinc-700 flex-shrink-0">{tag}</button>
                                         ))}
                                     </div>
@@ -1416,7 +1534,10 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
                     <div className="absolute bottom-0 left-0 right-0 p-6 bg-[#09090b]/95 backdrop-blur border-t border-zinc-800 z-30">
                         <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg disabled:opacity-50">
-                            {createMutation.isPending ? 'Scheduling...' : 'Create Reminder'} <Save size={18} />
+                            {createMutation.isPending
+                                ? (reminderId ? 'Updating...' : 'Creating...')
+                                : (reminderId ? 'Update Reminder' : 'Create Reminder')
+                            } <Save size={18} />
                         </button>
                     </div>
                 </div >

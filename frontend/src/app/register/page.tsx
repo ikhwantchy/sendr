@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Mail, Lock, User, Loader2, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { getErrorMessage } from '@/lib/errorUtils'
 
 export default function RegisterPage() {
     const router = useRouter()
@@ -41,7 +42,7 @@ export default function RegisterPage() {
             router.push('/login')
 
         } catch (error: any) {
-            toast.error(error.response?.data?.error || 'Registration failed')
+            toast.error(getErrorMessage(error, 'Registration failed'))
         } finally {
             setLoading(false)
         }

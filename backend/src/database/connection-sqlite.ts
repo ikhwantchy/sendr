@@ -237,6 +237,22 @@ async function initSchema(): Promise<void> {
       UNIQUE(bot_id, group_jid)
     );
 
+    -- LLM Allowed Targets
+    CREATE TABLE IF NOT EXISTS llm_allowed_targets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bot_id TEXT NOT NULL,
+        target_type TEXT NOT NULL CHECK(target_type IN ('group', 'contact')),
+        target_jid TEXT NOT NULL,
+        target_name TEXT,
+        config_name TEXT,
+        is_enabled INTEGER DEFAULT 1,
+        llm_config TEXT DEFAULT '{}',
+        last_used_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+    );
+
     -- Campaigns
     CREATE TABLE IF NOT EXISTS campaigns (
         id TEXT PRIMARY KEY,
@@ -278,7 +294,19 @@ async function initSchema(): Promise<void> {
     -- Removed auto-insert here to prevent dummy hash issues
   `;
 
-  db.run(schema);
+  // Split schema into individual statements
+  const statements = schema
+    .split(';')
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+
+  for (const statement of statements) {
+    try {
+      db.run(statement);
+    } catch (e) {
+      logger.error('Failed to execute schema statement', { statement: statement.substring(0, 50), error: e });
+    }
+  }
 
   // Activity Logs Table for persistent history
   db.run(`
@@ -330,6 +358,12 @@ async function initSchema(): Promise<void> {
   } catch (e) {
     logger.warn('Failed to backfill reminders', { error: e });
   }
+
+  // MIGRATION: Add deadlineRangeDays column to reminders if it doesn't exist
+  try {
+    db.run("ALTER TABLE reminders ADD COLUMN deadlineRangeDays INTEGER DEFAULT 3");
+    logger.info('✅ MIGRATION: Added deadlineRangeDays column to reminders table');
+  } catch (e) { }
 
   logger.info('✅ Database schema created');
 }

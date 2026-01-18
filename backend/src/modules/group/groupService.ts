@@ -15,50 +15,121 @@ class GroupService {
      * Sync groups for a bot
      * Called when bot connects
      */
-    async syncGroupsForBot(botId: string, retryCount = 0): Promise<void> {
+    async syncGroupsForBot(botId: string, retryCount = 0): Promise<number> {
         try {
             logger.info('Syncing groups for bot', { bot_id: botId, retry: retryCount });
 
-            // Get socket for this bot
-            const sock = whatsappAdapter.getSocket(botId);
+            // 1. Get socket for this bot
+            let sock = whatsappAdapter.getSocket(botId);
+
+            // If socket not found, maybe bot needs re-initialization
             if (!sock) {
-                // Retry up to 3 times with 2 second delay
-                if (retryCount < 3) {
-                    logger.warn('No socket found for bot, retrying...', { bot_id: botId, retry: retryCount });
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                logger.warn('No socket found for bot, checking bot status in DB...', { bot_id: botId });
+                const botResult = await query('SELECT status FROM bots WHERE id = ?', [botId]);
+                const botStatus = botResult.rows[0]?.status;
+
+                if (botStatus === 'connected') {
+                    logger.info('Bot status is connected but socket missing. Re-initializing...', { bot_id: botId });
+                    try {
+                        await whatsappAdapter.initializeBot(botId);
+                        // Wait for initialization to complete (max 10s)
+                        for (let i = 0; i < 5; i++) {
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                            sock = whatsappAdapter.getSocket(botId);
+                            if (sock) break;
+                        }
+                    } catch (initErr: any) {
+                        logger.error('Failed to auto-reinitialize bot during sync', { bot_id: botId, error: initErr.message });
+                    }
+                }
+            }
+
+            // If still no socket after attempt
+            if (!sock) {
+                if (retryCount < 2) {
+                    logger.warn('Still no socket found, final retry attempt...', { bot_id: botId, retry: retryCount });
+                    await new Promise(resolve => setTimeout(resolve, 3000));
                     return this.syncGroupsForBot(botId, retryCount + 1);
                 }
-
-                logger.warn('No socket found for bot after retries', { bot_id: botId });
-                return;
+                logger.error('No socket found for bot after all recovery attempts', { bot_id: botId });
+                return 0;
             }
 
-            // Fetch groups from WhatsApp
-            const groups = await sock.groupFetchAllParticipating();
+            // 2. Fetch groups from WhatsApp
+            // For new connections, WhatsApp might take time to index groups.
+            // We use a loop for retries here to avoid context loss in recursion
+            let groups: any = {};
+            let groupJids: string[] = [];
+            let fetchRetries = 0;
+            const maxFetchRetries = 5;
 
-            logger.info('Fetched groups', {
+            while (fetchRetries < maxFetchRetries) {
+                try {
+                    logger.info(`Fetching participating groups (Attempt ${fetchRetries + 1}/${maxFetchRetries})`, { bot_id: botId });
+                    groups = await sock.groupFetchAllParticipating();
+                    groupJids = Object.keys(groups);
+
+                    if (groupJids.length > 0) break;
+
+                    logger.info('No groups found yet, WA might be syncing...', { bot_id: botId });
+                } catch (fetchErr: any) {
+                    logger.warn('Error during group fetch, might be connection transient', {
+                        bot_id: botId,
+                        error: fetchErr.message,
+                        code: fetchErr.output?.statusCode || fetchErr.code
+                    });
+
+                    // If connection closed error (428/CB: 428), we should probably stop
+                    if (fetchErr.output?.statusCode === 428) {
+                        logger.error('Connection terminated during group fetch', { bot_id: botId });
+                        break;
+                    }
+                }
+
+                fetchRetries++;
+                if (fetchRetries < maxFetchRetries) {
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                }
+            }
+
+            if (groupJids.length === 0) {
+                logger.warn('Finished sync attempts, found 0 groups', { bot_id: botId });
+                return 0;
+            }
+
+            logger.info('Fetched groups raw info', {
                 bot_id: botId,
-                count: Object.keys(groups).length,
+                count: groupJids.length,
             });
 
-            // Store each group
+            // 3. Store each group
+            let upsertedCount = 0;
             for (const [groupId, groupData] of Object.entries(groups)) {
-                await this.upsertGroup(botId, groupId, groupData.subject);
+                try {
+                    const subject = (groupData as any).subject || 'Unnamed Group';
+                    await this.upsertGroup(botId, groupId, subject);
+                    upsertedCount++;
+                } catch (err: any) {
+                    logger.error(`Failed to upsert group ${groupId}`, { error: err.message });
+                }
             }
 
-            logger.info('Groups synced successfully', { bot_id: botId, count: Object.keys(groups).length });
+            logger.info('Groups synced successfully', { bot_id: botId, total: groupJids.length, upserted: upsertedCount });
+            return groupJids.length;
         } catch (error: any) {
-            logger.error('Failed to sync groups', {
+            logger.error('Unexpected error during group sync', {
                 bot_id: botId,
                 error: error.message,
+                stack: error.stack
             });
+            return 0;
         }
     }
 
     /**
      * Upsert group into database
      */
-    private async upsertGroup(
+    public async upsertGroup(
         botId: string,
         groupId: string,
         groupName: string

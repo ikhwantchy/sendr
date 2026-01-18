@@ -91,9 +91,10 @@ const htmlToMarkdown = (element: HTMLElement, activeStyles: { bold?: boolean, it
         .replace(/\*\*+/g, '*')
         .replace(/__+/g, '_')
         .replace(/~~+/g, '~')
-        .replace(/\n\n+/g, '\n')
+        // Don't collapse newlines - preserve them for WhatsApp formatting
+        .replace(/\n{3,}/g, '\n\n')  // Only collapse 3+ newlines to 2
         .replace(/^\n+/, '') // Trim extra leading newline if any
-        .trim();
+        .trimEnd();  // Use trimEnd instead of trim to preserve leading spaces
 }
 
 export default function RichTextEditor({
@@ -265,8 +266,8 @@ export default function RichTextEditor({
                                 type="button"
                                 onClick={() => setShowEmoji(!showEmoji)}
                                 className={`p-1.5 rounded-lg transition-all active:scale-95 flex items-center gap-2 ${showEmoji
-                                        ? 'text-yellow-400 bg-yellow-400/10'
-                                        : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
+                                    ? 'text-yellow-400 bg-yellow-400/10'
+                                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
                                     }`}
                                 title="Insert Emoji"
                             >
@@ -286,8 +287,8 @@ export default function RichTextEditor({
                                             type="button"
                                             onClick={() => setActiveCategory(cat as any)}
                                             className={`p-2 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ${activeCategory === cat
-                                                    ? 'bg-[#2a3942] text-[#00a884] shadow-sm ring-1 ring-[#00a884]/20'
-                                                    : 'text-[#8696a0] hover:bg-[#2a3942]/30 hover:text-zinc-300'
+                                                ? 'bg-[#2a3942] text-[#00a884] shadow-sm ring-1 ring-[#00a884]/20'
+                                                : 'text-[#8696a0] hover:bg-[#2a3942]/30 hover:text-zinc-300'
                                                 }`}
                                         >
                                             {CATEGORY_ICONS[cat] || <Smile size={18} />}

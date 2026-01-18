@@ -85,12 +85,23 @@ class AIEngine {
             const bot = botResult.rows[0];
             const aiConfig = JSON.parse(bot.ai_config || '{}');
 
-            if (!aiConfig.enabled) {
-                logger.debug('AI fallback skipped: disabled', { bot_id });
+            // ✅ Check if sender is in allowed targets (whitelist) - THIS IS THE PRIMARY CHECK
+            const senderJid = context.group_id || contact_id;
+            const isAllowed = await this.isTargetAllowed(bot_id, senderJid);
+
+            if (!isAllowed) {
+                logger.debug('AI fallback skipped: sender not in whitelist', {
+                    bot_id,
+                    senderJid,
+                    isGroup: !!context.group_id
+                });
                 return;
             }
+
+            // If we are here, this specific target (group/contact) is allowed.
+            // We only block if the bot-level mode is explicitly 'data_collection' (silent mode)
             if (aiConfig.mode === 'data_collection') {
-                logger.debug('AI fallback skipped: silent mode (data_collection)', { bot_id });
+                logger.debug('AI fallback skipped: bot-level silent mode (data_collection)', { bot_id });
                 return;
             }
 
@@ -132,16 +143,20 @@ class AIEngine {
                 } catch (aiError: any) {
                     logger.warn('AI failed, sending fallback response', { error: aiError.message, bot_id });
 
-                    // Generic fallback messages that don't expose technical issues
-                    const fallbackMessages = [
-                        'Hmm, aku lagi agak bingung nih. Bisa diulang pertanyaannya? 🤔',
-                        'Waduh, otakku lagi lemot. Coba tanya lagi nanti ya! 😅',
-                        'Maaf ya, aku lagi mikir terlalu keras sampai hang. Coba lagi dong! 🙏',
-                        'Eh sorry, aku lagi loading. Tanya lagi dalam beberapa saat ya! ⏳'
-                    ];
+                    let fallbackMessage = '';
 
-                    // Pick random fallback message
-                    const fallbackMessage = fallbackMessages[Math.floor(Math.random() * fallbackMessages.length)];
+                    if (aiError.message.includes('QUOTA_EXCEEDED')) {
+                        fallbackMessage = '⚠️ Maaf, Bot AI sedang mencapai limit harian/menit (Quota Exceeded). Silakan coba lagi nanti atau ganti model ke gemini-1.5-flash di konfigurasi.';
+                    } else {
+                        // Generic fallback messages that don't expose technical issues
+                        const fallbackMessages = [
+                            'Hmm, aku lagi agak bingung nih. Bisa diulang pertanyaannya? 🤔',
+                            'Waduh, otakku lagi lemot. Coba tanya lagi nanti ya! 😅',
+                            'Maaf ya, aku lagi mikir terlalu keras sampai hang. Coba lagi dong! 🙏',
+                            'Eh sorry, aku lagi loading. Tanya lagi dalam beberapa saat ya! ⏳'
+                        ];
+                        fallbackMessage = fallbackMessages[Math.floor(Math.random() * fallbackMessages.length)];
+                    }
 
                     // Send fallback response
                     await eventBus.emit(EventType.KEYWORD_MATCHED, context, {
@@ -211,31 +226,56 @@ class AIEngine {
             }
         }
 
-        // 3. Special Case: LID mention (common in groups)
-        if (mentionedJids.length > 0 && botName) {
-            const botNameLower = botName.toLowerCase();
-            if (normalized.includes(`@${botNameLower}`)) {
-                logger.info('AI Mention detected: Name with @ found with active mentions');
+        // 3. Robust Text-based Matching for Mentions (Handles @LID, @Phone, @Name)
+        const checkPatterns = [];
+        if (lid) checkPatterns.push(`@${lid.replace(/\D/g, '')}`);
+        if (phoneNumber) checkPatterns.push(`@${phoneNumber.replace(/\D/g, '')}`);
+        if (botName) {
+            checkPatterns.push(`@${botName.toLowerCase()}`);
+            checkPatterns.push(botName.toLowerCase()); // Plain name match as fallback
+        }
+
+        for (const pattern of checkPatterns) {
+            if (normalized.includes(pattern)) {
+                logger.info('AI Mention detected: Text pattern match', { pattern });
                 return true;
             }
         }
 
-        // 4. Check for name mention in text
-        if (botName && normalized.includes(botName.toLowerCase())) return true;
-
-        // 5. Check for @name in text
-        if (botName && normalized.includes(`@${botName.toLowerCase()}`)) return true;
-
-        // 6. Check for phone number in text
-        if (phoneNumber) {
-            const cleanPhone = phoneNumber.replace(/\D/g, '');
-            if (normalized.includes(cleanPhone)) return true;
+        // 4. Generic @bot/@ai mention in text
+        if (normalized.includes('@bot') || normalized.includes('@ai')) {
+            logger.info('AI Mention detected: Generic @bot/@ai');
+            return true;
         }
 
-        // 7. Check for generic @bot/@ai mention in text
-        if (normalized.includes('@bot') || normalized.includes('@ai')) return true;
-
         return false;
+    }
+
+    /**
+     * Check if target (group/contact) is allowed to use LLM
+     */
+    private async isTargetAllowed(botId: string, targetJid: string): Promise<boolean> {
+        try {
+            const result = await query(
+                'SELECT id FROM llm_allowed_targets WHERE bot_id = ? AND target_jid = ?',
+                [botId, targetJid]
+            );
+
+            const isAllowed = result.rows && result.rows.length > 0;
+
+            logger.debug('LLM whitelist check', {
+                botId,
+                targetJid,
+                isAllowed,
+                totalAllowed: result.rows?.length || 0
+            });
+
+            return isAllowed;
+        } catch (error) {
+            logger.error('Error checking LLM whitelist', { error, botId, targetJid });
+            // Fail-safe: if error, don't allow (prevents accidental bot loops)
+            return false;
+        }
     }
 }
 

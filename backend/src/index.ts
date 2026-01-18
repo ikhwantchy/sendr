@@ -35,6 +35,8 @@ import permissionsRoutes from './api/routes/permissionsRoutes';
 import invitationsRoutes from './api/routes/invitationsRoutes';
 import sheetsRoutes from './api/routes/sheetsRoutes';
 import aiRoutes from './api/routes/aiRoutes';
+import profileRoutes from './api/routes/profileRoutes';
+import llmTargetsRoutes from './api/routes/llmTargetsRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -87,6 +89,9 @@ app.use('/api/permissions', permissionsRoutes);
 app.use('/api/invitations', invitationsRoutes);
 app.use('/api/sheets', sheetsRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/bots', llmTargetsRoutes); // LLM targets are nested under /api/bots/:botId/llm-targets
+
 
 // 404 handler
 app.use((req, res) => {

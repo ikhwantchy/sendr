@@ -13,7 +13,7 @@ import DeleteConfirmationModal from '@/components/modals/DeleteConfirmationModal
 import CampaignsTable from '@/components/tables/CampaignsTable'
 import ActivityChart from '@/components/ActivityChart'
 import RecentActivityList from '@/components/RecentActivityList'
-import AIAssistantTab from '@/components/AIAssistantTab'
+import AIConfigTable from '@/components/AIConfigTable'
 import {
     ChevronLeft,
     MessageSquare,
@@ -24,7 +24,7 @@ import {
     Pause,
     Play,
     ArrowRight,
-    Edit,
+    Edit2,
     Trash2,
     Filter,
     CheckSquare,
@@ -36,14 +36,15 @@ import {
     Calendar,
     Clock,
     Users,
-    ChevronDown
+    ChevronDown,
+    Plus
 } from 'lucide-react'
 
 export default function BotDetailPage() {
     const params = useParams()
     const router = useRouter()
     const botId = params.id as string
-    const [activeTab, setActiveTab] = useState('overview')
+    const [activeTab, setActiveTab] = useState<string>('overview')
 
     // Modal states
     const [showCreateRuleModal, setShowCreateRuleModal] = useState(false)
@@ -858,206 +859,139 @@ export default function BotDetailPage() {
                                 onClick={() => setShowCreateRuleModal(true)}
                                 className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 text-zinc-100 rounded-lg font-medium transition-all text-sm"
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
+                                <Plus className="w-4 h-4" />
                                 <span>New Rule</span>
                             </button>
                         </div>
 
-                        {/* Bulk Actions Indicator */}
-                        {selectedRules.length > 0 && (
-                            <div className="flex items-center justify-between gap-4 mb-4 bg-red-500/5 p-3 rounded-xl border border-red-500/20 animate-in slide-in-from-top-2 duration-300">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm text-red-400 font-semibold tracking-wide">
-                                        {selectedRules.length} Rules Selected
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => setSelectedRules([])}
-                                        className="px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleBulkDeleteRules}
-                                        className="flex items-center gap-2 px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-all text-xs shadow-lg shadow-red-500/20"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                        <span>Delete Selected</span>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* select all bar */}
-                        {filteredRules.length > 0 && (
-                            <div className="flex items-center gap-3 px-4 py-2 mb-2 bg-zinc-900/30 rounded-lg border border-zinc-800/50">
-                                <button
-                                    onClick={() => {
-                                        if (selectedRules.length === filteredRules.length) {
-                                            setSelectedRules([])
-                                        } else {
-                                            setSelectedRules(filteredRules.map((r: any) => r.id))
-                                        }
-                                    }}
-                                    className="flex items-center gap-2 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
-                                >
-                                    {selectedRules.length === filteredRules.length ? (
-                                        <CheckSquare className="w-4 h-4 text-blue-500" />
-                                    ) : (
-                                        <Square className="w-4 h-4" />
-                                    )}
-                                    <span>Select All Visual ({filteredRules.length})</span>
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Stacked List - Ghost Aesthetic */}
+                        {/* Table View */}
                         {filteredRules.length > 0 ? (
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800 overflow-hidden shadow-2xl">
-                                {filteredRules.map((rule: any) => {
-                                    const isActive = rule.is_active === 1
-                                    const isSelected = selectedRules.includes(rule.id)
-
-                                    return (
-                                        <div
-                                            key={rule.id}
-                                            className={`group flex items-center gap-4 px-4 py-4 hover:bg-zinc-800/50 transition-all ${!isActive ? 'opacity-40' : ''} ${isSelected ? 'bg-blue-500/5 border-l-2 border-l-blue-500' : 'border-l-2 border-l-transparent'}`}
-                                        >
-                                            {/* Selection Checkbox */}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    setSelectedRules(prev =>
-                                                        prev.includes(rule.id)
-                                                            ? prev.filter(id => id !== rule.id)
-                                                            : [...prev, rule.id]
-                                                    )
-                                                }}
-                                                className="flex-shrink-0 focus:outline-none"
-                                            >
-                                                {isSelected ? (
-                                                    <CheckSquare className="w-5 h-5 text-blue-500 animate-in zoom-in-50 duration-200" />
-                                                ) : (
-                                                    <Square className="w-5 h-5 text-zinc-700 group-hover:text-zinc-500 transition-colors" />
-                                                )}
-                                            </button>
-
-                                            {/* Icon Container */}
-                                            <div className="w-8 h-8 rounded bg-zinc-900/50 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                                                <Zap className="w-4 h-4 text-zinc-400" />
-                                            </div>
-
-                                            {/* Content */}
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="text-sm font-semibold text-zinc-100 truncate group-hover:text-blue-400 transition-colors">
-                                                    {rule.keyword}
-                                                </h3>
-                                            </div>
-
-                                            {/* Scope Badge - Fixed Width 120px */}
-                                            {(() => {
-                                                const scope = rule.scope || 'global'
-                                                const isGroup = scope === 'group'
-
-                                                const icon = isGroup ? (
-                                                    <Users className="w-3.5 h-3.5" />
-                                                ) : (
-                                                    <Circle className="w-3.5 h-3.5" />
-                                                )
-
-                                                const label = isGroup ? 'Groups' : 'All'
-                                                const colorClass = 'bg-purple-500/10 border-purple-500/20 text-purple-300'
-
+                            <div className="border border-zinc-800 rounded-lg overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-zinc-900/30 border-b border-zinc-800">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Status</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Keyword</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Type</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Created</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredRules.map((rule: any) => {
+                                                const isActive = rule.is_active === 1
                                                 return (
-                                                    <div className={`w-[120px] h-[34px] inline-flex items-center justify-center gap-2 px-2.5 py-1 border rounded-md ${colorClass} group-hover:border-purple-500/40 transition-all`}>
-                                                        {icon}
-                                                        <span className="text-xs font-semibold">
-                                                            {label}
-                                                        </span>
-                                                    </div>
-                                                )
-                                            })()}
-
-                                            {/* Ultra-Minimal Toggle Switch */}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    api.rules.toggle(rule.id).then(() => {
-                                                        queryClient.invalidateQueries({ queryKey: ['rules', botId] })
-                                                        toast.success(isActive ? 'Rule disabled' : 'Rule enabled')
-                                                    }).catch(() => {
-                                                        toast.error('Failed to toggle rule')
-                                                    })
-                                                }}
-                                                className={`relative w-11 h-6 rounded-full transition-all flex-shrink-0 ${isActive
-                                                    ? 'bg-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
-                                                    : 'bg-zinc-800'
-                                                    }`}
-                                            >
-                                                <div
-                                                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-all shadow-sm ${isActive
-                                                        ? 'translate-x-5 bg-emerald-500'
-                                                        : 'translate-x-0 bg-zinc-600'
-                                                        }`}
-                                                />
-                                            </button>
-
-                                            {/* Action Buttons */}
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        setSelectedRule(rule)
-                                                        setShowEditRuleModal(true)
-                                                    }}
-                                                    className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-blue-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-blue-400"
-                                                    title="Edit rule"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-
-                                                {ruleToDelete === rule.id ? (
-                                                    <div className="flex items-center gap-2 animate-in fade-in zoom-in-95 duration-200">
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                handleDeleteRule()
-                                                            }}
-                                                            disabled={isDeletingRule}
-                                                            className="h-8 px-3 bg-red-500 hover:bg-red-600 text-white text-[11px] font-bold rounded-lg transition-all shadow-lg shadow-red-500/20 disabled:opacity-50"
-                                                        >
-                                                            {isDeletingRule ? '...' : 'Confirm'}
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                setRuleToDelete(null)
-                                                            }}
-                                                            disabled={isDeletingRule}
-                                                            className="h-8 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold rounded-lg transition-all disabled:opacity-50"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            setRuleToDelete(rule.id)
-                                                        }}
-                                                        className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
-                                                        title="Delete rule"
+                                                    <tr
+                                                        key={rule.id}
+                                                        className="border-b border-zinc-800/50 hover:bg-zinc-900/30 transition-colors"
                                                     >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )
-                                })}
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        api.rules.toggle(rule.id).then(() => {
+                                                                            queryClient.invalidateQueries({ queryKey: ['rules', botId] })
+                                                                            toast.success(isActive ? 'Rule disabled' : 'Rule enabled')
+                                                                        }).catch(() => {
+                                                                            toast.error('Failed to toggle rule')
+                                                                        })
+                                                                    }}
+                                                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${isActive ? 'bg-emerald-500' : 'bg-zinc-700'
+                                                                        }`}
+                                                                >
+                                                                    <span
+                                                                        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-5' : 'translate-x-1'
+                                                                            }`}
+                                                                    />
+                                                                </button>
+                                                                <span className={`text-xs font-medium ${isActive ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                                                                    {isActive ? 'Active' : 'Inactive'}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <Zap className="w-4 h-4 text-blue-500" />
+                                                                <span className="text-sm text-white font-medium">{rule.keyword}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            {(() => {
+                                                                const scope = rule.scope || 'global'
+                                                                const isGroup = scope === 'group'
+                                                                return (
+                                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${isGroup
+                                                                        ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                                                                        : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-400'
+                                                                        }`}>
+                                                                        {isGroup ? <Users className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
+                                                                        {isGroup ? 'Group' : 'Global'}
+                                                                    </span>
+                                                                )
+                                                            })()}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="text-xs text-zinc-500 font-mono">
+                                                                {new Date(rule.created_at).toLocaleDateString()}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center justify-end gap-2">
+                                                                {ruleToDelete === rule.id ? (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                handleDeleteRule()
+                                                                            }}
+                                                                            disabled={isDeletingRule}
+                                                                            className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-all"
+                                                                        >
+                                                                            Confirm
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                setRuleToDelete(null)
+                                                                            }}
+                                                                            className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium rounded-lg transition-all"
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                setSelectedRule(rule)
+                                                                                setShowEditRuleModal(true)
+                                                                            }}
+                                                                            className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
+                                                                        >
+                                                                            <Edit2 className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                setRuleToDelete(rule.id)
+                                                                            }}
+                                                                            className="px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-400 text-xs font-medium rounded-md transition-colors border border-red-600/20"
+                                                                        >
+                                                                            Delete
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         ) : (
                             <div className="border border-dashed border-zinc-800/50 rounded-xl p-12 text-center">
@@ -1101,311 +1035,149 @@ export default function BotDetailPage() {
                                 onClick={() => router.push(`/dashboard/reminders/create?botId=${botId}`)}
                                 className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 text-zinc-100 rounded-lg font-medium transition-all text-sm"
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
+                                <Plus className="w-4 h-4" />
                                 <span>New Reminder</span>
                             </button>
                         </div>
 
-                        {/* Bulk Actions Indicator */}
-                        {selectedReminders.length > 0 && (
-                            <div className="flex items-center justify-between gap-4 mb-4 bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/20 animate-in slide-in-from-top-2 duration-300">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm text-emerald-400 font-semibold tracking-wide">
-                                        {selectedReminders.length} Reminders Selected
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => setSelectedReminders([])}
-                                        className="px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleBulkDeleteReminders}
-                                        className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-semibold transition-all text-xs shadow-lg shadow-emerald-500/20"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                        <span>Delete Selected</span>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* select all bar */}
-                        {filteredReminders.length > 0 && (
-                            <div className="flex items-center gap-3 px-4 py-2 mb-2 bg-zinc-900/30 rounded-lg border border-zinc-800/50">
-                                <button
-                                    onClick={() => {
-                                        if (selectedReminders.length === filteredReminders.length) {
-                                            setSelectedReminders([])
-                                        } else {
-                                            setSelectedReminders(filteredReminders.map((r: any) => r.id))
-                                        }
-                                    }}
-                                    className="flex items-center gap-2 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
-                                >
-                                    {selectedReminders.length === filteredReminders.length ? (
-                                        <CheckSquare className="w-4 h-4 text-emerald-500" />
-                                    ) : (
-                                        <Square className="w-4 h-4" />
-                                    )}
-                                    <span>Select All Visual ({filteredReminders.length})</span>
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Stacked List - Ghost Aesthetic */}
+                        {/* Table View */}
                         {filteredReminders.length > 0 ? (
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800 overflow-hidden shadow-2xl">
-                                {filteredReminders.map((reminder: any) => {
-                                    const isActive = reminder.is_active === 1
-                                    const isSelected = selectedReminders.includes(reminder.id)
-
-                                    // Format schedule
-                                    const formatSchedule = (cron: string): string => {
-                                        if (cron === 'now') return 'One-time'
-                                        const parts = cron.split(' ')
-                                        if (parts.length !== 5) return cron
-                                        const [minute, hour, dom, month, dow] = parts
-
-                                        if (dow !== '*') {
-                                            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-                                            return `Weekly · ${days[parseInt(dow)]} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
-                                        }
-                                        if (dom === '*' && month === '*') {
-                                            return `Daily · ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
-                                        }
-                                        if (dom !== '*' && month !== '*') {
-                                            return `Once · ${dom}/${month} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
-                                        }
-                                        return cron
-                                    }
-
-                                    return (
-                                        <div
-                                            key={reminder.id}
-                                            className={`group flex items-center gap-4 px-4 py-4 hover:bg-zinc-800/50 transition-all ${!isActive ? 'opacity-40' : ''} ${isSelected ? 'bg-emerald-500/5 border-l-2 border-l-emerald-500' : 'border-l-2 border-l-transparent'}`}
-                                        >
-                                            {/* Selection Checkbox */}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    setSelectedReminders(prev =>
-                                                        prev.includes(reminder.id)
-                                                            ? prev.filter(id => id !== reminder.id)
-                                                            : [...prev, reminder.id]
-                                                    )
-                                                }}
-                                                className="flex-shrink-0 focus:outline-none"
-                                            >
-                                                {isSelected ? (
-                                                    <CheckSquare className="w-5 h-5 text-emerald-500 animate-in zoom-in-50 duration-200" />
-                                                ) : (
-                                                    <Square className="w-5 h-5 text-zinc-700 group-hover:text-zinc-500 transition-colors" />
-                                                )}
-                                            </button>
-
-                                            {/* Icon Container */}
-                                            <div className="w-8 h-8 rounded bg-zinc-900/50 flex items-center justify-center flex-shrink-0 group-hover:rotate-12 transition-transform">
-                                                <Clock className="w-4 h-4 text-zinc-400" />
-                                            </div>
-
-                                            {/* Content */}
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="text-sm font-semibold text-zinc-100 truncate group-hover:text-emerald-400 transition-colors">
-                                                    {reminder.name}
-                                                </h3>
-                                            </div>
-
-                                            {/* Next Run Badge (if active) */}
-                                            {reminder.next_run_at && isActive && (
-                                                <div className="hidden md:flex items-center gap-2 px-2.5 py-1 bg-zinc-900/50 border border-zinc-800/50 rounded-md">
-                                                    <Calendar className="w-3 h-3 text-blue-500" />
-                                                    <span className="text-xs text-zinc-400 font-mono">
-                                                        {new Date(reminder.next_run_at).toLocaleString('en-US', {
-                                                            month: 'short',
-                                                            day: 'numeric',
-                                                            hour: '2-digit',
-                                                            minute: '2-digit'
-                                                        })}
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {/* Target Type Badge */}
-                                            {(() => {
-                                                const targets = reminder.target_id ? reminder.target_id.split(',').filter((t: string) => t.trim()) : []
-                                                const targetType = reminder.target_type || 'contact'
-                                                const count = targets.length
-                                                const isExpanded = expandedTargets === reminder.id
-
-                                                if (count === 0) return null
-
-                                                const icon = targetType === 'group' ? (
-                                                    <Users className="w-3.5 h-3.5 text-purple-400" />
-                                                ) : (
-                                                    <Circle className="w-3.5 h-3.5 text-purple-400" />
-                                                )
-
-                                                const label = targetType === 'group'
-                                                    ? (count === 1 ? '1 Group' : `${count} Groups`)
-                                                    : (count === 1 ? '1 Contact' : `${count} Contacts`)
-
-                                                const getTargetDisplayName = (targetJid: string, index: number): string => {
-                                                    if (targetType === 'group') {
-                                                        if (count === 1 && reminder.group_name) return reminder.group_name
-                                                        const jidParts = targetJid.split('@')
-                                                        return jidParts[0] || `Group ${index + 1}`
-                                                    } else {
-                                                        const phoneMatch = targetJid.match(/(\d+)@/)
-                                                        if (phoneMatch) {
-                                                            const phone = phoneMatch[1]
-                                                            if (phone.startsWith('62')) {
-                                                                return `+${phone.slice(0, 2)} ${phone.slice(2, 5)} ${phone.slice(5, 9)} ${phone.slice(9)}`
-                                                            }
-                                                            return `+${phone}`
-                                                        }
-                                                        return targetJid
-                                                    }
-                                                }
-
-                                                return (
-                                                    <div className="relative">
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                setExpandedTargets(isExpanded ? null : reminder.id)
-                                                            }}
-                                                            className="w-[120px] h-[34px] inline-flex items-center justify-center gap-2 px-2.5 py-1 bg-purple-500/10 border border-purple-500/20 rounded-md hover:bg-purple-500/20 transition-all"
-                                                        >
-                                                            {icon}
-                                                            <span className="text-xs font-semibold text-purple-300">
-                                                                {label}
-                                                            </span>
-                                                        </button>
-
-                                                        {isExpanded && (
-                                                            <div className="absolute top-full left-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-2xl z-50 min-w-[200px] max-w-[300px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
-                                                                <div className="p-2 space-y-1">
-                                                                    {targets.map((target: string, idx: number) => (
-                                                                        <div key={idx} className="px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700/50 rounded truncate transition-colors">
-                                                                            {getTargetDisplayName(target, idx)}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )
-                                            })()}
-
-                                            {/* Schedule Type Badge */}
-                                            {(() => {
-                                                const getScheduleType = (cron: string): { label: string; color: string } => {
-                                                    if (cron === 'now') return { label: 'Now', color: 'cyan' }
+                            <div className="border border-zinc-800 rounded-lg overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-zinc-900/30 border-b border-zinc-800">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Status</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Name</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Schedule</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Target</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Next Run</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredReminders.map((reminder: any) => {
+                                                const isActive = reminder.is_active === 1
+                                                // Format schedule
+                                                const formatSchedule = (cron: string): string => {
+                                                    if (cron === 'now') return 'One-time'
                                                     const parts = cron.split(' ')
-                                                    if (parts.length !== 5) return { label: 'Custom', color: 'zinc' }
-                                                    const [, , dom, month, dow] = parts
-
-                                                    if (dow !== '*') return { label: 'Weekly', color: 'purple' }
-                                                    if (dom === '*' && month === '*') return { label: 'Daily', color: 'blue' }
-                                                    if (dom !== '*' && month !== '*') return { label: 'One-Time', color: 'emerald' }
-                                                    return { label: 'Custom', color: 'zinc' }
-                                                }
-
-                                                const scheduleType = getScheduleType(reminder.schedule)
-                                                const colorClasses = {
-                                                    cyan: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400',
-                                                    blue: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
-                                                    purple: 'bg-purple-500/10 border-purple-500/30 text-purple-400',
-                                                    emerald: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
-                                                    zinc: 'bg-zinc-500/10 border-zinc-500/30 text-zinc-400'
+                                                    if (parts.length !== 5) return cron
+                                                    const [minute, hour, dom, month, dow] = parts
+                                                    if (dow !== '*') {
+                                                        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                                                        return `Weekly · ${days[parseInt(dow)]} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+                                                    }
+                                                    if (dom === '*' && month === '*') return `Daily · ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+                                                    if (dom !== '*' && month !== '*') return `Once · ${dom}/${month} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+                                                    return cron
                                                 }
 
                                                 return (
-                                                    <div className={`w-[90px] px-3 py-1.5 rounded-lg border font-semibold text-[10px] uppercase tracking-wider text-center ${colorClasses[scheduleType.color as keyof typeof colorClasses]} group-hover:scale-105 transition-transform`}>
-                                                        {scheduleType.label}
-                                                    </div>
+                                                    <tr key={reminder.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/30 transition-colors">
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        api.reminders.toggle(reminder.id).then(() => {
+                                                                            queryClient.invalidateQueries({ queryKey: ['reminders', botId] })
+                                                                            toast.success(isActive ? 'Reminder paused' : 'Reminder activated')
+                                                                        }).catch(() => {
+                                                                            toast.error('Failed to toggle reminder')
+                                                                        })
+                                                                    }}
+                                                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${isActive ? 'bg-emerald-500' : 'bg-zinc-700'
+                                                                        }`}
+                                                                >
+                                                                    <span
+                                                                        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-5' : 'translate-x-1'
+                                                                            }`}
+                                                                    />
+                                                                </button>
+                                                                <span className={`text-xs font-medium ${isActive ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                                                                    {isActive ? 'Active' : 'Paused'}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <Clock className="w-4 h-4 text-emerald-500" />
+                                                                <span className="text-sm text-white font-medium">{reminder.name}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <span className="text-xs text-zinc-400">{formatSchedule(reminder.schedule)}</span>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-2 text-xs text-zinc-400">
+                                                                <Users className="w-3.5 h-3.5 text-purple-400" />
+                                                                <span>{reminder.group_name || reminder.target_id || '-'}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            {reminder.next_run_at && isActive ? (
+                                                                <div className="text-xs text-blue-400 font-mono">
+                                                                    {new Date(reminder.next_run_at).toLocaleString()}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-zinc-600">-</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center justify-end gap-2">
+                                                                {deleteReminderConfirm === reminder.id ? (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                handleDeleteReminder()
+                                                                            }}
+                                                                            disabled={isDeletingReminder}
+                                                                            className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-all"
+                                                                        >
+                                                                            Confirm
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                setDeleteReminderConfirm(null)
+                                                                            }}
+                                                                            className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium rounded-lg transition-all"
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                router.push(`/dashboard/reminders/create?botId=${botId}&edit=${reminder.id}`)
+                                                                            }}
+                                                                            className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
+                                                                        >
+                                                                            <Edit2 className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                setDeleteReminderConfirm(reminder.id)
+                                                                            }}
+                                                                            className="px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-400 text-xs font-medium rounded-md transition-colors border border-red-600/20"
+                                                                        >
+                                                                            Delete
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
                                                 )
-                                            })()}
-
-                                            {/* Ultra-Minimal Toggle Switch */}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    api.reminders.toggle(reminder.id).then(() => {
-                                                        queryClient.invalidateQueries({ queryKey: ['reminders', botId] })
-                                                        toast.success(isActive ? 'Reminder paused' : 'Reminder activated')
-                                                    }).catch(() => {
-                                                        toast.error('Failed to toggle reminder')
-                                                    })
-                                                }}
-                                                className={`relative w-11 h-6 rounded-full transition-all flex-shrink-0 ${isActive
-                                                    ? 'bg-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
-                                                    : 'bg-zinc-800'
-                                                    }`}
-                                            >
-                                                <div
-                                                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-all shadow-sm ${isActive
-                                                        ? 'translate-x-5 bg-emerald-500'
-                                                        : 'translate-x-0 bg-zinc-600'
-                                                        }`}
-                                                />
-                                            </button>
-
-                                            {/* Action Buttons */}
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        router.push(`/dashboard/reminders/create?botId=${botId}&edit=${reminder.id}`)
-                                                    }}
-                                                    className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-blue-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-blue-400"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-
-                                                {deleteReminderConfirm === reminder.id ? (
-                                                    <div className="flex items-center gap-2 animate-in fade-in zoom-in-95 duration-200">
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                handleDeleteReminder()
-                                                            }}
-                                                            disabled={isDeletingReminder}
-                                                            className="h-8 px-3 bg-red-500 hover:bg-red-600 text-white text-[11px] font-bold rounded-lg transition-all shadow-lg shadow-red-500/20 disabled:opacity-50"
-                                                        >
-                                                            {isDeletingReminder ? '...' : 'Confirm'}
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                setDeleteReminderConfirm(null)
-                                                            }}
-                                                            disabled={isDeletingReminder}
-                                                            className="h-8 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold rounded-lg transition-all disabled:opacity-50"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            setDeleteReminderConfirm(reminder.id)
-                                                        }}
-                                                        className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )
-                                })}
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         ) : (
                             <div className="border border-dashed border-zinc-800/50 rounded-xl p-12 text-center">
@@ -1422,7 +1194,9 @@ export default function BotDetailPage() {
                 )}
 
                 {activeTab === 'ai-assistant' && (
-                    <AIAssistantTab botId={botId} botData={bot} />
+                    <div>
+                        <AIConfigTable botId={botId} />
+                    </div>
                 )}
 
                 {activeTab === 'settings' && (

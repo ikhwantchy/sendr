@@ -17,15 +17,22 @@ export default function WhatsAppPreview({
     const formatMessage = (text: string) => {
         if (!text) return ''
 
-        // Bold: *text*
-        text = text.replace(/\*(.*?)\*/g, '<strong>$1</strong>')
-        // Italic: _text_
-        text = text.replace(/_(.*?)_/g, '<em>$1</em>')
+        console.log('📝 [WhatsAppPreview] Raw message:', text);
+        console.log('📝 [WhatsAppPreview] Has newlines:', text.includes('\n'));
+
+        // Code first (to avoid conflicts): ```text```
+        text = text.replace(/```([^`]+)```/g, '<code class="bg-gray-700 px-1 rounded">$1</code>')
+
+        // Bold: *text* (but not ** or single *)
+        text = text.replace(/\*([^\*\n]+)\*/g, '<strong>$1</strong>')
+
+        // Italic: _text_ (but not __ or single _)
+        text = text.replace(/_([^_\n]+)_/g, '<em>$1</em>')
+
         // Strikethrough: ~text~
-        text = text.replace(/~(.*?)~/g, '<del>$1</del>')
-        // Code: ```text```
-        text = text.replace(/```(.*?)```/g, '<code class="bg-gray-700 px-1 rounded">$1</code>')
-        // Line breaks
+        text = text.replace(/~([^~\n]+)~/g, '<del>$1</del>')
+
+        // Line breaks (last, to preserve formatting)
         text = text.replace(/\n/g, '<br/>')
 
         return text
@@ -69,8 +76,8 @@ export default function WhatsAppPreview({
                         {/* Message Bubble */}
                         <div
                             className={`rounded-lg px-3 py-2 ${isOwn
-                                    ? 'bg-[#005C4B] text-white'
-                                    : 'bg-[#1F2C33] text-white'
+                                ? 'bg-[#005C4B] text-white'
+                                : 'bg-[#1F2C33] text-white'
                                 }`}
                         >
                             <div
