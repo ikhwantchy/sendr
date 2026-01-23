@@ -1,0 +1,29 @@
+// MANUAL PATCH for reminderSchedulerService.ts
+// Location: Line 209-213
+// 
+// REPLACE THIS:
+//                 if (isFromSheet && templateConfig.isDigestMode) {
+//                     // Check if template uses new syntax (flexible regex to handle optional whitespace)
+//                     const usesNewSyntax = /{{\\s*#each/.test(templateText) ||
+//                         /{{\\s*#if/.test(templateText) ||
+//                         /{{\\s*#group/.test(templateText);
+//
+// WITH THIS:
+
+                if (isFromSheet && templateConfig.isDigestMode) {
+                    // Check if template uses Handlebars syntax (our custom helpers)
+                    const usesHandlebars = /\{\{\s*#(loop|reach|group|dosen)\s/.test(templateText);
+                    
+                    if (usesHandlebars) {
+                        // Use Handlebars renderer
+                        console.log('🎨 Using Handlebars template renderer');
+                        const templateRenderingService = require('./templateRenderingService').default;
+                        finalMessage = templateRenderingService.renderWithSheetData(templateText, sheetRows);
+                    } else {
+                        // Check if template uses new syntax (flexible regex to handle optional whitespace)
+                        const usesNewSyntax = /\{\{\s*#each/.test(templateText) ||
+                            /\{\{\s*#if/.test(templateText) ||
+                            /\{\{\s*#group/.test(templateText);
+
+// THEN ADD ONE MORE CLOSING BRACE } at line 236 (after the existing closing brace)
+// This closes the new else block we added

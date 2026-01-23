@@ -1,8 +1,5 @@
 import { format } from 'date-fns';
 import cron from 'node-cron';
-// Robust require for cron-parser
-const cronParser = require('cron-parser');
-const parseExpression = cronParser.parseExpression || cronParser.default?.parseExpression || (typeof cronParser === 'function' ? cronParser : cronParser.parseExpression);
 import { query } from '../database/connection';
 import googleSheetsService from './googleSheetsService';
 import templateEngineService from './templateEngineService';
@@ -23,26 +20,24 @@ class ReminderSchedulerService {
     private scheduledReminders: Map<string, ScheduledReminder> = new Map();
 
     /**
-     * Initialize scheduler - load all active reminders from database
+     * Initialize scheduler - load all active reminders
      */
     async initialize() {
         try {
-            console.log('🔄 Initializing Reminder Scheduler...');
-
             const result = await query(`
                 SELECT * FROM reminders 
                 WHERE is_active = 1
             `);
 
-            const reminders = result.rows || [];
+            console.log(`📅 Loading ${result.rows.length} active reminders...`);
 
-            for (const reminder of reminders) {
+            for (const reminder of result.rows) {
                 await this.scheduleReminder(reminder);
             }
 
-            console.log(`✅ Scheduler initialized with ${reminders.length} active reminders`);
+            console.log(`✅ Scheduler initialized with ${this.scheduledReminders.size} reminders`);
         } catch (error) {
-            console.error('❌ Error initializing scheduler:', error);
+            console.error('Failed to initialize scheduler:', error);
         }
     }
 
@@ -51,22 +46,28 @@ class ReminderSchedulerService {
      */
     async scheduleReminder(reminder: any) {
         try {
-            // If already scheduled, remove old schedule first
-            if (this.scheduledReminders.has(reminder.id)) {
-                this.unscheduleReminder(reminder.id);
-            }
+            // Unschedule if already scheduled
+            this.unscheduleReminder(reminder.id);
 
-            // Skip if schedule is 'now'
+            // Skip if schedule is 'now' (one-time immediate execution)
             if (reminder.schedule === 'now') {
-                console.log(`⚡ Reminder ${reminder.id} is set to 'now', skipping cron registration`);
+                console.log(`⚡ Skipping schedule for immediate reminder: ${reminder.name}`);
                 return;
             }
 
-            // Create cron task
+            // Validate cron expression
+            if (!cron.validate(reminder.schedule)) {
+                console.error(`❌ Invalid cron expression for reminder ${reminder.id}: ${reminder.schedule}`);
+                return;
+            }
+
+            // Schedule with node-cron
             const task = cron.schedule(reminder.schedule, async () => {
+                console.log(`⏰ Triggered reminder: ${reminder.name}`);
                 await this.executeReminder(reminder.id);
             }, {
-                timezone: reminder.timezone || 'Asia/Jakarta',
+                scheduled: true,
+                timezone: reminder.timezone || 'Asia/Jakarta'
             });
 
             this.scheduledReminders.set(reminder.id, {
@@ -75,17 +76,45 @@ class ReminderSchedulerService {
                 task,
             });
 
-            // Calculate next run at
-            try {
-                const interval = parseExpression(reminder.schedule, {
-                    tz: reminder.timezone || 'Asia/Jakarta'
-                });
-                const nextRunAt = interval.next().toISOString();
+            // Calculate next run at using cron-parser
+            // Skip for "Once" reminders - they don't need a "next run" display
+            const isOnceReminder = this.isOnceCron(reminder.schedule);
 
-                await query('UPDATE reminders SET next_run_at = ? WHERE id = ?', [nextRunAt, reminder.id]);
-            } catch (err) {
-                console.error('Error calculating next run:', err);
+            if (!isOnceReminder) {
+                try {
+                    // Dynamic import for cron-parser to avoid TypeScript issues
+                    const cp = require('cron-parser');
+                    const parser = cp.default || cp;
+
+                    // In v5.x, the main export might be the CronExpressionParser class which has a static .parse() method
+                    // instead of the traditional .parseExpression() function
+                    const parseFn = parser.parseExpression || parser.parse;
+
+                    if (typeof parseFn === 'function') {
+                        const interval = parseFn.call(parser, reminder.schedule, {
+                            tz: reminder.timezone || 'Asia/Jakarta'
+                        });
+                        const nextRunAt = interval.next().toISOString();
+
+                        await query('UPDATE reminders SET next_run_at = ? WHERE id = ?', [nextRunAt, reminder.id]);
+                        console.log(`📅 Next run for "${reminder.name}": ${nextRunAt}`);
+                    } else {
+                        console.error('❌ cron-parser: No valid parse function found', {
+                            cpType: typeof cp,
+                            parserType: typeof parser,
+                            hasParse: typeof parser.parse === 'function',
+                            hasParseExpr: typeof parser.parseExpression === 'function'
+                        });
+                    }
+                } catch (err) {
+                    console.error('Error calculating next run:', err);
+                }
+            } else {
+                // Clear next_run_at for "Once" reminders
+                await query('UPDATE reminders SET next_run_at = NULL WHERE id = ?', [reminder.id]);
+                console.log(`📭 Skipped next_run_at for "Once" reminder: ${reminder.name}`);
             }
+
 
             console.log(`✅ Scheduled reminder: ${reminder.name} (${reminder.schedule})`);
         } catch (error) {
@@ -178,32 +207,42 @@ class ReminderSchedulerService {
                 let finalMessage = '';
 
                 if (isFromSheet && templateConfig.isDigestMode) {
-                    // Check if template uses new syntax (flexible regex to handle optional whitespace)
-                    const usesNewSyntax = /{{\s*#each/.test(templateText) ||
-                        /{{\s*#if/.test(templateText) ||
-                        /{{\s*#group/.test(templateText);
+                    // Check if template uses Handlebars syntax (our custom helpers)
+                    const usesHandlebars = /{{\s*#(loop|reach|group|dosen)\s/.test(templateText);
 
-                    if (usesNewSyntax) {
-                        // Use enhanced renderer
-                        console.log('🎨 Using enhanced template renderer');
-                        finalMessage = enhancedTemplateRenderer.render(templateText, {
-                            data: sheetRows,
-                            globalVars: {
-                                RUN_TIME: new Date().toLocaleTimeString(),
-                                TODAY: new Date().toLocaleDateString('id-ID', {
-                                    weekday: 'long',
-                                    day: 'numeric',
-                                    month: 'long'
-                                })
-                            },
-                            timezone: reminder.timezone || 'Asia/Jakarta'
-                        });
+                    if (usesHandlebars) {
+                        // Use Handlebars renderer
+                        console.log('🎨 Using Handlebars template renderer');
+                        const templateRenderingService = require('./templateRenderingService').default;
+                        finalMessage = templateRenderingService.renderWithSheetData(templateText, sheetRows);
                     } else {
-                        // Use legacy loop-supporting renderer
-                        console.log('📝 Using legacy template renderer');
-                        finalMessage = templateEngineService.renderGeneralTemplate(templateText, sheetRows, {
-                            RUN_TIME: new Date().toLocaleTimeString()
-                        });
+                        // Check if template uses new syntax (flexible regex to handle optional whitespace)
+                        const usesNewSyntax = /{{\s*#each/.test(templateText) ||
+                            /{{\s*#if/.test(templateText) ||
+                            /{{\s*#group/.test(templateText);
+
+                        if (usesNewSyntax) {
+                            // Use enhanced renderer
+                            console.log('🎨 Using enhanced template renderer');
+                            finalMessage = enhancedTemplateRenderer.render(templateText, {
+                                data: sheetRows,
+                                globalVars: {
+                                    RUN_TIME: new Date().toLocaleTimeString(),
+                                    TODAY: new Date().toLocaleDateString('id-ID', {
+                                        weekday: 'long',
+                                        day: 'numeric',
+                                        month: 'long'
+                                    })
+                                },
+                                timezone: reminder.timezone || 'Asia/Jakarta'
+                            });
+                        } else {
+                            // Use legacy loop-supporting renderer
+                            console.log('📝 Using legacy template renderer');
+                            finalMessage = templateEngineService.renderGeneralTemplate(templateText, sheetRows, {
+                                RUN_TIME: new Date().toLocaleTimeString()
+                            });
+                        }
                     }
                 } else if (isFromSheet && sheetRows.length > 0) {
                     // Just use the first matching row if not in digest mode but from sheet
@@ -459,16 +498,54 @@ class ReminderSchedulerService {
                 VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
             `, [require('uuid').v4(), reminderId, status, details]);
 
+            // Get reminder info to check if it's a "Once" type
+            const reminderResult = await query('SELECT schedule FROM reminders WHERE id = ?', [reminderId]);
+            const isOnceReminder = reminderResult.rows.length > 0 && this.isOnceCron(reminderResult.rows[0].schedule);
+
             // Update reminder's last_run_at
-            await query(`
-                UPDATE reminders 
-                SET last_run_at = CURRENT_TIMESTAMP, last_status = ?, run_count = run_count + 1
-                WHERE id = ?
-            `, [status, reminderId]);
+            // For "Once" reminders, clear next_run_at after execution
+            if (isOnceReminder) {
+                await query(`
+                    UPDATE reminders 
+                    SET last_run_at = CURRENT_TIMESTAMP, last_status = ?, run_count = run_count + 1, next_run_at = NULL
+                    WHERE id = ?
+                `, [status, reminderId]);
+                console.log(`📭 Cleared next_run_at for "Once" reminder: ${reminderId}`);
+            } else {
+                await query(`
+                    UPDATE reminders 
+                    SET last_run_at = CURRENT_TIMESTAMP, last_status = ?, run_count = run_count + 1
+                    WHERE id = ?
+                `, [status, reminderId]);
+            }
         } catch (error) {
             console.error('Error logging execution:', error);
         }
     }
+
+    /**
+     * Check if a cron expression represents a "once" execution
+     * A "once" cron has specific date/month values (not wildcards)
+     */
+    private isOnceCron(cronExpression: string): boolean {
+        if (!cronExpression || cronExpression === 'now') return true;
+
+        // Standard cron format: minute hour day month dayOfWeek
+        // "Once" pattern: specific minute, hour, day, and month (e.g., "30 14 19 1 *")
+        // "Daily/Weekly" pattern: wildcards in day or month (e.g., "30 14 * * *" or "30 14 * * 1,3,5")
+
+        const parts = cronExpression.trim().split(/\s+/);
+        if (parts.length < 5) return false;
+
+        const [minute, hour, day, month, dayOfWeek] = parts;
+
+        // If both day AND month are specific numbers (not wildcards), it's a "once" reminder
+        const hasSpecificDay = day !== '*' && !day.includes('/') && !day.includes('-') && !day.includes(',');
+        const hasSpecificMonth = month !== '*' && !month.includes('/') && !month.includes('-') && !month.includes(',');
+
+        return hasSpecificDay && hasSpecificMonth;
+    }
+
 
     /**
      * Execute reminder immediately (for "Send Now" option)

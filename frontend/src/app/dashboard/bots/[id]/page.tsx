@@ -1060,7 +1060,7 @@ export default function BotDetailPage() {
                                                 const isActive = reminder.is_active === 1
                                                 // Format schedule
                                                 const formatSchedule = (cron: string): string => {
-                                                    if (cron === 'now') return 'One-time'
+                                                    if (cron === 'now') return 'Send Now'
                                                     const parts = cron.split(' ')
                                                     if (parts.length !== 5) return cron
                                                     const [minute, hour, dom, month, dow] = parts
@@ -1117,11 +1117,18 @@ export default function BotDetailPage() {
                                                         </td>
                                                         <td className="px-4 py-3">
                                                             {reminder.next_run_at && isActive ? (
-                                                                <div className="text-xs text-blue-400 font-mono">
-                                                                    {new Date(reminder.next_run_at).toLocaleString()}
-                                                                </div>
+                                                                <span className="text-xs text-zinc-400">
+                                                                    {new Date(reminder.next_run_at).toLocaleDateString('en-GB', {
+                                                                        day: '2-digit',
+                                                                        month: '2-digit',
+                                                                    })} · {new Date(reminder.next_run_at).toLocaleTimeString('en-GB', {
+                                                                        hour: '2-digit',
+                                                                        minute: '2-digit',
+                                                                        hour12: false
+                                                                    })}
+                                                                </span>
                                                             ) : (
-                                                                <span className="text-zinc-600">-</span>
+                                                                <span className="text-zinc-600 text-xs">-</span>
                                                             )}
                                                         </td>
                                                         <td className="px-4 py-3">

@@ -69,23 +69,26 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
     })
 
     const formatSchedule = (cron: string): string => {
-        if (cron === 'now') return 'One-time (Now)'
+        if (cron === 'now') return 'Send Now'
         const parts = cron.split(' ')
         if (parts.length !== 5) return cron
 
         const [minute, hour, dom, month, dow] = parts
 
+        // Weekly schedule
         if (dow !== '*') {
-            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-            return `Weekly (Every ${days[parseInt(dow)]} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')})`
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+            return `Weekly · ${days[parseInt(dow)]} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
         }
 
+        // Daily schedule
         if (dom === '*' && month === '*') {
-            return `Daily (${hour.padStart(2, '0')}:${minute.padStart(2, '0')})`
+            return `Daily · ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
         }
 
+        // Once schedule
         if (dom !== '*' && month !== '*') {
-            return `Once (${dom}/${month} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')})`
+            return `Once · ${dom}/${month} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
         }
 
         return cron
@@ -193,18 +196,22 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
 
                                         {/* Next Run */}
                                         <td className="px-4 py-3">
-                                            {reminder.next_run_at && isActive ? (
-                                                <div className="text-blue-400 text-sm font-mono">
-                                                    {new Date(reminder.next_run_at).toLocaleString('en-US', {
-                                                        month: 'short',
-                                                        day: 'numeric',
-                                                        hour: '2-digit',
-                                                        minute: '2-digit',
-                                                    })}
-                                                </div>
-                                            ) : (
-                                                <span className="text-zinc-600 text-sm">-</span>
-                                            )}
+                                            <div className="flex items-center gap-2">
+                                                {reminder.next_run_at && isActive ? (
+                                                    <span className="text-zinc-400 text-sm">
+                                                        {new Date(reminder.next_run_at).toLocaleDateString('en-GB', {
+                                                            day: '2-digit',
+                                                            month: '2-digit',
+                                                        })} · {new Date(reminder.next_run_at).toLocaleTimeString('en-GB', {
+                                                            hour: '2-digit',
+                                                            minute: '2-digit',
+                                                            hour12: false
+                                                        })}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-zinc-600 text-sm">-</span>
+                                                )}
+                                            </div>
                                         </td>
 
                                         {/* Actions */}
@@ -339,13 +346,15 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                                     </div>
                                     {reminder.next_run_at && isActive && (
                                         <div className="flex items-center gap-2 text-sm">
-                                            <Clock className="w-3.5 h-3.5 text-blue-500" />
-                                            <span className="text-blue-400 font-mono">
-                                                Next: {new Date(reminder.next_run_at).toLocaleString('en-US', {
-                                                    month: 'short',
-                                                    day: 'numeric',
+                                            <Clock className="w-3.5 h-3.5 text-zinc-600" />
+                                            <span className="text-zinc-400">
+                                                Next: {new Date(reminder.next_run_at).toLocaleDateString('en-GB', {
+                                                    day: '2-digit',
+                                                    month: '2-digit',
+                                                })} · {new Date(reminder.next_run_at).toLocaleTimeString('en-GB', {
                                                     hour: '2-digit',
                                                     minute: '2-digit',
+                                                    hour12: false
                                                 })}
                                             </span>
                                         </div>

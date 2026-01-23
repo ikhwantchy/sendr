@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { getSheetTabs, previewDigest } from '../controllers/sheetsController';
+import { getSheetTabs, previewDigest, renderPreview } from '../controllers/sheetsController';
 import {
     testFilter,
     testTemplate,
@@ -50,5 +50,11 @@ router.get('/filter-presets', getFilterPresets);
  * Enhanced preview with full filter and template support
  */
 router.post('/preview-enhanced', previewEnhanced);
+
+/**
+ * POST /api/sheets/render-preview
+ * Render Handlebars template with sample Google Sheets data
+ */
+router.post('/render-preview', renderPreview);
 
 export default router;

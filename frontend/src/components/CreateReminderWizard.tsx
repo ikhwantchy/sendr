@@ -222,7 +222,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         dataSource: templateConfig.googleSheetsUrl ? 'google_sheets' : 'static',
                         message: templateConfig.body || '',
                         imageFile: null,
-                        imagePreview: null,
+                        imagePreview: templateConfig.image_url || null,
                     })
 
                     // Set botId for fetching groups
@@ -238,6 +238,16 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
         loadReminderData()
     }, [reminderId])
+
+    // Sync initial message to contentEditable on load (for edit mode)
+    useEffect(() => {
+        if (reminderId && textareaRef.current && formData.message && !isTypingRef.current) {
+            // Only set if editor matches or is empty to avoid jumpy cursor
+            if (textareaRef.current.innerHTML === '' || textareaRef.current.innerText === '') {
+                textareaRef.current.innerHTML = markdownToHtml(formData.message)
+            }
+        }
+    }, [formData.message, reminderId])
 
     // Auto-detect tabs when Sheet URL changes
     useEffect(() => {
@@ -260,23 +270,22 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
             setIsLoadingTabs(true)
 
             try {
-                const response = await fetch(`http://localhost:3001/api/sheets/tabs?url=${encodeURIComponent(url)}`)
-                const data = await response.json()
+                // Use robust backend detection
+                const response = await api.sheets.getTabs(url)
+                const data = response.data
 
-                if (data.success && data.tabs) {
+                if (data.success && data.tabs && data.tabs.length > 0) {
                     setAvailableTabs(data.tabs)
                     // Auto-select first tab if none selected
-                    if (!formData.sheetName && data.tabs.length > 0) {
+                    if (!formData.sheetName) {
                         setFormData(prev => ({ ...prev, sheetName: data.tabs[0].name }))
                     }
                 } else {
                     setAvailableTabs([])
-                    toast.error(data.message || 'Failed to detect tabs')
                 }
             } catch (error) {
                 console.error('Tab detection error:', error)
                 setAvailableTabs([])
-                // Silent fail - user can still input manually
             } finally {
                 setIsLoadingTabs(false)
             }
@@ -304,6 +313,43 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, [])
+
+    // Auto-render preview when message or sheet data changes
+    useEffect(() => {
+        const renderPreview = async () => {
+            // Only render if we have Google Sheets data source and a message with Handlebars
+            if (
+                formData.dataSource !== 'google_sheets' ||
+                !formData.message ||
+                !formData.contactSheetUrl ||
+                !formData.sheetName ||
+                !formData.message.includes('{{')
+            ) {
+                return;
+            }
+
+            try {
+                const response = await api.sheets.renderPreview({
+                    url: formData.contactSheetUrl,
+                    sheetName: formData.sheetName,
+                    template: formData.message,
+                    sampleSize: 3
+                });
+
+                if (response.data.success) {
+                    // Store rendered preview in a ref or state if needed
+                    console.log('[Preview] Rendered:', response.data.rendered);
+                    // You can add state here if you want to display it
+                }
+            } catch (error) {
+                console.error('[Preview] Render error:', error);
+            }
+        };
+
+        // Debounce to avoid excessive API calls
+        const timeoutId = setTimeout(renderPreview, 1000);
+        return () => clearTimeout(timeoutId);
+    }, [formData.message, formData.contactSheetUrl, formData.sheetName, formData.dataSource])
 
     // Sync markdown to contentEditable (only on external changes)
     useEffect(() => {
@@ -748,12 +794,20 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
     // --- Sub-Components ---
 
-    const SectionHeader = ({ title, desc }: { title: string, desc: string }) => (
+
+    const SectionHeader = ({ title, desc, step }: { title: string, desc: string, step?: number }) => (
         <div className="mb-6">
-            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                {title}
-            </h3>
-            <p className="text-sm text-zinc-500">{desc}</p>
+            <div className="flex items-center gap-3 mb-2">
+                {step && (
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold text-sm shrink-0">
+                        {step}
+                    </div>
+                )}
+                <h3 className="text-lg font-semibold text-white">
+                    {title}
+                </h3>
+            </div>
+            <p className="text-sm text-zinc-500 ml-11">{desc}</p>
         </div>
     )
 
@@ -766,34 +820,63 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                 {/* --- Left Panel: Scrollable Form (60%) --- */}
                 <div className="w-[60%] flex flex-col h-full border-r border-zinc-800 relative bg-[#09090b]">
                     {/* Header */}
-                    <div className="h-16 flex items-center justify-between px-8 border-b border-zinc-800 shrink-0 bg-[#09090b] z-20">
-                        <h1 className="text-xl font-bold text-white tracking-tight">Create Reminder</h1>
-                        <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
-                            <X size={20} />
-                        </button>
+                    <div className="shrink-0 bg-[#09090b] z-20 border-b border-zinc-800">
+                        <div className="h-16 flex items-center justify-between px-8">
+                            <h1 className="text-xl font-bold text-white tracking-tight">Create Reminder</h1>
+                            <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Progress Indicator */}
+                        <div className="px-8 pb-4">
+                            <div className="flex items-center gap-2">
+                                {[
+                                    { num: 1, label: 'Basic' },
+                                    { num: 2, label: 'Target' },
+                                    { num: 3, label: 'Content' },
+                                    { num: 4, label: 'Schedule' },
+                                    { num: 5, label: 'Message' }
+                                ].map((step, idx) => (
+                                    <div key={step.num} className="flex items-center flex-1">
+                                        <div className="flex items-center gap-2 flex-1">
+                                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold text-xs shrink-0">
+                                                {step.num}
+                                            </div>
+                                            <span className="text-xs text-zinc-500 font-medium">{step.label}</span>
+                                        </div>
+                                        {idx < 4 && <div className="w-4 h-[2px] bg-zinc-800 mx-1" />}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
 
                     {/* Scrollable Content */}
-                    <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar scroll-smooth">
 
                         {/* 1. Basic Details */}
-                        <section className="mb-10 pb-8 border-b border-zinc-800/50">
-                            <SectionHeader title="Basic Details" desc="Name your reminder to easily identify it later." />
+                        <section className="mb-10 pb-8 border-b border-zinc-800/50 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <SectionHeader step={1} title="Basic Details" desc="Name your reminder to easily identify it later." />
                             <div className="space-y-4">
-                                <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Reminder Name</label>
-                                <input
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:ring-1 focus:ring-blue-600 outline-none transition-all"
-                                    placeholder="e.g. Monthly Staff Meeting"
-                                />
+                                <div>
+                                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Reminder Name *</label>
+                                    <input
+                                        type="text"
+                                        value={formData.name}
+                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
+                                        placeholder="e.g. Daily Team Standup"
+                                        required
+                                    />
+                                    <p className="mt-1.5 text-xs text-zinc-500">💡 Use a descriptive name like "Weekly Sales Report" or "H-3 Deadline Reminder"</p>
+                                </div>
                             </div>
                         </section>
 
                         {/* 2. Target Audience */}
                         <section className="mb-10 pb-8 border-b border-zinc-800/50">
-                            <SectionHeader title="Target Audience" desc="Who should receive this reminder?" />
+                            <SectionHeader step={2} title="Target Audience" desc="Who should receive this reminder?" />
 
                             <div className="flex bg-zinc-900 p-1 rounded-lg border border-zinc-800 mb-6 w-fit">
                                 <button
@@ -945,9 +1028,9 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                             )}
                         </section>
 
-                        {/* 3. Trigger Logic (Data Source) */}
+                        {/* 3. Message Content (Data Source) */}
                         <section className="mb-10 pb-8 border-b border-zinc-800/50 animate-in fade-in slide-in-from-top-4">
-                            <SectionHeader title="Trigger Logic" desc="Determine when to send reminders based on your sheet data." />
+                            <SectionHeader step={3} title="Message Content" desc="Choose how to create your message - simple text or dynamic data from Google Sheets." />
                             <div className="space-y-4">
                                 <button
                                     onClick={() => setFormData({ ...formData, dataSource: formData.dataSource === 'static' ? 'google_sheets' : 'static' })}
@@ -959,8 +1042,8 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                             <Database size={24} />
                                         </div>
                                         <div className="text-left">
-                                            <div className={`font-semibold text-base mb-1 ${formData.dataSource === 'google_sheets' ? 'text-emerald-400' : 'text-zinc-200'}`}>Google Sheets Monitor</div>
-                                            <div className="text-xs text-zinc-500">Auto-send based on a "Trigger" column value (e.g. "SEND")</div>
+                                            <div className={`font-semibold text-base mb-1 ${formData.dataSource === 'google_sheets' ? 'text-emerald-400' : 'text-zinc-200'}`}>Get Data from Google Sheets</div>
+                                            <div className="text-xs text-zinc-500">Pull data from your spreadsheet and send personalized messages</div>
                                         </div>
                                     </div>
                                     <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all ${formData.dataSource === 'google_sheets' ? 'bg-emerald-500 border-emerald-500 text-white scale-110' : 'border-zinc-600 group-hover:border-zinc-500'}`}>
@@ -1001,37 +1084,65 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                 </div>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-                                                    Tab Name
-                                                    {isLoadingTabs && <RefreshCw size={12} className="animate-spin text-emerald-400" />}
+                                                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <span>Tab Name</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const match = formData.contactSheetUrl.match(/\/d\/([\w-]+)/);
+                                                                if (match) {
+                                                                    setAvailableTabs([]);
+                                                                    // Re-trigger the detectTabs logic by clearing and setting back
+                                                                    const currentUrl = formData.contactSheetUrl;
+                                                                    setFormData(prev => ({ ...prev, contactSheetUrl: '' }));
+                                                                    setTimeout(() => setFormData(prev => ({ ...prev, contactSheetUrl: currentUrl })), 10);
+                                                                }
+                                                            }}
+                                                            className="text-zinc-500 hover:text-emerald-400 transition-colors"
+                                                            title="Refresh tabs"
+                                                        >
+                                                            <RefreshCw size={10} className={isLoadingTabs ? 'animate-spin' : ''} />
+                                                        </button>
+                                                    </div>
+                                                    {isLoadingTabs && (
+                                                        <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 animate-pulse lowercase font-normal">
+                                                            detecting...
+                                                        </span>
+                                                    )}
                                                 </label>
-                                                {availableTabs.length > 0 ? (
-                                                    <select
-                                                        value={formData.sheetName}
-                                                        onChange={e => setFormData({ ...formData, sheetName: e.target.value })}
-                                                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:ring-1 focus:ring-emerald-500/50 outline-none text-sm transition-all"
-                                                    >
-                                                        <option value="">Select a tab...</option>
-                                                        {availableTabs.map(tab => (
-                                                            <option key={tab.gid} value={tab.name}>
-                                                                {tab.name}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                ) : (
-                                                    <input
-                                                        type="text"
-                                                        value={formData.sheetName}
-                                                        onChange={e => setFormData({ ...formData, sheetName: e.target.value })}
-                                                        placeholder="Paste URL first to auto-detect"
-                                                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:ring-1 focus:ring-emerald-500/50 outline-none text-sm transition-all"
-                                                        disabled={!formData.contactSheetUrl}
-                                                    />
-                                                )}
-                                                <p className="text-[10px] text-zinc-500">
-                                                    {availableTabs.length > 0
-                                                        ? `✓ ${availableTabs.length} tabs detected`
-                                                        : 'Paste Sheet URL to auto-detect tabs'}
+                                                <div className="relative group/tabs">
+                                                    {availableTabs.length > 0 ? (
+                                                        <select
+                                                            value={formData.sheetName}
+                                                            onChange={e => setFormData({ ...formData, sheetName: e.target.value })}
+                                                            className="w-full px-4 py-2.5 bg-zinc-900 border border-emerald-500/30 rounded-lg text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none text-sm transition-all cursor-pointer appearance-none shadow-[0_0_15px_rgba(16,185,129,0.05)]"
+                                                        >
+                                                            <option value="" disabled>Select a tab...</option>
+                                                            {availableTabs.map(tab => (
+                                                                <option key={tab.gid} value={tab.name}>
+                                                                    {tab.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    ) : (
+                                                        <input
+                                                            type="text"
+                                                            value={formData.sheetName}
+                                                            onChange={e => setFormData({ ...formData, sheetName: e.target.value })}
+                                                            placeholder={isLoadingTabs ? "Detecting tabs..." : "e.g. Sheet1"}
+                                                            className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none text-sm transition-all"
+                                                            disabled={isLoadingTabs}
+                                                        />
+                                                    )}
+                                                    {availableTabs.length > 0 && (
+                                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500">
+                                                            <ChevronDown size={16} />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10px] text-zinc-500 flex items-center gap-1">
+                                                    {availableTabs.length > 0 ? `✓ ${availableTabs.length} tabs found` : 'Paste URL to auto-detect tabs'}
                                                 </p>
                                             </div>
                                         </div>
@@ -1065,6 +1176,15 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                     const toastId = toast.loading(toastMsg)
 
                                                     try {
+                                                        // Fallback Tab Detection: If dropdown is empty, try to fetch tabs now
+                                                        if (availableTabs.length === 0) {
+                                                            api.sheets.getTabs(url).then(res => {
+                                                                if (res.data.success && res.data.tabs?.length > 0) {
+                                                                    setAvailableTabs(res.data.tabs);
+                                                                }
+                                                            }).catch(() => { });
+                                                        }
+
                                                         const res = await fetch(csvUrl)
                                                         if (!res.ok) throw new Error('Failed to fetch')
 
@@ -1172,8 +1292,8 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                         <div className="pt-2 space-y-4">
                                             <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg border border-zinc-800">
                                                 <div>
-                                                    <div className="font-medium text-white text-sm">Advanced Filters</div>
-                                                    <div className="text-xs text-zinc-500">Use multiple filters with operators (H-3, date ranges, etc.)</div>
+                                                    <div className="font-medium text-white text-sm">Filter Data (Optional)</div>
+                                                    <div className="text-xs text-zinc-500">Show only rows that match specific conditions (e.g., deadlines within 3 days)</div>
                                                 </div>
                                                 <button
                                                     type="button"
@@ -1266,7 +1386,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
                         {/* 4. Schedule */}
                         <section className="mb-10 pb-8 border-b border-zinc-800/50">
-                            <SectionHeader title="Schedule" desc="When should this reminder run?" />
+                            <SectionHeader step={4} title="Schedule" desc="When should this reminder run?" />
                             <div className="space-y-6">
                                 {/* Schedule Type Selector */}
                                 <div className="grid grid-cols-3 gap-3">
@@ -1403,7 +1523,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
                         {/* 5. Message Content */}
                         <section className="mb-20">
-                            <SectionHeader title="Message Content" desc="Compose your message." />
+                            <SectionHeader step={5} title="Message" desc="Compose your message with formatting and variables." />
 
                             <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-600/50 transition-all">
                                 {/* Digest Mode Toggle */}
@@ -1413,8 +1533,8 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                             <FileText size={16} />
                                         </div>
                                         <div>
-                                            <div className="text-sm font-medium text-zinc-200">Digest / List Mode</div>
-                                            <div className="text-[10px] text-zinc-500">Combine multiple rows into one message (e.g. "Daily Summary")</div>
+                                            <div className="text-sm font-medium text-zinc-200">Group Multiple Rows?</div>
+                                            <div className="text-[10px] text-zinc-500">Combine all matching rows into one message (useful for daily summaries)</div>
                                         </div>
                                     </div>
                                     <button
@@ -1499,10 +1619,19 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                                         <button
                                             onClick={() => fileInputRef.current?.click()}
-                                            className={`flex items-center gap-2 px-2 py-1 rounded text-xs font-medium transition-colors ${formData.imageFile ? 'bg-blue-600/10 text-blue-400' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
+                                            className={`flex items-center gap-2 px-2 py-1 rounded text-xs font-medium transition-colors ${formData.imagePreview ? 'bg-blue-600/10 text-blue-400' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
                                         >
-                                            <ImageIcon size={14} /> {formData.imageFile ? 'Change Image' : 'Add Image'}
+                                            <ImageIcon size={14} /> {formData.imagePreview ? 'Change Image' : 'Add Image'}
                                         </button>
+                                        {formData.imagePreview && (
+                                            <button
+                                                onClick={() => setFormData({ ...formData, imageFile: null, imagePreview: null })}
+                                                className="p-1 hover:bg-red-500/10 text-red-400 rounded transition-colors"
+                                                title="Remove Image"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 

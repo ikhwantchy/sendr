@@ -163,4 +163,12 @@ export const api = {
         update: (id: string, data: any) => apiClient.put(`/permissions/${id}`, data),
         revoke: (id: string) => apiClient.delete(`/permissions/${id}`),
     },
+
+    // Sheets
+    sheets: {
+        getTabs: (url: string) => apiClient.get(`/sheets/tabs?url=${encodeURIComponent(url)}`),
+        previewEnhanced: (data: any) => apiClient.post('/sheets/preview-enhanced', data),
+        renderPreview: (data: { url: string; sheetName: string; template: string; sampleSize?: number }) =>
+            apiClient.post('/sheets/render-preview', data),
+    },
 }

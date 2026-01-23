@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 interface SheetData {
     sheetName: string;
     headers: string[];
@@ -7,12 +9,6 @@ interface SheetData {
 /**
  * Google Sheets Service - Public Access Only
  * Fetches data from public Google Sheets using CSV export (no API key required!)
- * 
- * Requirements:
- * - Sheet must be set to "Anyone with the link can view"
- * - No authentication needed
- * - No API key needed
- * - Multi-tenant ready
  */
 class GoogleSheetsService {
 
@@ -153,76 +149,75 @@ class GoogleSheetsService {
      * Uses HTML scraping (public access) with multiple fallback strategies
      */
     async getSheetNames(spreadsheetId: string): Promise<string[]> {
+        const sheetNames: string[] = [];
+        const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
+
         try {
-            // Fetch the spreadsheet HTML page
-            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
-            const response = await fetch(url);
+            console.log(`[Sheets] Fetching tabs from: ${url}`);
+            const response = await axios.get(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                },
+                timeout: 10000
+            });
 
-            if (!response.ok) {
-                if (response.status === 403 || response.status === 401) {
-                    throw new Error('Access denied. Make sure the sheet is set to "Anyone with the link can view"');
+            const html = response.data;
+            if (!html || typeof html !== 'string') return [];
+
+            // STRATEGY 1: JavaScript items.push() format (MOST COMMON in htmlview)
+            // Example: items.push({name: "Bot_Digest", pageUrl: "...", gid: "1836066351"});
+            const itemsPushRegex = /items\.push\(\{name:\s*"([^"]+)"/g;
+            let match;
+            while ((match = itemsPushRegex.exec(html)) !== null) {
+                const name = match[1].trim();
+                if (name && !sheetNames.includes(name)) {
+                    sheetNames.push(name);
                 }
-                throw new Error(`HTTP ${response.status}`);
             }
 
-            const html = await response.text();
-
-            // Extract sheet names from HTML
-            const sheetNames: string[] = [];
-
-            // Strategy 1: Try to find sheet data in JSON format
-            // Pattern: "sheets":[{"properties":{"sheetId":0,"title":"Sheet1"...
-            try {
-                const sheetsMatch = html.match(/"sheets":\[(.*?)\]/);
-                if (sheetsMatch) {
-                    const sheetsData = sheetsMatch[1];
-                    const titleMatches = sheetsData.matchAll(/"title":"([^"]+)"/g);
-                    for (const match of titleMatches) {
-                        sheetNames.push(match[1]);
+            // STRATEGY 2: JSON Metadata format (fallback)
+            // Example: {"sheetId":12345,"title":"Bot_Digest"}
+            if (sheetNames.length === 0) {
+                const metadataRegex = /\{"sheetId":\d+,"title":"([^"]+)"/g;
+                while ((match = metadataRegex.exec(html)) !== null) {
+                    const name = match[1].trim();
+                    if (name && !sheetNames.includes(name)) {
+                        sheetNames.push(name);
                     }
                 }
-            } catch (e) {
-                console.warn('Strategy 1 failed:', e);
             }
 
-            // Strategy 2: Try another pattern
+            // STRATEGY 3: data-sheet-name attribute (fallback)
             if (sheetNames.length === 0) {
-                try {
-                    const titleMatches = html.matchAll(/"sheetName":"([^"]+)"/g);
-                    for (const match of titleMatches) {
-                        if (!sheetNames.includes(match[1])) {
-                            sheetNames.push(match[1]);
-                        }
+                const footerRegex = /data-sheet-name="([^"]+)"/g;
+                while ((match = footerRegex.exec(html)) !== null) {
+                    const name = match[1].trim();
+                    if (name && !sheetNames.includes(name)) {
+                        sheetNames.push(name);
                     }
-                } catch (e) {
-                    console.warn('Strategy 2 failed:', e);
                 }
             }
 
-            // Strategy 3: Look for sheet tabs in a different format
-            if (sheetNames.length === 0) {
-                try {
-                    // Pattern: data-sheet-name="SheetName"
-                    const tabMatches = html.matchAll(/data-sheet-name="([^"]+)"/g);
-                    for (const match of tabMatches) {
-                        if (!sheetNames.includes(match[1])) {
-                            sheetNames.push(match[1]);
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Strategy 3 failed:', e);
-                }
-            }
+            // FINAL FILTER: Remove Google UI boilerplate
+            const blacklist = [
+                'Google Sheets', 'Spreadsheet', 'Untitled', 'Draft', 'true', 'false',
+                'Templates', 'Feedback', 'Bantuan', 'Help',
+                'Dasar-dasar', 'Kontrak', 'Pelacak', 'Surat', 'Tidak dikategorikan',
+                'Kontrak, orientasi, dan formulir lainnya', 'Polacak'
+            ];
 
-            // If all strategies fail, return empty array (user can input manually)
-            if (sheetNames.length === 0) {
-                console.warn('Could not auto-detect sheet names. User will need to input manually.');
-            }
+            const final = sheetNames.filter(name =>
+                name &&
+                !blacklist.includes(name) &&
+                !name.startsWith('http') &&
+                !name.includes('{') &&
+                name.trim().length > 0
+            );
 
-            return sheetNames.filter(Boolean);
-        } catch (error: any) {
-            console.error('Error fetching sheet names:', error.message);
-            // Don't throw - return empty array so user can input manually
+            console.log(`[Sheets] ✅ Found ${final.length} tabs:`, final);
+            return final;
+        } catch (err: any) {
+            console.error(`[Sheets] ❌ Failed to fetch tabs:`, err.message);
             return [];
         }
     }

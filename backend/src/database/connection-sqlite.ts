@@ -359,11 +359,7 @@ async function initSchema(): Promise<void> {
     logger.warn('Failed to backfill reminders', { error: e });
   }
 
-  // MIGRATION: Add deadlineRangeDays column to reminders if it doesn't exist
-  try {
-    db.run("ALTER TABLE reminders ADD COLUMN deadlineRangeDays INTEGER DEFAULT 3");
-    logger.info('✅ MIGRATION: Added deadlineRangeDays column to reminders table');
-  } catch (e) { }
+
 
   logger.info('✅ Database schema created');
 }

@@ -220,3 +220,61 @@ export const previewDigest = async (req: Request, res: Response) => {
         });
     }
 };
+
+/**
+ * POST /api/sheets/render-preview
+ * Renders a Handlebars template with sample data from Google Sheets
+ */
+export const renderPreview = async (req: Request, res: Response) => {
+    try {
+        const { url, sheetName, template, sampleSize = 5 } = req.body;
+
+        if (!url || !template) {
+            return res.status(400).json({
+                success: false,
+                message: 'URL and template are required'
+            });
+        }
+
+        // Extract spreadsheet ID
+        const spreadsheetId = googleSheetsService.extractSpreadsheetId(url);
+        if (!spreadsheetId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid Google Sheets URL'
+            });
+        }
+
+        // Fetch sample data
+        const sheetData = await googleSheetsService.fetchSheetData(spreadsheetId, sheetName || 'Sheet1');
+        if (!sheetData) {
+            return res.status(404).json({
+                success: false,
+                message: 'Could not fetch sheet data'
+            });
+        }
+
+        // Convert to objects
+        const objects = googleSheetsService.convertToObjects(sheetData);
+        const sampleData = objects.slice(0, parseInt(sampleSize as any));
+
+        // Render template
+        const templateRenderingService = require('../../services/templateRenderingService').default;
+        const rendered = templateRenderingService.renderWithSheetData(template, sampleData);
+
+        res.json({
+            success: true,
+            rendered,
+            sampleData,
+            totalRows: objects.length
+        });
+
+    } catch (error: any) {
+        console.error('[Sheets] Render preview error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to render preview',
+            error: error.message
+        });
+    }
+};

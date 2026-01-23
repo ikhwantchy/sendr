@@ -5,14 +5,7 @@ import { authenticate } from '../middleware/auth';
 import googleSheetsService from '../../services/googleSheetsService';
 import reminderSchedulerService from '../../services/reminderSchedulerService';
 
-// Handle cron-parser import issues
-let cronParser: any;
-try {
-    const cp = require('cron-parser');
-    cronParser = cp.default || cp;
-} catch (e) {
-    cronParser = require('cron-parser');
-}
+
 
 const router = Router();
 
