@@ -97,6 +97,7 @@ export default function AnalyticsDashboard() {
     const topBots = data?.topBots || []
     const summary = data?.summary || {
         totalMessages: 0,
+        lifetimeMessages: 0, // NEW
         trend: 0,
         campaigns: 0,
         reminders: 0,
@@ -124,7 +125,7 @@ export default function AnalyticsDashboard() {
     }
 
     return (
-        <div className="p-8 space-y-8 min-h-screen bg-black text-zinc-100">
+        <div className="p-8 space-y-8 min-h-screen bg-black text-zinc-100 font-sans">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -137,7 +138,6 @@ export default function AnalyticsDashboard() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {/* Time Range Filter */}
                     {/* Time Range Filter - Dropdown Style */}
                     <div className="relative">
                         <button
@@ -229,12 +229,12 @@ export default function AnalyticsDashboard() {
                     icon={<Activity className="w-5 h-5" />}
                     loading={loading}
                 />
-            </div>
+            </div >
 
             {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            < div className="grid grid-cols-1 lg:grid-cols-3 gap-6" >
                 {/* Primary Chart: Traffic Volume */}
-                <div className="lg:col-span-2 bg-zinc-950 border border-zinc-900 rounded-xl p-6">
+                < div className="lg:col-span-2 bg-zinc-950 border border-zinc-900 rounded-xl p-6" >
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-lg font-medium text-zinc-200">Traffic Volume</h3>
                         <div className="flex flex-wrap items-center gap-4 text-xs">
@@ -413,10 +413,10 @@ export default function AnalyticsDashboard() {
                             </div>
                         )}
                     </div>
-                </div>
+                </div >
 
                 {/* Secondary Chart: Distribution */}
-                <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 flex flex-col">
+                < div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 flex flex-col" >
                     <h3 className="text-lg font-medium text-zinc-200 mb-6">Message Type</h3>
 
                     <div className="flex-1 min-h-[200px]">
@@ -451,11 +451,11 @@ export default function AnalyticsDashboard() {
                             </ResponsiveContainer>
                         )}
                     </div>
-                </div>
-            </div>
+                </div >
+            </div >
 
             {/* Leaderboard Table */}
-            <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
+            < div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden" >
                 <div className="px-6 py-4 border-b border-zinc-800/50 flex justify-between items-center">
                     <h3 className="text-lg font-medium text-zinc-200">Top Performing Bots</h3>
                     <div className="text-xs text-zinc-500">Based on processed volume</div>
@@ -513,8 +513,8 @@ export default function AnalyticsDashboard() {
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     )
 }
 

@@ -13,6 +13,7 @@ const DB_PATH = join(__dirname, '../../data/database.sqlite');
 let db: Database | null = null;
 
 export async function initDatabase(): Promise<void> {
+  if (db) return;
   try {
     const SQL = await initSqlJs();
 
@@ -29,8 +30,8 @@ export async function initDatabase(): Promise<void> {
     // Always initialize schema (CREATE TABLE IF NOT EXISTS handles existing tables)
     await initSchema();
 
-    // Save to file
-    saveDatabase();
+    // CRITICAL: DO NOT saveDatabase() here. 
+    // It can overwrite the disk with an uninitialized state during concurrent boots.
   } catch (error) {
     logger.error('Failed to initialize SQLite database', { error });
     throw error;
@@ -371,16 +372,13 @@ export function saveDatabase(): void {
     const data = db.export();
     const buffer = Buffer.from(data);
     writeFileSync(DB_PATH, buffer);
-    logger.debug('Database saved to file');
+    logger.info('💾 Database saved to file successfully');
   } catch (error) {
-    logger.error('Failed to save database', { error });
+    logger.error('❌ Failed to save database to disk', { error });
   }
 }
 
-// Auto-save every 5 seconds
-setInterval(() => {
-  saveDatabase();
-}, 5000);
+// Auto-save removed to prevent race conditions. Save on write instead.
 
 export async function query(sql: string, params: any[] = []): Promise<any> {
   if (!db) {

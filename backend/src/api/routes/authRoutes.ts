@@ -64,11 +64,16 @@ router.post('/login', async (req, res) => {
             }
 
             logger.debug('Generating JWT token');
+            const permissions = typeof user.permissions === 'string'
+                ? JSON.parse(user.permissions || '{}')
+                : (user.permissions || {});
+
             const token = generateToken({
                 id: user.id,
                 tenant_id: user.tenant_id,
                 email: user.email,
                 role: user.role,
+                permissions
             });
 
             logger.info('Login successful', { email: user.email, id: user.id });
@@ -82,7 +87,8 @@ router.post('/login', async (req, res) => {
                         email: user.email,
                         name: user.name,
                         role: user.role,
-                        tenant_id: user.tenant_id
+                        tenant_id: user.tenant_id,
+                        permissions
                     },
                 },
             });
@@ -108,7 +114,7 @@ router.post('/login', async (req, res) => {
  */
 router.post('/register', async (req, res) => {
     try {
-        const { email, password, name, tenant_name } = req.body;
+        const { email, password, name, tenant_name, inviteToken } = req.body;
 
         if (!email || !password || !name) {
             return res.status(400).json({
@@ -143,6 +149,22 @@ router.post('/register', async (req, res) => {
             'INSERT INTO users (id, tenant_id, email, password_hash, name, role) VALUES (?, ?, ?, ?, ?, ?)',
             [userId, tenantId, email, passwordHash, name, 'OWNER']
         );
+
+        // Accept invite if token provided
+        if (inviteToken) {
+            try {
+                const userInviteService = (await import('../../services/userInviteService')).default;
+                await userInviteService.acceptInvite(inviteToken, userId);
+                logger.info('Invite accepted during registration', { userId, email });
+            } catch (inviteError: any) {
+                logger.error('Failed to accept invite during registration', {
+                    error: inviteError.message,
+                    userId,
+                    email
+                });
+                // Don't fail registration if invite acceptance fails
+            }
+        }
 
         res.json({
             success: true,

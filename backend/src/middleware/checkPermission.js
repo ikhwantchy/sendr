@@ -9,10 +9,11 @@ const { query } = require('../database/connection');
  * Check if user is owner
  */
 const requireOwner = (req, res, next) => {
-    if (req.user.role?.toLowerCase() !== 'owner') {
+    const role = req.user.role?.toLowerCase();
+    if (role !== 'admin' && role !== 'owner') {
         return res.status(403).json({
             success: false,
-            error: 'Owner access required'
+            error: 'Admin access required'
         });
     }
     next();
@@ -35,8 +36,9 @@ const checkBotAccess = (action) => {
                 });
             }
 
-            // Owner has full access to all bots
-            if (req.user.role?.toLowerCase() === 'owner') {
+            // Admin has full access to all bots
+            const role = req.user.role?.toLowerCase();
+            if (role === 'admin' || role === 'owner') {
                 return next();
             }
 
@@ -106,8 +108,9 @@ const checkBotAccess = (action) => {
  */
 const getUserBotIds = async (userId, userRole) => {
     try {
-        // Owner has access to all bots
-        if (userRole?.toLowerCase() === 'owner') {
+        // Admin has access to all bots
+        const role = userRole?.toLowerCase();
+        if (role === 'admin' || role === 'owner') {
             const result = await query('SELECT id FROM bots');
             return result.rows.map(row => row.id);
         }

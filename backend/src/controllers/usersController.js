@@ -248,11 +248,11 @@ const getUserStats = async (req, res) => {
         const result = await query(`
       SELECT 
         COUNT(*) as total_users,
-        COUNT(CASE WHEN role = 'admin' THEN 1 END) as admin_count,
-        COUNT(CASE WHEN role = 'user' THEN 1 END) as user_count
+        COUNT(CASE WHEN LOWER(role) IN ('admin', 'owner') THEN 1 END) as admin_count,
+        COUNT(CASE WHEN LOWER(role) IN ('user', 'operator', 'viewer') THEN 1 END) as user_count
       FROM users
-      WHERE role != 'owner'
-    `);
+      WHERE LOWER(role) != 'owner' OR id != ?
+    `, [req.user.id]);
 
         res.json({
             success: true,

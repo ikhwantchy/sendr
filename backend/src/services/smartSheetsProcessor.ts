@@ -92,7 +92,14 @@ class SmartSheetsProcessor {
      * Evaluate a single filter condition
      */
     private evaluateFilter(row: any, filter: FilterCondition): boolean {
-        const value = row[filter.column];
+        // Helper to find the ACTUAL column name (fuzzy)
+        const allKeys = Object.keys(row);
+        const searchKey = filter.column.toLowerCase().trim();
+        const actualKey = allKeys.find(k => k.toLowerCase().trim() === searchKey) ||
+            allKeys.find(k => k.toLowerCase().trim().includes(searchKey)) ||
+            filter.column;
+
+        const value = row[actualKey];
         const filterValue = filter.value;
         const caseInsensitive = filter.caseInsensitive !== false; // Default true
 
@@ -101,8 +108,8 @@ class SmartSheetsProcessor {
             const strA = String(a || '');
             const strB = String(b || '');
             return caseInsensitive
-                ? strA.toLowerCase() === strB.toLowerCase()
-                : strA === strB;
+                ? strA.toLowerCase().trim() === strB.toLowerCase().trim()
+                : strA.trim() === strB.trim();
         };
 
         switch (filter.operator) {

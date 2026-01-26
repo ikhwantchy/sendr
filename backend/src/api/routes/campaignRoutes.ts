@@ -40,9 +40,9 @@ router.get('/', async (req, res) => {
  * List campaigns for a specific bot
  */
 router.get('/bot/:botId', async (req, res) => {
+    const { botId } = req.params;
     try {
         const tenantId = req.user?.tenant_id || '00000000-0000-0000-0000-000000000001';
-        const { botId } = req.params;
 
         const campaigns = await campaignService.listCampaigns(tenantId, botId);
 
@@ -51,7 +51,7 @@ router.get('/bot/:botId', async (req, res) => {
             data: campaigns,
         });
     } catch (error: any) {
-        logger.error('Failed to list bot campaigns', { botId, error: error.message });
+        logger.error('Failed to list bot campaigns', { bot_id: botId, error: error.message });
         res.status(500).json({
             success: false,
             error: error.message,
@@ -72,6 +72,9 @@ router.post('/', async (req, res) => {
             message_template,
             target_type,
             target_contacts,
+            delay,
+            image_url,
+            scheduled_at,
         } = req.body;
 
         // Validation
@@ -107,6 +110,9 @@ router.post('/', async (req, res) => {
             name,
             target_type,
             contacts_count: csv_data.length,
+            delay,
+            has_image: !!image_url,
+            scheduled_at,
         });
 
         const campaign = await campaignService.createCampaign({
@@ -115,12 +121,18 @@ router.post('/', async (req, res) => {
             name,
             message_template,
             csv_data,
+            delay: parseInt(delay as string) || 0,
+            image_url,
+            scheduled_at,
         });
 
-        // Auto-start campaign immediately
-        if (campaign && campaign.id) {
-            logger.info('Auto-starting campaign', { campaign_id: campaign.id });
+        // Auto-start campaign if not scheduled for future
+        if (campaign && campaign.id && !scheduled_at) {
+            logger.info('Auto-starting campaign (immediate)', { campaign_id: campaign.id });
             await campaignService.startCampaign(campaign.id);
+        } else if (campaign && campaign.id && scheduled_at) {
+            logger.info('Campaign scheduled for later', { campaign_id: campaign.id, scheduled_at });
+            // Note: A background scheduler (like cron) should pickup campaigns with status 'draft' and scheduled_at <= now
         }
 
         res.json({

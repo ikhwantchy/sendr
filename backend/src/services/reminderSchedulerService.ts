@@ -207,42 +207,29 @@ class ReminderSchedulerService {
                 let finalMessage = '';
 
                 if (isFromSheet && templateConfig.isDigestMode) {
-                    // Check if template uses Handlebars syntax (our custom helpers)
-                    const usesHandlebars = /{{\s*#(loop|reach|group|dosen)\s/.test(templateText);
+                    // NEW: Smarter renderer selection
+                    const isModernTemplate = /{{.*(@|==|contains|\|).*}}/.test(templateText);
+                    const hasModernBlocks = /{{\s*#(if|each|group)\s/.test(templateText);
 
-                    if (usesHandlebars) {
-                        // Use Handlebars renderer
-                        console.log('🎨 Using Handlebars template renderer');
+                    if (isModernTemplate || hasModernBlocks || !/{{.*#/.test(templateText)) {
+                        console.log('🎨 Using enhanced template renderer (Modern/Hybrid)');
+                        finalMessage = enhancedTemplateRenderer.render(templateText, {
+                            data: sheetRows,
+                            globalVars: {
+                                RUN_TIME: new Date().toLocaleTimeString(),
+                                TODAY: new Date().toLocaleDateString('id-ID', {
+                                    weekday: 'long',
+                                    day: 'numeric',
+                                    month: 'long'
+                                })
+                            },
+                            timezone: reminder.timezone || 'Asia/Jakarta'
+                        });
+                    } else {
+                        // Legacy Handlebars path
+                        console.log('🎨 Using Handlebars template renderer (Legacy)');
                         const templateRenderingService = require('./templateRenderingService').default;
                         finalMessage = templateRenderingService.renderWithSheetData(templateText, sheetRows);
-                    } else {
-                        // Check if template uses new syntax (flexible regex to handle optional whitespace)
-                        const usesNewSyntax = /{{\s*#each/.test(templateText) ||
-                            /{{\s*#if/.test(templateText) ||
-                            /{{\s*#group/.test(templateText);
-
-                        if (usesNewSyntax) {
-                            // Use enhanced renderer
-                            console.log('🎨 Using enhanced template renderer');
-                            finalMessage = enhancedTemplateRenderer.render(templateText, {
-                                data: sheetRows,
-                                globalVars: {
-                                    RUN_TIME: new Date().toLocaleTimeString(),
-                                    TODAY: new Date().toLocaleDateString('id-ID', {
-                                        weekday: 'long',
-                                        day: 'numeric',
-                                        month: 'long'
-                                    })
-                                },
-                                timezone: reminder.timezone || 'Asia/Jakarta'
-                            });
-                        } else {
-                            // Use legacy loop-supporting renderer
-                            console.log('📝 Using legacy template renderer');
-                            finalMessage = templateEngineService.renderGeneralTemplate(templateText, sheetRows, {
-                                RUN_TIME: new Date().toLocaleTimeString()
-                            });
-                        }
                     }
                 } else if (isFromSheet && sheetRows.length > 0) {
                     // Just use the first matching row if not in digest mode but from sheet

@@ -57,13 +57,24 @@ export class AnalyticsController {
 
         // 2. Fetch Summaries (Current Period vs Previous Period)
 
-        // Total Messages
+        // Total Outbound Messages (Period-based for Analytics Card + Trend)
         const totalMessagesResult = await query(`
             SELECT COUNT(*) as count FROM messages m
             JOIN bots b ON m.bot_id = b.id
-            WHERE b.tenant_id = ? AND m.created_at >= ?
+            WHERE b.tenant_id = ? 
+            AND datetime(m.created_at) >= datetime(?)
+            AND m.direction = 'outbound'
         `, [tenantId, startIso]);
         const totalMessages = totalMessagesResult.rows[0]?.count || 0;
+
+        // NEW: Lifetime Total Messages (The 'Original' Count from Dashboard)
+        const lifetimeResult = await query(`
+            SELECT COUNT(*) as count FROM messages m
+            JOIN bots b ON m.bot_id = b.id
+            WHERE b.tenant_id = ? 
+            AND m.direction = 'outbound'
+        `, [tenantId]);
+        const lifetimeMessages = lifetimeResult.rows[0]?.count || 0;
 
         const prevTotalMessagesResult = await query(`
             SELECT COUNT(*) as count FROM messages m
@@ -203,7 +214,8 @@ export class AnalyticsController {
 
         return {
             summary: {
-                totalMessages,
+                totalMessages, // Period Total
+                lifetimeMessages, // Lifetime Total (Asli/Realtime)
                 trend: messageTrend,
                 campaigns: distMap['campaign'],
                 reminders: totalReminders,

@@ -14,7 +14,7 @@ export default function InviteUserModal({ isOpen, onClose }: InviteUserModalProp
     const queryClient = useQueryClient()
     const [formData, setFormData] = useState({
         email: '',
-        role: 'admin',
+        role: 'USER',
         selectedBots: [] as string[],
         permissions: {
             can_view: true,
@@ -60,7 +60,7 @@ export default function InviteUserModal({ isOpen, onClose }: InviteUserModalProp
     const resetForm = () => {
         setFormData({
             email: '',
-            role: 'admin',
+            role: 'USER',
             selectedBots: [],
             permissions: {
                 can_view: true,
@@ -158,8 +158,8 @@ export default function InviteUserModal({ isOpen, onClose }: InviteUserModalProp
                             onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500 transition-colors"
                         >
-                            <option value="admin">Admin - Can manage assigned bots</option>
-                            <option value="user">User - Limited access</option>
+                            <option value="ADMIN">Admin - Can manage assigned bots</option>
+                            <option value="USER">User - Limited access</option>
                         </select>
                     </div>
 
@@ -186,8 +186,8 @@ export default function InviteUserModal({ isOpen, onClose }: InviteUserModalProp
                                             <div className="text-sm text-gray-400">{bot.phone_number}</div>
                                         </div>
                                         <div className={`px-2 py-1 rounded-full text-xs font-semibold ${bot.status === 'connected'
-                                                ? 'bg-green-500/20 text-green-400'
-                                                : 'bg-gray-500/20 text-gray-400'
+                                            ? 'bg-green-500/20 text-green-400'
+                                            : 'bg-gray-500/20 text-gray-400'
                                             }`}>
                                             {bot.status}
                                         </div>

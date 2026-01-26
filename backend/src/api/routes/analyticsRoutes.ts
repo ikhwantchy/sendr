@@ -10,22 +10,23 @@ router.use(authenticate);
 // Legacy/Dashboard Stats (Keep for backwards compatibility or specific widget)
 router.get('/dashboard-stats', async (req, res) => {
     try {
-        const userId = (req as any).user.id;
+        const tenantId = (req as any).user.tenant_id;
+        const userId = (req as any).user.id; // Still used for some personal filters if needed
 
-        // Get total bots
+        // Get total bots (using tenant_id for consistency with analytics)
         const botsResult = await query(`
             SELECT COUNT(*) as count 
             FROM bots 
-            WHERE created_by = ?
-        `, [userId]);
+            WHERE tenant_id = ?
+        `, [tenantId]);
 
         // Get active rules
         const rulesResult = await query(`
             SELECT COUNT(*) as count 
             FROM keyword_rules r
             INNER JOIN bots b ON r.bot_id = b.id
-            WHERE b.created_by = ? AND r.is_active = 1
-        `, [userId]);
+            WHERE b.tenant_id = ? AND r.is_active = 1
+        `, [tenantId]);
 
         // Get outbound messages
         let messagesSent = 0;
@@ -34,8 +35,8 @@ router.get('/dashboard-stats', async (req, res) => {
                 SELECT COUNT(*) as count 
                 FROM messages m
                 INNER JOIN bots b ON m.bot_id = b.id
-                WHERE b.created_by = ? AND m.direction = 'outbound'
-            `, [userId]);
+                WHERE b.tenant_id = ? AND m.direction = 'outbound'
+            `, [tenantId]);
             messagesSent = messagesResult.rows[0]?.count || 0;
         } catch (err) {
             // Check if table exists error?
@@ -48,8 +49,8 @@ router.get('/dashboard-stats', async (req, res) => {
                 SELECT COUNT(*) as count 
                 FROM campaigns c
                 INNER JOIN bots b ON c.bot_id = b.id
-                WHERE b.created_by = ?
-            `, [userId]);
+                WHERE b.tenant_id = ?
+            `, [tenantId]);
             campaigns = campaignsResult.rows[0]?.count || 0;
         } catch (err) { }
 

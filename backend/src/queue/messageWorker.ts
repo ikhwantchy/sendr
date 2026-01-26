@@ -16,14 +16,19 @@ import { logger } from '../utils/logger';
 
 /**
  * Replace template variables
- * Example: "Hello {{name}}" + {name: "John"} = "Hello John"
+ * Example: "Hello {{name}}" or "Hello [name]" + {name: "John"} = "Hello John"
  */
 function replaceTemplateVariables(template: string, variables: Record<string, string>): string {
     let result = template;
 
-    for (const [key, value] of Object.entries(variables)) {
-        const regex = new RegExp(`{{${key}}}`, 'g');
-        result = result.replace(regex, value);
+    for (const [key, value] of Object.entries(variables || {})) {
+        // Support {{name}}
+        const regexCurly = new RegExp(`{{${key}}}`, 'gi');
+        result = result.replace(regexCurly, value);
+
+        // Support [name]
+        const regexSquare = new RegExp(`\\[${key}\\]`, 'gi');
+        result = result.replace(regexSquare, value);
     }
 
     return result;
@@ -33,13 +38,14 @@ function replaceTemplateVariables(template: string, variables: Record<string, st
  * Campaign Message Worker
  */
 messageQueue.process('campaign-message', async (job) => {
-    const { campaign_id, recipient_id, bot_id, phone, template, variables } = job.data;
+    const { campaign_id, recipient_id, bot_id, phone, template, variables, image_url } = job.data;
 
     logger.info('Processing campaign message', {
         job_id: job.id,
         campaign_id,
         recipient_id,
         phone,
+        has_image: !!image_url
     });
 
     try {
@@ -48,8 +54,10 @@ messageQueue.process('campaign-message', async (job) => {
 
         // ✅ Call existing adapter (NO socket creation!)
         const result = await whatsappAdapter.sendMessage(bot_id, phone, {
-            type: 'text',
-            content: message,
+            type: image_url ? 'image' : 'text',
+            content: image_url ? undefined : message,
+            media_url: image_url,
+            caption: image_url ? message : undefined
         });
 
         // Log to messages table
@@ -58,8 +66,8 @@ messageQueue.process('campaign-message', async (job) => {
                 INSERT INTO messages (
                     id, bot_id, direction, source,
                     message_type, content, created_at
-                ) VALUES (?, ?, 'outbound', 'campaign', 'text', ?, CURRENT_TIMESTAMP)
-            `, [uuidv4(), bot_id, message]);
+                ) VALUES (?, ?, 'outbound', 'campaign', ?, ?, CURRENT_TIMESTAMP)
+            `, [uuidv4(), bot_id, image_url ? 'image' : 'text', message]);
         } catch (logError) {
             logger.warn('Failed to log campaign message', { error: logError });
         }

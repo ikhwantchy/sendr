@@ -92,8 +92,8 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
     const fileInputRef = useRef<HTMLInputElement>(null)
     const isTypingRef = useRef(false)
 
-    // Default Dates
-    const today = new Date().toISOString().split('T')[0]
+    // Default Dates (Local Time)
+    const today = new Date().toLocaleDateString('en-CA'); // en-CA gives YYYY-MM-DD format
 
     // UI State
     const [isContactPreviewOpen, setIsContactPreviewOpen] = useState(false)

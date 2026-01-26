@@ -17,6 +17,9 @@ export interface CampaignData {
     name: string;
     message_template: string;
     csv_data: Array<{ phone: string; name: string;[key: string]: string }>;
+    delay?: number;
+    image_url?: string;
+    scheduled_at?: string;
 }
 
 class CampaignService {
@@ -24,7 +27,7 @@ class CampaignService {
      * Create campaign from CSV upload
      */
     async createCampaign(data: CampaignData): Promise<any> {
-        const { tenant_id, bot_id, name, message_template, csv_data } = data;
+        const { tenant_id, bot_id, name, message_template, csv_data, delay, image_url, scheduled_at } = data;
 
         try {
             const campaignId = uuidv4();
@@ -33,14 +36,18 @@ class CampaignService {
             await query(
                 `INSERT INTO campaigns (
                     id, tenant_id, bot_id, name, message_template, 
-                    status, total_contacts
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [campaignId, tenant_id, bot_id, name, message_template, 'draft', csv_data.length]
+                    status, total_contacts, delay, image_url, scheduled_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    campaignId, tenant_id, bot_id, name, message_template,
+                    'draft', csv_data.length, delay || 0, image_url || null, scheduled_at || null
+                ]
             );
 
             // Insert recipients
             for (const contact of csv_data) {
                 const recipientId = uuidv4();
+                const contactVars = { ...contact, nama: contact.name || '' };
                 await query(
                     `INSERT INTO campaign_recipients (
                         id, campaign_id, phone, name, variables, status
@@ -50,7 +57,7 @@ class CampaignService {
                         campaignId,
                         contact.phone,
                         contact.name || '',
-                        JSON.stringify(contact),
+                        JSON.stringify(contactVars),
                         'pending',
                     ]
                 );
@@ -105,7 +112,10 @@ class CampaignService {
                 [campaignId]
             );
 
-            // Queue each recipient
+            // Queue each recipient with delay if specified
+            const delaySeconds = campaign.delay || 0;
+            let currentDelay = 0;
+
             for (const recipient of recipientsResult.rows) {
                 await messageQueue.add(
                     'campaign-message',
@@ -117,8 +127,10 @@ class CampaignService {
                         phone: recipient.phone,
                         template: campaign.message_template,
                         variables: JSON.parse(recipient.variables || '{}'),
+                        image_url: campaign.image_url,
                     },
                     {
+                        delay: currentDelay * 1000, // Bull delay is in milliseconds
                         attempts: 3,
                         backoff: {
                             type: 'exponential',
@@ -126,6 +138,11 @@ class CampaignService {
                         },
                     }
                 );
+
+                // Increment delay for next recipient
+                if (delaySeconds > 0) {
+                    currentDelay += delaySeconds;
+                }
             }
 
             logger.info('Campaign started', {

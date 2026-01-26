@@ -3,12 +3,15 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import CreateUserModal from '@/components/CreateUserModal'
 import InviteUserModal from '@/components/InviteUserModal'
 import EditUserModal from '@/components/EditUserModal'
 import DeleteUserModal from '@/components/DeleteUserModal'
+import { Users as UsersIcon, User, UserPlus, Mail } from 'lucide-react'
 
 export default function UsersPage() {
     const [showInviteModal, setShowInviteModal] = useState(false)
+    const [showCreateModal, setShowCreateModal] = useState(false)
     const [showEditModal, setShowEditModal] = useState(false)
     const [showDeleteModal, setShowDeleteModal] = useState(false)
     const [selectedUser, setSelectedUser] = useState<any>(null)
@@ -40,109 +43,102 @@ export default function UsersPage() {
     }
 
     return (
-        <div className="p-8">
+        <div className="p-8 min-h-screen bg-[#09090b]">
+            {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
-                        <span className="w-1.5 h-10 bg-gradient-to-b from-cyan-400 to-purple-600 rounded-full"></span>
-                        User Management
-                    </h1>
-                    <p className="text-gray-400 text-lg">Manage user access and permissions</p>
+                    <h1 className="text-2xl font-medium text-white tracking-tight">User Management</h1>
+                    <p className="text-zinc-500 text-sm mt-1">Manage user access and permissions</p>
                 </div>
-                <button
-                    onClick={() => setShowInviteModal(true)}
-                    className="group px-6 py-3.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-xl font-bold hover:shadow-2xl hover:shadow-cyan-500/50 transition-all flex items-center gap-2 hover-lift relative overflow-hidden"
-                >
-                    <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100"></div>
-                    <svg className="w-5 h-5 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span className="relative z-10">Invite User</span>
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-lg font-medium hover:bg-zinc-200 transition-colors"
+                    >
+                        <UserPlus className="w-4 h-4" />
+                        Create User
+                    </button>
+                </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="glass rounded-2xl p-6 border border-white/10">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-cyan-500/20 to-purple-500/20 rounded-xl flex items-center justify-center">
-                            <span className="text-2xl">👥</span>
-                        </div>
-                        <div>
-                            <p className="text-3xl font-bold text-white">{stats?.total_users || 0}</p>
-                            <p className="text-sm text-gray-400">Total Users</p>
-                        </div>
+            {/* Stats Cards - Exact Match to Overview Style */}
+            <div className="grid grid-cols-4 gap-4 mb-10">
+                {/* Total Users */}
+                <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-5 min-h-[110px] flex flex-col justify-between hover:border-zinc-700/50 transition-all duration-200 group">
+                    <div className="flex justify-between items-start">
+                        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Total Users</span>
+                        <UsersIcon className="w-3.5 h-3.5 text-zinc-600 opacity-50 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <div className="text-2xl font-medium text-zinc-100 tracking-tight">
+                        {stats?.total_users || 0}
                     </div>
                 </div>
-                <div className="glass rounded-2xl p-6 border border-white/10">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-xl flex items-center justify-center">
-                            <span className="text-2xl">👨‍💼</span>
-                        </div>
-                        <div>
-                            <p className="text-3xl font-bold text-white">{stats?.admin_count || 0}</p>
-                            <p className="text-sm text-gray-400">Admins</p>
-                        </div>
+
+                {/* Admins */}
+                <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-5 min-h-[110px] flex flex-col justify-between hover:border-zinc-700/50 transition-all duration-200 group">
+                    <div className="flex justify-between items-start">
+                        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Admins</span>
+                        <User className="w-3.5 h-3.5 text-zinc-600 opacity-50 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <div className="text-2xl font-medium text-zinc-100 tracking-tight">
+                        {stats?.admin_count || 0}
                     </div>
                 </div>
-                <div className="glass rounded-2xl p-6 border border-white/10">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-pink-500/20 to-rose-500/20 rounded-xl flex items-center justify-center">
-                            <span className="text-2xl">👤</span>
-                        </div>
-                        <div>
-                            <p className="text-3xl font-bold text-white">{stats?.user_count || 0}</p>
-                            <p className="text-sm text-gray-400">Users</p>
-                        </div>
+
+                {/* Users */}
+                <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-5 min-h-[110px] flex flex-col justify-between hover:border-zinc-700/50 transition-all duration-200 group">
+                    <div className="flex justify-between items-start">
+                        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Users</span>
+                        <User className="w-3.5 h-3.5 text-zinc-600 opacity-50 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <div className="text-2xl font-medium text-zinc-100 tracking-tight">
+                        {stats?.user_count || 0}
                     </div>
                 </div>
             </div>
 
             {/* Users Table */}
             {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                    <div className="relative w-16 h-16">
-                        <div className="absolute inset-0 rounded-full border-4 border-cyan-500/20"></div>
-                        <div className="absolute inset-0 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin"></div>
-                    </div>
+                <div className="flex items-center justify-center py-20">
+                    <div className="w-6 h-6 border-2 border-zinc-800 border-t-white rounded-full animate-spin" />
                 </div>
             ) : users && users.length > 0 ? (
-                <div className="glass rounded-2xl border border-white/10 overflow-hidden">
+                <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl overflow-hidden">
                     <table className="w-full">
                         <thead>
-                            <tr className="bg-white/5 border-b border-white/10">
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-white">Name</th>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-white">Email</th>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-white">Role</th>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-white">Bots</th>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-white">Actions</th>
+                            <tr className="border-b border-zinc-800/50">
+                                <th className="px-6 py-4 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
+                                <th className="px-6 py-4 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Email</th>
+                                <th className="px-6 py-4 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Role</th>
+                                <th className="px-6 py-4 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Bots</th>
+                                <th className="px-6 py-4 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-zinc-800/30">
                             {users.map((user: any) => (
-                                <tr key={user.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                    <td className="px-6 py-4 text-white">{user.name || 'N/A'}</td>
-                                    <td className="px-6 py-4 text-gray-400">{user.email}</td>
+                                <tr key={user.id} className="hover:bg-zinc-900/50 transition-colors">
+                                    <td className="px-6 py-4 text-sm text-white">{user.name || 'N/A'}</td>
+                                    <td className="px-6 py-4 text-sm text-zinc-400">{user.email}</td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${user.role === 'admin'
-                                                ? 'bg-purple-500/20 text-purple-400'
-                                                : 'bg-cyan-500/20 text-cyan-400'
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${(user.role === 'ADMIN' || user.role === 'OWNER')
+                                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                            : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
                                             }`}>
                                             {user.role}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-gray-400">{user.bots_count || 0} bots</td>
+                                    <td className="px-6 py-4 text-sm text-zinc-500">{user.bots_count || 0} bots</td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => handleEdit(user)}
-                                                className="px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-colors text-sm"
+                                                className="px-3 py-1.5 text-xs bg-zinc-800 text-zinc-300 rounded-lg hover:bg-zinc-700 transition-colors border border-zinc-700"
                                             >
                                                 Edit
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(user)}
-                                                className="px-3 py-1 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors text-sm"
+                                                className="px-3 py-1.5 text-xs bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors border border-red-500/20"
                                             >
                                                 Delete
                                             </button>
@@ -154,28 +150,28 @@ export default function UsersPage() {
                     </table>
                 </div>
             ) : (
-                <div className="text-center py-16 glass rounded-2xl border-2 border-dashed border-white/10">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-cyan-500/20 to-purple-500/20 rounded-2xl mb-6">
-                        <svg className="w-10 h-10 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                        </svg>
+                <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-16 text-center">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-900 rounded-full mb-4">
+                        <UsersIcon className="w-8 h-8 text-zinc-600" />
                     </div>
-                    <h3 className="text-xl font-bold text-white mb-2">No users yet</h3>
-                    <p className="text-gray-400 mb-6">Invite users to collaborate on your bots</p>
+                    <h3 className="text-lg font-medium text-white mb-2">No users yet</h3>
+                    <p className="text-sm text-zinc-500 mb-6">Create new users to collaborate on your bots</p>
                     <button
-                        onClick={() => setShowInviteModal(true)}
-                        className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/50 transition-all hover-lift"
+                        onClick={() => setShowCreateModal(true)}
+                        className="px-4 py-2.5 bg-white text-black rounded-lg font-medium hover:bg-zinc-200 transition-colors"
                     >
-                        Invite User
+                        Create User
                     </button>
                 </div>
             )}
 
             {/* Modals */}
-            <InviteUserModal
-                isOpen={showInviteModal}
-                onClose={() => setShowInviteModal(false)}
+            <CreateUserModal
+                isOpen={showCreateModal}
+                onClose={() => setShowCreateModal(false)}
             />
+
+
 
             <EditUserModal
                 isOpen={showEditModal}

@@ -13,7 +13,8 @@ export interface AuthUser {
     id: string;
     tenant_id: string;
     email: string;
-    role: 'OWNER' | 'OPERATOR' | 'VIEWER';
+    role: 'OWNER' | 'OPERATOR' | 'VIEWER' | 'ADMIN' | 'USER';
+    permissions?: any;
 }
 
 declare global {

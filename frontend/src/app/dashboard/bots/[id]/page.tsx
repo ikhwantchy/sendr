@@ -8,9 +8,9 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import CreateRuleModal from '@/components/modals/CreateRuleModal'
 import EditRuleModal from '@/components/modals/EditRuleModal'
-import CreateCampaignModal from '@/components/modals/CreateCampaignModal'
 import DeleteConfirmationModal from '@/components/modals/DeleteConfirmationModal'
 import CampaignsTable from '@/components/tables/CampaignsTable'
+import CreateCampaignWizard from '@/components/CreateCampaignWizard'
 import ActivityChart from '@/components/ActivityChart'
 import RecentActivityList from '@/components/RecentActivityList'
 import AIConfigTable from '@/components/AIConfigTable'
@@ -50,7 +50,7 @@ export default function BotDetailPage() {
     const [showCreateRuleModal, setShowCreateRuleModal] = useState(false)
     const [showEditRuleModal, setShowEditRuleModal] = useState(false)
     const [selectedRule, setSelectedRule] = useState<any>(null)
-    const [showCreateCampaignModal, setShowCreateCampaignModal] = useState(false)
+    const [showCreateCampaignWizard, setShowCreateCampaignWizard] = useState(false)
 
     // Delete Confirmation State
     const [ruleToDelete, setRuleToDelete] = useState<string | null>(null)
@@ -391,9 +391,9 @@ export default function BotDetailPage() {
 
     const tabs = [
         { id: 'overview', name: 'Overview' },
-        { id: 'rules', name: 'Rules' },
+        { id: 'rules', name: 'Auto-Reply' },
         { id: 'ai-assistant', name: 'AI Assistant' },
-        { id: 'campaigns', name: 'Campaigns', comingSoon: true },
+        { id: 'campaigns', name: 'Campaigns' },
         { id: 'reminders', name: 'Reminders' },
         { id: 'settings', name: 'Settings' },
     ]
@@ -461,7 +461,7 @@ export default function BotDetailPage() {
             <div className="mb-8 border-b border-zinc-800/50">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex overflow-x-auto no-scrollbar gap-1">
-                        {tabs.map((tab) => (
+                        {(tabs as any[]).map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
@@ -1008,21 +1008,23 @@ export default function BotDetailPage() {
                 )}
 
                 {activeTab === 'campaigns' && (
-                    <div className="flex items-center justify-center min-h-[500px]">
-                        <div className="text-center max-w-md">
-                            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-2xl flex items-center justify-center border border-amber-500/20">
-                                <Megaphone className="w-10 h-10 text-amber-500" />
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Broadcast Campaigns</h2>
+                                <p className="text-zinc-500 text-sm mt-1">Mass message your contacts at scale</p>
                             </div>
-                            <h3 className="text-2xl font-bold text-zinc-100 mb-3 tracking-tight">
-                                Under Development
-                            </h3>
-                            <p className="text-zinc-400 mb-6 leading-relaxed">
-                                Broadcast Campaigns feature is currently being developed and will be available in the next release.
-                            </p>
-                            <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-sm text-amber-500 font-medium">
-                                <Clock className="w-4 h-4" />
-                                <span>Coming Soon in v0.2</span>
-                            </div>
+                            <button
+                                onClick={() => setShowCreateCampaignWizard(true)}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all text-sm shadow-lg shadow-blue-500/20 active:scale-95"
+                            >
+                                <Plus size={18} />
+                                <span>New Campaign</span>
+                            </button>
+                        </div>
+
+                        <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-2xl p-6">
+                            <CampaignsTable botId={botId} />
                         </div>
                     </div>
                 )}
@@ -1261,10 +1263,13 @@ export default function BotDetailPage() {
                 />
             )}
 
-            {showCreateCampaignModal && (
-                <CreateCampaignModal
-                    botId={botId}
-                    onClose={() => setShowCreateCampaignModal(false)}
+            {showCreateCampaignWizard && (
+                <CreateCampaignWizard
+                    initialBotId={botId}
+                    onClose={() => {
+                        setShowCreateCampaignWizard(false)
+                        queryClient.invalidateQueries({ queryKey: ['campaigns', botId] })
+                    }}
                 />
             )}
 

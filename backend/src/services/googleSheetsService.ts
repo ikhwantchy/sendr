@@ -99,9 +99,12 @@ class GoogleSheetsService {
             // Use Google Sheets CSV export URL (works for public sheets!)
             const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
 
-            const response = await fetch(csvUrl);
+            const response = await axios.get(csvUrl, {
+                responseType: 'text',
+                validateStatus: (status) => status < 500
+            });
 
-            if (!response.ok) {
+            if (response.status !== 200) {
                 if (response.status === 403) {
                     throw new Error('Access denied. Make sure the sheet is set to "Anyone with the link can view"');
                 }
@@ -111,7 +114,7 @@ class GoogleSheetsService {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            const csvText = await response.text();
+            const csvText = response.data;
 
             if (!csvText || csvText.trim() === '') {
                 return null;

@@ -15,7 +15,12 @@ import {
     ChevronLeft,
     ChevronRight,
     Settings,
-    User
+    User,
+    Key,
+    Shield,
+    FileText,
+    Clock,
+    Server
 } from 'lucide-react'
 
 export default function Sidebar() {
@@ -70,9 +75,10 @@ export default function Sidebar() {
             icon: Bot,
         },
         {
-            name: 'Data Sources',
-            href: '/dashboard/datasources',
-            icon: Database,
+            name: 'Users',
+            href: '/dashboard/users',
+            icon: Users,
+            adminOnly: true
         },
         {
             name: 'Analytics',
@@ -81,11 +87,31 @@ export default function Sidebar() {
         },
     ]
 
-    const ownerNavigation = [
+    const ownerNavigation: any[] = []
+
+    const adminTopNavigation = [
         {
-            name: 'Users',
-            href: '/dashboard/users',
-            icon: Users,
+            name: 'Audit Logs',
+            href: '/dashboard/audit-logs',
+            icon: FileText,
+        },
+        {
+            name: 'System',
+            href: '/dashboard/system',
+            icon: Server,
+        },
+    ]
+
+    const bottomNavigation = [
+        {
+            name: 'Get API key',
+            href: '/dashboard/api-keys',
+            icon: Key,
+        },
+        {
+            name: 'Settings',
+            href: '/dashboard/settings',
+            icon: Settings,
         },
     ]
 
@@ -125,9 +151,15 @@ export default function Sidebar() {
 
             {/* Navigation */}
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-                {navigation.map((item) => {
+                {navigation.map((item: any) => {
                     const isActive = pathname === item.href
                     const Icon = item.icon
+
+                    // Conditionally hide admin-only items
+                    if (item.adminOnly && !(user?.role?.toLowerCase() === 'admin' || user?.role?.toLowerCase() === 'owner')) {
+                        return null
+                    }
+
                     return (
                         <Link
                             key={item.name}
@@ -146,8 +178,8 @@ export default function Sidebar() {
                     )
                 })}
 
-                {/* Owner-only navigation */}
-                {user?.role?.toLowerCase() === 'owner' && ownerNavigation.map((item) => {
+                {/* Admin/Owner top only items */}
+                {(user?.role?.toLowerCase() === 'admin' || user?.role?.toLowerCase() === 'owner') && adminTopNavigation.map((item) => {
                     const isActive = pathname === item.href
                     const Icon = item.icon
                     return (
@@ -169,146 +201,113 @@ export default function Sidebar() {
                 })}
             </nav>
 
-            {/* User Info with Dropdown Menu */}
+            {/* Bottom Actions & User Info */}
+            <div className="px-3 py-4 space-y-1">
+                {bottomNavigation.map((item) => {
+                    const isActive = pathname === item.href
+                    const Icon = item.icon
+                    return (
+                        <Link
+                            key={item.name}
+                            href={item.href}
+                            className={`group flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${isActive
+                                ? 'bg-zinc-900 text-zinc-100'
+                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/40'
+                                }`}
+                            title={!isExpanded ? item.name : undefined}
+                        >
+                            <Icon className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive ? 'text-zinc-100' : 'text-zinc-500 group-hover:text-zinc-300'}`} />
+                            {isExpanded && (
+                                <span className="text-sm font-medium tracking-tight truncate">{item.name}</span>
+                            )}
+                        </Link>
+                    )
+                })}
+            </div>
+
+            {/* User Info with Enhanced Popup Menu */}
             {user && (
                 <div className="p-4 border-t border-zinc-900 bg-zinc-950 relative">
                     <button
                         onClick={() => setShowUserMenu(!showUserMenu)}
-                        className={`w-full flex items-center ${isExpanded ? 'justify-between' : 'justify-center'} hover:bg-zinc-900/50 rounded-lg p-2 transition-colors`}
+                        className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} hover:bg-zinc-900/50 rounded-xl p-1.5 transition-colors gap-3 overflow-hidden group`}
                     >
-                        <div className="flex items-center gap-3 overflow-hidden">
-                            {/* Avatar */}
-                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 text-zinc-500 border border-zinc-700">
-                                {user.name ? (
-                                    <span className="font-medium text-sm text-zinc-300">{user.name.charAt(0)}</span>
-                                ) : (
-                                    <User className="w-5 h-5" />
-                                )}
-                            </div>
-
-                            {/* Text Info */}
-                            {isExpanded && (
-                                <div className="min-w-0 transition-opacity duration-200">
-                                    <h4 className="text-sm font-medium text-white truncate leading-none mb-1">
-                                        {user.name || 'Admin'}
-                                    </h4>
-                                    <p className="text-xs text-zinc-500 truncate font-medium">
-                                        {user.email}
-                                    </p>
+                        {/* Avatar */}
+                        <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-zinc-800 group-hover:border-zinc-700 transition-colors bg-zinc-800">
+                            {user.avatar_url || user.image ? (
+                                <img src={user.avatar_url || user.image} alt={user.name} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-zinc-400">
+                                    <User className="w-4 h-4" />
                                 </div>
                             )}
                         </div>
+
+                        {/* Email / Username Label */}
+                        {isExpanded && (
+                            <div className="flex-1 min-w-0 text-left">
+                                <p className="text-[13px] font-medium text-zinc-200 truncate tracking-tight">
+                                    {user.email || 'admin@example.com'}
+                                </p>
+                            </div>
+                        )}
                     </button>
 
-                    {/* Dropdown Menu */}
+                    {/* Dropdown Menu Popup (Custom Modal Style as per Image) */}
                     {showUserMenu && (
                         <>
                             {/* Backdrop */}
                             <div
-                                className="fixed inset-0 z-40"
+                                className="fixed inset-0 z-40 bg-black/20"
                                 onClick={() => setShowUserMenu(false)}
                             />
 
-                            {/* Menu Popup */}
-                            <div className="absolute bottom-full left-4 right-4 mb-2 bg-[#0e0e11] border border-zinc-800/50 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                                <div className="py-2">
-                                    <button
-                                        onClick={() => {
-                                            setShowUserMenu(false);
-                                            router.push('/dashboard/settings/profile');
-                                        }}
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-800/50 transition-colors"
-                                    >
-                                        <User className="w-5 h-5 text-zinc-100" />
-                                        <span className="text-[15px] font-normal text-zinc-100">Profile</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => setShowSettingsSubmenu(!showSettingsSubmenu)}
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-800/50 transition-colors"
-                                    >
-                                        <Settings className="w-5 h-5 text-zinc-100" />
-                                        <span className="flex-1 text-[15px] font-normal text-zinc-100">Settings</span>
-                                        <ChevronRight className={`w-4 h-4 text-zinc-500 transition-transform ${showSettingsSubmenu ? 'rotate-90' : ''}`} />
-                                    </button>
-
-                                    {/* Settings Submenu */}
-                                    <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showSettingsSubmenu ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-                                        }`}>
-                                        <div className="bg-zinc-900/30">
-                                            <button
-                                                onClick={() => {
-                                                    setShowUserMenu(false);
-                                                    setShowSettingsSubmenu(false);
-                                                    router.push('/dashboard/settings/profile');
-                                                }}
-                                                className="w-full flex items-center gap-3 pl-12 pr-4 py-2.5 text-left hover:bg-zinc-800/50 transition-colors"
-                                            >
-                                                <span className="text-[14px] font-normal text-zinc-300">General Settings</span>
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setShowUserMenu(false);
-                                                    setShowSettingsSubmenu(false);
-                                                    router.push('/dashboard/settings/security');
-                                                }}
-                                                className="w-full flex items-center gap-3 pl-12 pr-4 py-2.5 text-left hover:bg-zinc-800/50 transition-colors"
-                                            >
-                                                <span className="text-[14px] font-normal text-zinc-300">Security Settings</span>
-                                            </button>
-                                        </div>
+                            {/* Menu Popup Modal */}
+                            <div className="absolute bottom-full left-4 mr-4 mb-3 w-[280px] bg-[#1a1a1c] border border-zinc-800/80 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                <div className="p-6 flex flex-col items-center text-center">
+                                    {/* Large Avatar */}
+                                    <div className="w-16 h-16 rounded-full overflow-hidden mb-4 border-2 border-zinc-800 shadow-xl bg-zinc-800">
+                                        {user.avatar_url || user.image ? (
+                                            <img src={user.avatar_url || user.image} alt={user.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-zinc-400">
+                                                <User className="w-8 h-8" />
+                                            </div>
+                                        )}
                                     </div>
 
+                                    {/* Name & Email */}
+                                    <h3 className="text-[17px] font-semibold text-white tracking-tight leading-tight mb-1">
+                                        {user.name || 'Ikhwan Tricahya'}
+                                    </h3>
+                                    <p className="text-[13px] text-zinc-400 font-normal mb-6 break-all">
+                                        {user.email || 'ikhwantricahya03@gmail.com'}
+                                    </p>
+
+                                    {/* Switch Account */}
                                     <button
-                                        disabled
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-left opacity-50 cursor-not-allowed"
+                                        onClick={() => {/* Switch account logic */ }}
+                                        className="w-full py-2.5 px-6 border border-zinc-700/50 rounded-full text-zinc-200 text-sm font-medium hover:bg-zinc-800 transition-colors mb-2"
                                     >
-                                        <svg className="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                                        </svg>
-                                        <span className="flex-1 text-[15px] font-normal text-zinc-100">Theme</span>
-                                        <ChevronRight className="w-4 h-4 text-zinc-500" />
+                                        Switch account
                                     </button>
+                                </div>
 
-                                    <button
-                                        disabled
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-left opacity-50 cursor-not-allowed"
-                                    >
-                                        <svg className="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                        </svg>
-                                        <span className="text-[15px] font-normal text-zinc-100">Upgrade</span>
-                                    </button>
-
-                                    <div className="border-t border-zinc-800 my-2" />
-
-                                    <button
-                                        disabled
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-left opacity-50 cursor-not-allowed"
-                                    >
-                                        <svg className="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                                        </svg>
-                                        <span className="text-[15px] font-normal text-zinc-100">Keyboard shortcuts</span>
-                                    </button>
-
-                                    <button
-                                        disabled
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-left opacity-50 cursor-not-allowed"
-                                    >
-                                        <svg className="w-5 h-5 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <span className="text-[15px] font-normal text-zinc-100">Help center</span>
-                                    </button>
-
+                                {/* Menu Actions */}
+                                <div className="border-t border-zinc-800/50">
                                     <button
                                         onClick={handleLogout}
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-800/50 transition-colors"
+                                        className="w-full py-3.5 px-6 text-center text-[15px] font-medium text-zinc-200 hover:bg-zinc-800 transition-colors"
                                     >
-                                        <LogOut className="w-5 h-5 text-zinc-100" />
-                                        <span className="text-[15px] font-normal text-zinc-100">Log out</span>
+                                        Sign out
                                     </button>
+                                </div>
+
+                                {/* Footer Links */}
+                                <div className="px-6 py-4 bg-zinc-900/30 text-center flex items-center justify-center gap-2">
+                                    <Link href="/privacy" className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors">Privacy Policy</Link>
+                                    <span className="w-1 h-1 rounded-full bg-zinc-700" />
+                                    <Link href="/terms" className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors">Terms of Service</Link>
                                 </div>
                             </div>
                         </>
