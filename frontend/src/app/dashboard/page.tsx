@@ -174,7 +174,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                 {/* Left Column: Quick Actions & Activity */}
-                <div className="lg:col-span-2 space-y-8">
+                <div className={`${user?.role === 'ADMIN' || user?.role === 'OWNER' ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-8`}>
 
                     {/* Quick Start Features */}
                     <div className="space-y-4">
@@ -195,81 +195,85 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    {/* Recent Activity */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Recent Activity</h3>
-                            <Link href="/dashboard/activity" className="text-xs text-zinc-500 hover:text-white transition-colors">View All</Link>
-                        </div>
+                    {/* Recent Activity - Hidden for USER */}
+                    {(user?.role === 'ADMIN' || user?.role === 'OWNER') && (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Recent Activity</h3>
+                                <Link href="/dashboard/activity" className="text-xs text-zinc-500 hover:text-white transition-colors">View All</Link>
+                            </div>
 
-                        <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl overflow-hidden min-h-[300px]">
-                            {activityLogs.length === 0 ? (
-                                <div className="p-8 text-center text-zinc-600 text-sm flex flex-col items-center justify-center h-full">
-                                    <Clock className="w-8 h-8 mb-3 opacity-20" />
-                                    No recent activity
-                                </div>
-                            ) : (
-                                <div className="divide-y divide-zinc-800/30">
-                                    {activityLogs.map((log) => (
-                                        <div key={log.id} className="group flex items-center gap-4 px-5 py-3 hover:bg-zinc-800/20 transition-colors">
-                                            <div className="flex-shrink-0 mt-0.5">
-                                                {getActivityIcon(log.type)}
+                            <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl overflow-hidden min-h-[300px]">
+                                {activityLogs.length === 0 ? (
+                                    <div className="p-8 text-center text-zinc-600 text-sm flex flex-col items-center justify-center h-full">
+                                        <Clock className="w-8 h-8 mb-3 opacity-20" />
+                                        No recent activity
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-zinc-800/30">
+                                        {activityLogs.map((log) => (
+                                            <div key={log.id} className="group flex items-center gap-4 px-5 py-3 hover:bg-zinc-800/20 transition-colors">
+                                                <div className="flex-shrink-0 mt-0.5">
+                                                    {getActivityIcon(log.type)}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm text-zinc-300 group-hover:text-zinc-100 transition-colors truncate">
+                                                        {log.message}
+                                                    </p>
+                                                </div>
+                                                <span className="text-xs font-mono text-zinc-600 whitespace-nowrap">
+                                                    {formatTimestamp(log.timestamp)}
+                                                </span>
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm text-zinc-300 group-hover:text-zinc-100 transition-colors truncate">
-                                                    {log.message}
-                                                </p>
-                                            </div>
-                                            <span className="text-xs font-mono text-zinc-600 whitespace-nowrap">
-                                                {formatTimestamp(log.timestamp)}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
-                {/* Right Column: System Status */}
-                <div className="space-y-4">
-                    <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">System Status</h3>
-                    <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-5 space-y-6">
+                {/* Right Column: System Status - Hidden for USER */}
+                {(user?.role === 'ADMIN' || user?.role === 'OWNER') && (
+                    <div className="space-y-4">
+                        <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">System Status</h3>
+                        <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-5 space-y-6">
 
-                        {/* Metrics */}
-                        <div className="space-y-5">
-                            <SystemMetric label="CPU Usage" value={systemStatus.cpu} />
-                            <SystemMetric label="Memory" value={systemStatus.memory} />
+                            {/* Metrics */}
+                            <div className="space-y-5">
+                                <SystemMetric label="CPU Usage" value={systemStatus.cpu} />
+                                <SystemMetric label="Memory" value={systemStatus.memory} />
 
-                            <div className="flex items-center justify-between text-sm pt-2">
-                                <span className="text-zinc-500">Latency</span>
-                                <span className="font-mono text-zinc-300">{systemStatus.latency || 14}ms</span>
+                                <div className="flex items-center justify-between text-sm pt-2">
+                                    <span className="text-zinc-500">Latency</span>
+                                    <span className="font-mono text-zinc-300">{systemStatus.latency || 14}ms</span>
+                                </div>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="h-px bg-zinc-800/50" />
+
+                            {/* Service Health */}
+                            <div className="space-y-3">
+                                <ServiceStatus name="API Gateway" status="operational" />
+                                <ServiceStatus name="WhatsApp Engine" status="operational" />
+                                <ServiceStatus name="Database" status="operational" />
                             </div>
                         </div>
 
-                        {/* Divider */}
-                        <div className="h-px bg-zinc-800/50" />
-
-                        {/* Service Health */}
-                        <div className="space-y-3">
-                            <ServiceStatus name="API Gateway" status="operational" />
-                            <ServiceStatus name="WhatsApp Engine" status="operational" />
-                            <ServiceStatus name="Database" status="operational" />
+                        {/* Pro Tip or Promo */}
+                        <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800/50 rounded-xl p-5 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-3xl rounded-full -mr-16 -mt-16 transition-opacity opacity-50 group-hover:opacity-80" />
+                            <h4 className="text-sm font-medium text-white mb-2 relative z-10">Need help automating?</h4>
+                            <p className="text-xs text-zinc-500 mb-4 relative z-10 leading-relaxed">
+                                Check out our documentation to learn how to build complex flows with BroBot.
+                            </p>
+                            <a href="#" className="inline-flex items-center gap-2 text-xs font-medium text-white hover:text-zinc-300 transition-colors relative z-10">
+                                Read Docs <ArrowUpRight className="w-3 h-3" />
+                            </a>
                         </div>
                     </div>
-
-                    {/* Pro Tip or Promo */}
-                    <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800/50 rounded-xl p-5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-3xl rounded-full -mr-16 -mt-16 transition-opacity opacity-50 group-hover:opacity-80" />
-                        <h4 className="text-sm font-medium text-white mb-2 relative z-10">Need help automating?</h4>
-                        <p className="text-xs text-zinc-500 mb-4 relative z-10 leading-relaxed">
-                            Check out our documentation to learn how to build complex flows with BroBot.
-                        </p>
-                        <a href="#" className="inline-flex items-center gap-2 text-xs font-medium text-white hover:text-zinc-300 transition-colors relative z-10">
-                            Read Docs <ArrowUpRight className="w-3 h-3" />
-                        </a>
-                    </div>
-                </div>
+                )}
             </div>
         </div>
     )

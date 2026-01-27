@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import { Save, Mail, Shield, Settings as SettingsIcon, Zap } from 'lucide-react';
+import { Save, Mail, Shield, Settings as SettingsIcon, Zap, Send } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface Setting {
@@ -111,9 +111,11 @@ export default function SystemSettingsPage() {
         );
     };
 
+
     const tabs = [
         { id: 'general', label: 'General', icon: SettingsIcon },
         { id: 'email', label: 'Email', icon: Mail },
+        { id: 'telegram', label: 'Telegram', icon: Send },
         { id: 'security', label: 'Security', icon: Shield },
         { id: 'advanced', label: 'Advanced', icon: Zap },
     ];

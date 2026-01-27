@@ -59,6 +59,33 @@ class BotRepository {
     }
 
     /**
+     * Find all bots in the system (for admins)
+     */
+    async findAll(): Promise<Bot[]> {
+        const result = await query(
+            'SELECT * FROM bots ORDER BY created_at DESC'
+        );
+
+        return result.rows.map((bot: Bot) => {
+            if (bot.config) {
+                try {
+                    bot.config = typeof bot.config === 'string' ? JSON.parse(bot.config as any) : bot.config;
+                } catch (e) {
+                    bot.config = {};
+                }
+            }
+            if (bot.ai_config) {
+                try {
+                    bot.ai_config = typeof bot.ai_config === 'string' ? JSON.parse(bot.ai_config as any) : bot.ai_config;
+                } catch (e) {
+                    bot.ai_config = { enabled: false };
+                }
+            }
+            return bot;
+        });
+    }
+
+    /**
      * Find all bots for a tenant
      */
     async findByTenant(tenantId: string): Promise<Bot[]> {
@@ -68,6 +95,37 @@ class BotRepository {
         );
 
         // Parse JSON fields for each bot
+        return result.rows.map((bot: Bot) => {
+            if (bot.config) {
+                try {
+                    bot.config = typeof bot.config === 'string' ? JSON.parse(bot.config as any) : bot.config;
+                } catch (e) {
+                    bot.config = {};
+                }
+            }
+            if (bot.ai_config) {
+                try {
+                    bot.ai_config = typeof bot.ai_config === 'string' ? JSON.parse(bot.ai_config as any) : bot.ai_config;
+                } catch (e) {
+                    bot.ai_config = { enabled: false };
+                }
+            }
+            return bot;
+        });
+    }
+
+    /**
+     * Find bots accessible by user (tenant bots + explicit permissions)
+     */
+    async findAccessibleByUser(userId: string, tenantId: string): Promise<Bot[]> {
+        // FIXED: Using correct table name 'bot_permissions'
+        const result = await query(`
+            SELECT DISTINCT b.* FROM bots b
+            LEFT JOIN bot_permissions p ON b.id = p.bot_id AND p.user_id = ?
+            WHERE b.tenant_id = ? OR (p.user_id = ? AND (p.can_view = 1 OR p.can_view = 'true'))
+            ORDER BY b.created_at DESC
+        `, [userId, tenantId, userId]);
+
         return result.rows.map((bot: Bot) => {
             if (bot.config) {
                 try {
@@ -174,11 +232,12 @@ class BotRepository {
     /**
      * Delete bot
      */
-    async delete(id: string, tenantId: string): Promise<void> {
-        await query(
-            'DELETE FROM bots WHERE id = ? AND tenant_id = ?',
-            [id, tenantId]
-        );
+    async delete(id: string, tenantId?: string): Promise<void> {
+        const sql = tenantId
+            ? 'DELETE FROM bots WHERE id = ? AND tenant_id = ?'
+            : 'DELETE FROM bots WHERE id = ?';
+        const params = tenantId ? [id, tenantId] : [id];
+        await query(sql, params);
     }
 
     /**

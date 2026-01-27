@@ -179,14 +179,24 @@ class CampaignService {
     /**
      * List campaigns
      */
-    async listCampaigns(tenantId: string, botId?: string): Promise<any[]> {
+    async listCampaigns(tenantId?: string | null, botId?: string): Promise<any[]> {
         try {
-            let sql = 'SELECT * FROM campaigns WHERE tenant_id = ?';
-            const params: any[] = [tenantId];
+            let sql = 'SELECT * FROM campaigns';
+            const params: any[] = [];
+            const conditions: string[] = [];
+
+            if (tenantId) {
+                conditions.push('tenant_id = ?');
+                params.push(tenantId);
+            }
 
             if (botId) {
-                sql += ' AND bot_id = ?';
+                conditions.push('bot_id = ?');
                 params.push(botId);
+            }
+
+            if (conditions.length > 0) {
+                sql += ' WHERE ' + conditions.join(' AND ');
             }
 
             sql += ' ORDER BY created_at DESC';

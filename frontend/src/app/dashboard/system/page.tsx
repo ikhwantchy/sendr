@@ -38,7 +38,20 @@ export default function SystemPage() {
         setLoading(true);
         try {
             const response = await api.get('/admin/system/health');
-            setHealth(response.data);
+            if (response.data && response.data.health) {
+                const { health } = response.data;
+                setHealth({
+                    status: health.status,
+                    database: health.checks?.database || { status: 'unknown' },
+                    memory: {
+                        status: health.checks?.memory?.status || 'unknown',
+                        used: health.checks?.memory?.heapUsed || 0,
+                        total: health.checks?.memory?.heapTotal || 0
+                    },
+                    whatsapp: health.checks?.whatsapp || { status: 'unknown', connected_bots: 0, total_bots: 0 },
+                    redis: health.checks?.redis || { status: 'unknown' }
+                });
+            }
         } catch (error) {
             console.error('Failed to fetch health:', error);
         } finally {
@@ -76,7 +89,7 @@ export default function SystemPage() {
         if (!confirm('Optimize database? This may take a few moments.')) return;
         setLoading(true);
         try {
-            await api.post('/admin/system/optimize');
+            await api.post('/admin/system/maintenance/optimize-db');
             alert('Database optimized successfully');
         } catch (error) {
             console.error('Failed to optimize database:', error);
@@ -90,7 +103,7 @@ export default function SystemPage() {
         if (!confirm('Delete old logs? This cannot be undone.')) return;
         setLoading(true);
         try {
-            await api.post('/admin/system/cleanup-logs');
+            await api.post('/admin/system/maintenance/cleanup-logs');
             alert('Logs cleaned up successfully');
         } catch (error) {
             console.error('Failed to cleanup logs:', error);
@@ -103,7 +116,7 @@ export default function SystemPage() {
     const handleClearCache = async () => {
         setLoading(true);
         try {
-            await api.post('/admin/system/clear-cache');
+            await api.post('/admin/cache/clear');
             alert('Cache cleared successfully');
         } catch (error) {
             console.error('Failed to clear cache:', error);
@@ -181,11 +194,11 @@ export default function SystemPage() {
                                         <Database className="w-5 h-5 text-purple-400" />
                                         <h3 className="font-semibold text-zinc-100">Database</h3>
                                     </div>
-                                    <span className={`px-3 py-1 rounded-full text-xs border ${getStatusColor(health.database.status)}`}>
-                                        {health.database.status}
+                                    <span className={`px-3 py-1 rounded-full text-xs border ${getStatusColor(health.database?.status || 'error')}`}>
+                                        {health.database?.status || 'disconnected'}
                                     </span>
                                 </div>
-                                <p className="text-sm text-zinc-500">{health.database.message || 'Connected'}</p>
+                                <p className="text-sm text-zinc-500">{health.database?.message || 'Database connection status unknown'}</p>
                             </div>
 
                             {/* Memory */}
@@ -195,12 +208,12 @@ export default function SystemPage() {
                                         <HardDrive className="w-5 h-5 text-blue-400" />
                                         <h3 className="font-semibold text-zinc-100">Memory</h3>
                                     </div>
-                                    <span className={`px-3 py-1 rounded-full text-xs border ${getStatusColor(health.memory.status)}`}>
-                                        {health.memory.status}
+                                    <span className={`px-3 py-1 rounded-full text-xs border ${getStatusColor(health.memory?.status || 'error')}`}>
+                                        {health.memory?.status || 'unknown'}
                                     </span>
                                 </div>
                                 <p className="text-sm text-zinc-500">
-                                    {(health.memory.used / 1024 / 1024).toFixed(2)} MB / {(health.memory.total / 1024 / 1024).toFixed(2)} MB
+                                    {((health.memory?.used || 0) / 1024 / 1024).toFixed(2)} MB / {((health.memory?.total || 0) / 1024 / 1024).toFixed(2)} MB
                                 </p>
                             </div>
 
@@ -211,12 +224,12 @@ export default function SystemPage() {
                                         <Activity className="w-5 h-5 text-green-400" />
                                         <h3 className="font-semibold text-zinc-100">WhatsApp</h3>
                                     </div>
-                                    <span className={`px-3 py-1 rounded-full text-xs border ${getStatusColor(health.whatsapp.status)}`}>
-                                        {health.whatsapp.status}
+                                    <span className={`px-3 py-1 rounded-full text-xs border ${getStatusColor(health.whatsapp?.status || 'error')}`}>
+                                        {health.whatsapp?.status || 'unknown'}
                                     </span>
                                 </div>
                                 <p className="text-sm text-zinc-500">
-                                    {health.whatsapp.connected_bots} / {health.whatsapp.total_bots} bots connected
+                                    {health.whatsapp?.connected_bots || 0} / {health.whatsapp?.total_bots || 0} bots connected
                                 </p>
                             </div>
 
@@ -227,11 +240,11 @@ export default function SystemPage() {
                                         <Server className="w-5 h-5 text-red-400" />
                                         <h3 className="font-semibold text-zinc-100">Redis</h3>
                                     </div>
-                                    <span className={`px-3 py-1 rounded-full text-xs border ${getStatusColor(health.redis.status)}`}>
-                                        {health.redis.status}
+                                    <span className={`px-3 py-1 rounded-full text-xs border ${getStatusColor(health.redis?.status || 'error')}`}>
+                                        {health.redis?.status || 'disconnected'}
                                     </span>
                                 </div>
-                                <p className="text-sm text-zinc-500">{health.redis.message || 'Connected'}</p>
+                                <p className="text-sm text-zinc-500">{health.redis?.message || 'Redis connection status unknown'}</p>
                             </div>
                         </div>
                     )}

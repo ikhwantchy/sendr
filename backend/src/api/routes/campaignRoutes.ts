@@ -42,9 +42,10 @@ router.get('/', async (req, res) => {
 router.get('/bot/:botId', async (req, res) => {
     const { botId } = req.params;
     try {
-        const tenantId = req.user?.tenant_id || '00000000-0000-0000-0000-000000000001';
+        const isAdmin = req.user?.role === 'ADMIN' || req.user?.role === 'OWNER';
+        const tenantId = req.user?.tenant_id;
 
-        const campaigns = await campaignService.listCampaigns(tenantId, botId);
+        const campaigns = await campaignService.listCampaigns(isAdmin ? null : tenantId, botId);
 
         res.json({
             success: true,

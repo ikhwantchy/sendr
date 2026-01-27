@@ -5,6 +5,7 @@ type TimeRange = '30m' | '24h' | '7d' | '30d';
 interface AnalyticsFilter {
     timeRange: TimeRange;
     tenantId: string;
+    botId?: string;
 }
 
 export class AnalyticsController {
@@ -12,7 +13,7 @@ export class AnalyticsController {
      * Get comprehensive analytics data
      */
     static async getAnalyticsData(filter: AnalyticsFilter) {
-        const { timeRange, tenantId } = filter;
+        const { timeRange, tenantId, botId } = filter;
 
         // 1. Calculate Date Ranges
         const now = new Date();
@@ -49,11 +50,15 @@ export class AnalyticsController {
         }
 
         // Debug log
-        console.log(`[Analytics] TimeRange: ${timeRange}, StartDate: ${startDate.toISOString()}, GroupBy: ${groupByFormat}`);
+        console.log(`[Analytics] TimeRange: ${timeRange}, StartDate: ${startDate.toISOString()}, GroupBy: ${groupByFormat}${botId ? `, BotId: ${botId}` : ''}`);
 
         const startIso = startDate.toISOString();
         const prevStartIso = prevStartDate.toISOString();
         const prevEndIso = prevEndDate.toISOString();
+
+        // SQL Helpers
+        const botFilter = botId ? `AND b.id = ?` : '';
+        const botParams = botId ? [botId] : [];
 
         // 2. Fetch Summaries (Current Period vs Previous Period)
 
@@ -64,7 +69,8 @@ export class AnalyticsController {
             WHERE b.tenant_id = ? 
             AND datetime(m.created_at) >= datetime(?)
             AND m.direction = 'outbound'
-        `, [tenantId, startIso]);
+            ${botFilter}
+        `, [tenantId, startIso, ...botParams]);
         const totalMessages = totalMessagesResult.rows[0]?.count || 0;
 
         // NEW: Lifetime Total Messages (The 'Original' Count from Dashboard)
@@ -73,14 +79,16 @@ export class AnalyticsController {
             JOIN bots b ON m.bot_id = b.id
             WHERE b.tenant_id = ? 
             AND m.direction = 'outbound'
-        `, [tenantId]);
+            ${botFilter}
+        `, [tenantId, ...botParams]);
         const lifetimeMessages = lifetimeResult.rows[0]?.count || 0;
 
         const prevTotalMessagesResult = await query(`
             SELECT COUNT(*) as count FROM messages m
             JOIN bots b ON m.bot_id = b.id
             WHERE b.tenant_id = ? AND m.created_at >= ? AND m.created_at < ?
-        `, [tenantId, prevStartIso, prevEndIso]);
+            ${botFilter}
+        `, [tenantId, prevStartIso, prevEndIso, ...botParams]);
         const prevTotalMessages = prevTotalMessagesResult.rows[0]?.count || 0;
 
         const messageTrend = AnalyticsController.calculateTrend(totalMessages, prevTotalMessages);
@@ -89,8 +97,10 @@ export class AnalyticsController {
         const remindersResult = await query(`
             SELECT COUNT(*) as count FROM reminder_logs rl
             JOIN reminders r ON rl.reminder_id = r.id
+            JOIN bots b ON r.bot_id = b.id
             WHERE r.tenant_id = ? AND rl.executed_at >= ? AND rl.status = 'success'
-        `, [tenantId, startIso]);
+            ${botFilter}
+        `, [tenantId, startIso, ...botParams]);
         const totalReminders = remindersResult.rows[0]?.count || 0;
 
         // Active Bots
@@ -98,9 +108,10 @@ export class AnalyticsController {
             SELECT 
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'connected' THEN 1 ELSE 0 END) as active
-            FROM bots
+            FROM bots b
             WHERE tenant_id = ?
-        `, [tenantId]);
+            ${botFilter}
+        `, [tenantId, ...botParams]);
         const totalBots = botsResult.rows[0]?.total || 0;
         const activeBots = botsResult.rows[0]?.active || 0;
 
@@ -115,9 +126,10 @@ export class AnalyticsController {
             FROM messages m
             JOIN bots b ON m.bot_id = b.id
             WHERE b.tenant_id = ? AND m.created_at >= ?
+            ${botFilter}
             GROUP BY 1
             ORDER BY 1
-        `, [groupByFormat, tenantId, startIso]);
+        `, [groupByFormat, tenantId, startIso, ...botParams]);
 
 
         let trafficChart = trafficResult.rows;
@@ -158,17 +170,15 @@ export class AnalyticsController {
             });
         }
 
-        // Debug log
-        console.log(`[Analytics] Traffic data points: ${trafficChart.length}, First: ${trafficChart[0]?.date}, Last: ${trafficChart[trafficChart.length - 1]?.date}`);
-
         // 4. Message Distribution - Real Data Now
         const distributionResult = await query(`
             SELECT source, COUNT(*) as count
             FROM messages m
             JOIN bots b ON m.bot_id = b.id
             WHERE b.tenant_id = ? AND m.created_at >= ? AND m.direction = 'outbound'
+            ${botFilter}
             GROUP BY source
-        `, [tenantId, startIso]);
+        `, [tenantId, startIso, ...botParams]);
 
         // Map database results to UI structure
         const distMap: any = {
@@ -198,10 +208,11 @@ export class AnalyticsController {
             FROM bots b
             LEFT JOIN messages m ON b.id = m.bot_id AND m.created_at >= ?
             WHERE b.tenant_id = ?
+            ${botFilter}
             GROUP BY b.id
             ORDER BY volume DESC
             LIMIT 5
-        `, [startIso, tenantId]);
+        `, [startIso, tenantId, ...botParams]);
 
         const maxVolume = topBotsResult.rows[0]?.volume || 1;
         const topBots = topBotsResult.rows.map((bot: any) => ({

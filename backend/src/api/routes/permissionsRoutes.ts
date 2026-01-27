@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+// @ts-ignore - JS controller
 import {
     getUserPermissions,
     getBotPermissions,
@@ -20,22 +21,25 @@ const router = express.Router();
 // All routes require authentication
 router.use(authenticate);
 
-// Get user's permissions (user can view their own, owner can view any)
+// Get user's permissions
 router.get('/user/:userId', getUserPermissions);
 
-// Get bot's permissions (owner only)
+// Get bot's permissions
 router.get('/bot/:botId', requireOwner, getBotPermissions);
 
-// Check access (any authenticated user)
+// Check access
 router.get('/check/:botId/:userId', checkAccess);
 
-// Grant permission (owner only)
+// Grant/Update permission (owner only)
 router.post('/', requireOwner, grantPermission);
 
-// Update permission (owner only)
+// NEW: Support for granular bot update
+router.put('/:userId/:botId', requireOwner, updatePermission);
+
+// LEGACY: Old single param update
 router.put('/:id', requireOwner, updatePermission);
 
-// Revoke permission (owner only)
+// Revoke permission
 router.delete('/:id', requireOwner, revokePermission);
 
 export default router;

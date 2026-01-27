@@ -37,6 +37,8 @@ import sheetsRoutes from './api/routes/sheetsRoutes';
 import aiRoutes from './api/routes/aiRoutes';
 import profileRoutes from './api/routes/profileRoutes';
 import llmTargetsRoutes from './api/routes/llmTargetsRoutes';
+import adminRoutes from './api/routes/adminRoutes';
+import securityRoutes from './api/routes/securityRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -91,6 +93,8 @@ app.use('/api/sheets', sheetsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/bots', llmTargetsRoutes); // LLM targets are nested under /api/bots/:botId/llm-targets
+app.use('/api/admin', adminRoutes);
+app.use('/api/security', securityRoutes);
 
 
 // 404 handler

@@ -12,22 +12,20 @@ const { authenticateToken } = require('../middleware/auth');
 // All routes require authentication
 router.use(authenticateToken);
 
-// Get user's permissions (user can view their own, owner can view any)
+// Get user's permissions
 router.get('/user/:userId', permissionsController.getUserPermissions);
 
-// Get bot's permissions (owner only)
-router.get('/bot/:botId', requireOwner, permissionsController.getBotPermissions);
+// Get bot's permissions
+router.get('/bot/:botId', permissionsController.getBotPermissions);
 
-// Check access (any authenticated user)
+// Check access
 router.get('/check/:botId/:userId', permissionsController.checkAccess);
 
-// Grant permission (owner only)
+// Grant/Update permission (owner only)
 router.post('/', requireOwner, permissionsController.grantPermission);
+router.put('/:userId/:botId', requireOwner, permissionsController.updatePermission);
 
-// Update permission (owner only)
-router.put('/:id', requireOwner, permissionsController.updatePermission);
-
-// Revoke permission (owner only)
+// Revoke permission
 router.delete('/:id', requireOwner, permissionsController.revokePermission);
 
 module.exports = router;

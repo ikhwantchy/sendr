@@ -26,6 +26,7 @@ router.get('/dashboard/stats', adminController.getDashboardStats);
 // SETTINGS
 // ============================================
 router.get('/settings', adminController.getAllSettings);
+router.put('/settings', adminController.bulkUpdateSettings);
 router.get('/settings/:category', adminController.getSettings);
 router.put('/settings/:category', adminController.updateSettings);
 router.post('/settings/test-email', adminController.testEmail);

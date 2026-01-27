@@ -12,6 +12,7 @@ export default function BotsPage() {
     const queryClient = useQueryClient()
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [newBotName, setNewBotName] = useState('')
+    const [targetTenantId, setTargetTenantId] = useState('')
     const [mounted, setMounted] = useState(false)
     const [botToDelete, setBotToDelete] = useState<string | null>(null)
 
@@ -19,7 +20,7 @@ export default function BotsPage() {
         setMounted(true)
     }, [])
 
-    const { filterBots, isOwner } = usePermissions()
+    const { filterBots, isAdmin } = usePermissions()
 
     const { data: allBots, isLoading } = useQuery({
         queryKey: ['bots'],
@@ -34,15 +35,25 @@ export default function BotsPage() {
         return filterBots(allBots)
     }, [allBots, filterBots])
 
+    // Fetch users for tenant selection (only for Admins)
+    const { data: users } = useQuery({
+        queryKey: ['users'],
+        queryFn: async () => {
+            const response = await api.users.list()
+            return response.data.data || []
+        },
+        enabled: mounted && isAdmin
+    })
+
     const createMutation = useMutation({
-        mutationFn: async (name: string) => {
-            // Placeholder: Replace with actual creation API
-            return await api.bots.create({ name })
+        mutationFn: async (data: { name: string, target_tenant_id?: string }) => {
+            return await api.bots.create(data)
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['bots'] })
             setShowCreateModal(false)
             setNewBotName('')
+            setTargetTenantId('')
             toast.success('Bot created successfully!')
         },
         onError: (error: any) => {
@@ -70,7 +81,10 @@ export default function BotsPage() {
             toast.error('Please enter a bot name')
             return
         }
-        createMutation.mutate(newBotName)
+        createMutation.mutate({
+            name: newBotName,
+            target_tenant_id: targetTenantId || undefined
+        })
     }
 
     const handleDeleteClick = (e: React.MouseEvent, botId: string) => {
@@ -93,7 +107,7 @@ export default function BotsPage() {
                     <h1 className="text-2xl font-semibold text-white tracking-tight">Bots</h1>
                     <p className="text-zinc-500 text-sm mt-1">Manage your automation instances</p>
                 </div>
-                {mounted && isOwner && (
+                {mounted && isAdmin && (
                     <button
                         onClick={() => setShowCreateModal(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
@@ -128,7 +142,7 @@ export default function BotsPage() {
                                     </Link>
                                     <div className="flex items-center gap-2">
                                         <StatusBadge status={bot.status} />
-                                        {mounted && isOwner && (
+                                        {mounted && isAdmin && (
                                             botToDelete === bot.id ? (
                                                 <div className="flex items-center gap-2">
                                                     <button
@@ -200,7 +214,7 @@ export default function BotsPage() {
                         <p className="text-zinc-500 max-w-sm mb-6">
                             Get started by creating your first WhatsApp bot instance to handle automation.
                         </p>
-                        {mounted && isOwner && (
+                        {mounted && isAdmin && (
                             <button
                                 onClick={() => setShowCreateModal(true)}
                                 className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
@@ -238,6 +252,27 @@ export default function BotsPage() {
                                         autoFocus
                                     />
                                 </div>
+
+                                {isAdmin && users && users.length > 0 && (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                                            Assign to Client (Optional)
+                                        </label>
+                                        <select
+                                            value={targetTenantId}
+                                            onChange={(e) => setTargetTenantId(e.target.value)}
+                                            className="w-full bg-zinc-900/50 border border-zinc-800 text-white text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-zinc-700"
+                                        >
+                                            <option value="">My Workspace (Admin)</option>
+                                            {users.filter((u: any) => u.role === 'USER').map((u: any) => (
+                                                <option key={u.id} value={u.tenant_id}>
+                                                    {u.name} ({u.email})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <p className="text-[10px] text-zinc-500">Leaving this unselected will assign the bot to your admin workspace.</p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex items-center justify-end gap-3 pt-2">

@@ -55,9 +55,9 @@ export const getSystemHealth = async (req: Request, res: Response) => {
         const memUsage = process.memoryUsage();
         health.checks.memory = {
             status: 'healthy',
-            rss: `${Math.round(memUsage.rss / 1024 / 1024)} MB`,
-            heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`,
-            heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)} MB`
+            rss: memUsage.rss,
+            heapUsed: memUsage.heapUsed,
+            heapTotal: memUsage.heapTotal
         };
 
         // Uptime

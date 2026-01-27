@@ -26,8 +26,10 @@ router.use(authenticate);
  */
 router.get('/', async (req, res) => {
     try {
-        const tenantId = req.user!.tenant_id;
-        const bots = await botRepository.findByTenant(tenantId);
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
+        const bots = isAdmin
+            ? await botRepository.findAll()
+            : await botRepository.findAccessibleByUser(req.user!.id, req.user!.tenant_id);
 
         res.json({
             success: true,
@@ -49,15 +51,33 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const tenantId = req.user!.tenant_id;
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
 
-        const bot = await botRepository.findById(id, tenantId);
+        // Find bot first
+        let bot = await botRepository.findById(id);
 
         if (!bot) {
             return res.status(404).json({
                 success: false,
                 error: 'Bot not found',
             });
+        }
+
+        // Access control: Admin/Owner OR Tenant Match OR Explicit Permission
+        if (!isAdmin && bot.tenant_id !== req.user!.tenant_id) {
+            // FIXED: Using correct table name 'bot_permissions'
+            const permCheck = await query(
+                `SELECT 1 FROM bot_permissions 
+                 WHERE user_id = ? AND bot_id = ? AND (can_view = 1 OR can_view = 'true')`,
+                [req.user!.id, id]
+            );
+
+            if (permCheck.rows.length === 0) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Permission denied',
+                });
+            }
         }
 
         res.json({
@@ -73,15 +93,19 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-/**
- * POST /api/bots
- * Create a new bot
- */
-router.post('/', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+// POST /api/bots
+// Create a new bot
+router.post('/', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
     try {
-        const { name, config } = req.body;
-        const tenantId = req.user!.tenant_id;
+        const { name, config, target_tenant_id } = req.body;
+        let tenantId = req.user!.tenant_id;
         const userId = req.user!.id;
+        const userRole = req.user!.role;
+
+        // If ADMIN/OWNER specifies a target tenant, use it
+        if (target_tenant_id && (userRole === 'OWNER' || userRole === 'ADMIN')) {
+            tenantId = target_tenant_id;
+        }
 
         if (!name) {
             return res.status(400).json({
@@ -97,24 +121,6 @@ router.post('/', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
             created_by: userId,
         });
 
-        // Event emission skipped for now - bot_id validation issue
-        // Will be handled by webhook/polling system instead
-        /*
-        await eventBus.emit(
-            EventType.BOT_CREATED,
-            {
-                tenant_id: tenantId,
-                bot_id: bot.id,
-                channel: 'wa',
-                group_id: null,
-                contact_id: null,
-                message: null,
-                timestamp: new Date().toISOString(),
-            },
-            { bot }
-        );
-        */
-
         res.status(201).json({
             success: true,
             data: bot,
@@ -128,16 +134,31 @@ router.post('/', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
     }
 });
 
-/**
- * PUT /api/bots/:id
- * Update bot details
- */
-router.put('/:id', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+// PUT /api/bots/:id
+// Update bot details
+router.put('/:id', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         const { id } = req.params;
-        const tenantId = req.user!.tenant_id;
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
 
-        const bot = await botRepository.update(id, req.body);
+        let bot = await botRepository.findById(id);
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
+
+        // Access control for update
+        if (!isAdmin && bot.tenant_id !== req.user!.tenant_id) {
+            // FIXED: Using correct table name 'bot_permissions'
+            const permCheck = await query(
+                `SELECT 1 FROM bot_permissions 
+                 WHERE user_id = ? AND bot_id = ? AND (can_edit = 1 OR can_edit = 'true')`,
+                [req.user!.id, id]
+            );
+
+            if (permCheck.rows.length === 0) {
+                return res.status(403).json({ success: false, error: 'Permission denied' });
+            }
+        }
+
+        bot = await botRepository.update(id, req.body);
 
         res.json({
             success: true,
@@ -152,25 +173,25 @@ router.put('/:id', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
     }
 });
 
-/**
- * POST /api/bots/:id/connect
- * Initiate WhatsApp connection (request QR code)
- */
-router.post('/:id/connect', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+// POST /api/bots/:id/connect
+// Initiate WhatsApp connection (request QR code)
+router.post('/:id/connect', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         const { id } = req.params;
-        const tenantId = req.user!.tenant_id;
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
 
-        const bot = await botRepository.findById(id, tenantId);
+        let bot = await botRepository.findById(id);
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
 
-        if (!bot) {
-            return res.status(404).json({
-                success: false,
-                error: 'Bot not found',
-            });
+        if (!isAdmin && bot.tenant_id !== req.user!.tenant_id) {
+            const permCheck = await query(
+                `SELECT 1 FROM bot_permissions 
+                 WHERE user_id = ? AND bot_id = ? AND (can_edit = 1 OR can_edit = 'true')`,
+                [req.user!.id, id]
+            );
+            if (permCheck.rows.length === 0) return res.status(403).json({ success: false, error: 'Permission denied' });
         }
 
-        // Initialize bot and request QR
         const qrData = await whatsappAdapter.requestQRCode(id);
 
         res.json({
@@ -196,15 +217,18 @@ router.post('/:id/connect', requireRole(['OWNER', 'OPERATOR']), async (req, res)
 router.get('/:id/status', async (req, res) => {
     try {
         const { id } = req.params;
-        const tenantId = req.user!.tenant_id;
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
 
-        const bot = await botRepository.findById(id, tenantId);
+        let bot = await botRepository.findById(id);
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
 
-        if (!bot) {
-            return res.status(404).json({
-                success: false,
-                error: 'Bot not found',
-            });
+        if (!isAdmin && bot.tenant_id !== req.user!.tenant_id) {
+            const permCheck = await query(
+                `SELECT 1 FROM bot_permissions 
+                 WHERE user_id = ? AND bot_id = ? AND (can_view = 1 OR can_view = 'true')`,
+                [req.user!.id, id]
+            );
+            if (permCheck.rows.length === 0) return res.status(403).json({ success: false, error: 'Permission denied' });
         }
 
         const status = await whatsappAdapter.getConnectionStatus(id);
@@ -225,27 +249,29 @@ router.get('/:id/status', async (req, res) => {
     }
 });
 
-/**
- * POST /api/bots/:id/disconnect
- * Disconnect bot
- */
-router.post('/:id/disconnect', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+// ... rest of the file (disconnect, pause, resume, delete, groups, sync-groups)
+// Needs proper restoration for the rest as well to ensure table name is fixed everywhere
+
+// POST /api/bots/:id/disconnect
+// Disconnect bot
+router.post('/:id/disconnect', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         const { id } = req.params;
-        const tenantId = req.user!.tenant_id;
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
 
-        const bot = await botRepository.findById(id, tenantId);
+        let bot = await botRepository.findById(id);
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
 
-        if (!bot) {
-            return res.status(404).json({
-                success: false,
-                error: 'Bot not found',
-            });
+        if (!isAdmin && bot.tenant_id !== req.user!.tenant_id) {
+            const permCheck = await query(
+                `SELECT 1 FROM bot_permissions 
+                 WHERE user_id = ? AND bot_id = ? AND (can_edit = 1 OR can_edit = 'true')`,
+                [req.user!.id, id]
+            );
+            if (permCheck.rows.length === 0) return res.status(403).json({ success: false, error: 'Permission denied' });
         }
 
         await whatsappAdapter.disconnect(id);
-
-        // Log activity
         await logActivity('bot', `${bot.name} disconnected`, { bot_id: id });
 
         res.json({
@@ -261,22 +287,23 @@ router.post('/:id/disconnect', requireRole(['OWNER', 'OPERATOR']), async (req, r
     }
 });
 
-/**
- * POST /api/bots/:id/pause
- * Pause bot (disconnect but keep session for quick resume)
- */
-router.post('/:id/pause', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+// POST /api/bots/:id/pause
+// Pause bot
+router.post('/:id/pause', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         const { id } = req.params;
-        const tenantId = req.user!.tenant_id;
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
 
-        const bot = await botRepository.findById(id, tenantId);
+        let bot = await botRepository.findById(id);
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
 
-        if (!bot) {
-            return res.status(404).json({
-                success: false,
-                error: 'Bot not found',
-            });
+        if (!isAdmin && bot.tenant_id !== req.user!.tenant_id) {
+            const permCheck = await query(
+                `SELECT 1 FROM bot_permissions 
+                 WHERE user_id = ? AND bot_id = ? AND (can_edit = 1 OR can_edit = 'true')`,
+                [req.user!.id, id]
+            );
+            if (permCheck.rows.length === 0) return res.status(403).json({ success: false, error: 'Permission denied' });
         }
 
         if (bot.status !== 'connected') {
@@ -286,126 +313,75 @@ router.post('/:id/pause', requireRole(['OWNER', 'OPERATOR']), async (req, res) =
             });
         }
 
-        // Pause bot (disconnect socket but keep session)
         await whatsappAdapter.pauseBot(id);
-
-        // Update status to paused
-        await botRepository.update(id, {
-            status: 'disconnected', // We use disconnected status for paused state
-        });
-
-        // Log activity
+        await botRepository.update(id, { status: 'disconnected' });
         await logActivity('bot', `${bot.name} paused`, { bot_id: id });
 
-        logger.info('Bot paused successfully', { bot_id: id });
-
-        res.json({
-            success: true,
-            message: 'Bot paused successfully',
-        });
+        res.json({ success: true, message: 'Bot paused successfully' });
     } catch (error: any) {
         logger.error('Failed to pause bot', { error });
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-/**
- * POST /api/bots/:id/resume
- * Resume paused bot (reconnect using saved session)
- */
-router.post('/:id/resume', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+// POST /api/bots/:id/resume
+// Resume paused bot
+router.post('/:id/resume', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         const { id } = req.params;
-        const tenantId = req.user!.tenant_id;
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
 
-        const bot = await botRepository.findById(id, tenantId);
+        let bot = await botRepository.findById(id);
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
 
-        if (!bot) {
-            return res.status(404).json({
-                success: false,
-                error: 'Bot not found',
-            });
+        if (!isAdmin && bot.tenant_id !== req.user!.tenant_id) {
+            const permCheck = await query(
+                `SELECT 1 FROM bot_permissions 
+                 WHERE user_id = ? AND bot_id = ? AND (can_edit = 1 OR can_edit = 'true')`,
+                [req.user!.id, id]
+            );
+            if (permCheck.rows.length === 0) return res.status(403).json({ success: false, error: 'Permission denied' });
         }
 
-        // Check if bot has session data (was previously connected)
         if (!bot.phone_number) {
-            return res.status(400).json({
-                success: false,
-                error: 'Bot has no saved session. Please connect with QR code first.',
-            });
+            return res.status(400).json({ success: false, error: 'Bot has no saved session' });
         }
 
-        // Resume bot (re-initialize with saved session)
         await whatsappAdapter.initializeBot(id);
-
-        // Log activity
         await logActivity('bot', `${bot.name} resumed`, { bot_id: id });
 
-        logger.info('Bot resume initiated', { bot_id: id });
-
-        res.json({
-            success: true,
-            message: 'Bot is resuming connection...',
-        });
+        res.json({ success: true, message: 'Bot is resuming connection...' });
     } catch (error: any) {
         logger.error('Failed to resume bot', { error });
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-/**
- * DELETE /api/bots/:id
- * Delete bot
- */
-router.delete('/:id', requireRole(['OWNER']), async (req, res) => {
+// DELETE /api/bots/:id
+// Delete bot
+router.delete('/:id', requireRole(['OWNER', 'ADMIN', 'USER']), async (req, res) => {
     try {
         const { id } = req.params;
         const tenantId = req.user!.tenant_id;
 
-        const bot = await botRepository.findById(id, tenantId);
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
+        const bot = await botRepository.findById(id, isAdmin ? undefined : tenantId);
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
 
-        if (!bot) {
-            return res.status(404).json({
-                success: false,
-                error: 'Bot not found',
-            });
-        }
-
-        // Destroy session and delete
         await whatsappAdapter.destroySession(id);
-        await botRepository.delete(id, tenantId);
+        await botRepository.delete(id, isAdmin ? undefined : tenantId);
 
-        // Emit event
-        await eventBus.emit(
-            EventType.BOT_DELETED,
-            {
-                tenant_id: tenantId,
-                bot_id: id,
-                channel: 'wa',
-                group_id: null,
-                contact_id: null,
-                message: null,
-                timestamp: new Date().toISOString(),
-            },
-            { bot_id: id }
-        );
+        await eventBus.emit(EventType.BOT_DELETED, {
+            tenant_id: tenantId,
+            bot_id: id,
+            channel: 'wa',
+            timestamp: new Date().toISOString(),
+        }, { bot_id: id });
 
-        res.json({
-            success: true,
-            message: 'Bot deleted successfully',
-        });
+        res.json({ success: true, message: 'Bot deleted successfully' });
     } catch (error: any) {
         logger.error('Failed to delete bot', { error });
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -415,23 +391,19 @@ router.delete('/:id', requireRole(['OWNER']), async (req, res) => {
  */
 router.get('/:id/groups', async (req, res) => {
     const { id } = req.params;
-
     try {
-        const tenantId = req.user!.tenant_id;
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
+        let bot = await botRepository.findById(id);
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
 
-        const bot = await botRepository.findById(id, tenantId);
-
-        if (!bot) {
-            return res.status(404).json({
-                success: false,
-                error: 'Bot not found',
-            });
+        if (!isAdmin && bot.tenant_id !== req.user!.tenant_id) {
+            const permCheck = await query(
+                `SELECT 1 FROM bot_permissions 
+                 WHERE user_id = ? AND bot_id = ? AND (can_view = 1 OR can_view = 'true')`,
+                [req.user!.id, id]
+            );
+            if (permCheck.rows.length === 0) return res.status(403).json({ success: false, error: 'Permission denied' });
         }
-
-        // Fetch groups from database
-        const { query } = await import('../../database/connection');
-
-        logger.info('Fetching groups from database', { bot_id: id });
 
         const dbGroups = await query(`
             SELECT * FROM wa_groups
@@ -439,9 +411,6 @@ router.get('/:id/groups', async (req, res) => {
             ORDER BY group_name ASC
         `, [id]);
 
-        logger.info('Groups fetched from database', { bot_id: id, count: dbGroups.rows.length });
-
-        // Map database columns to frontend expected format
         const groups = dbGroups.rows.map((g: any) => ({
             id: g.id,
             jid: g.group_jid,
@@ -452,22 +421,10 @@ router.get('/:id/groups', async (req, res) => {
             created_at: g.created_at
         }));
 
-        logger.info('Groups mapped successfully', { bot_id: id, count: groups.length });
-
-        res.json({
-            success: true,
-            data: groups,
-        });
+        res.json({ success: true, data: groups });
     } catch (error: any) {
-        logger.error('Failed to get bot groups', {
-            error: error.message,
-            stack: error.stack,
-            bot_id: id
-        });
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        logger.error('Failed to get bot groups', { error: error.message, bot_id: id });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -478,32 +435,27 @@ router.get('/:id/groups', async (req, res) => {
 router.post('/:id/sync-groups', async (req, res) => {
     try {
         const { id } = req.params;
-        const tenantId = req.user!.tenant_id;
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
 
-        const bot = await botRepository.findById(id, tenantId);
+        let bot = await botRepository.findById(id);
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
 
-        if (!bot) {
-            return res.status(404).json({
-                success: false,
-                error: 'Bot not found',
-            });
+        if (!isAdmin && bot.tenant_id !== req.user!.tenant_id) {
+            const permCheck = await query(
+                `SELECT 1 FROM bot_permissions 
+                 WHERE user_id = ? AND bot_id = ? AND (can_edit = 1 OR can_edit = 'true')`,
+                [req.user!.id, id]
+            );
+            if (permCheck.rows.length === 0) return res.status(403).json({ success: false, error: 'Permission denied' });
         }
 
-        // Trigger group sync
         const { groupService } = await import('../../modules/group/groupService');
         const count = await groupService.syncGroupsForBot(id);
 
-        res.json({
-            success: true,
-            message: `Group sync completed. Found ${count} groups.`,
-            count
-        });
+        res.json({ success: true, message: `Sync completed. Found ${count} groups.`, count });
     } catch (error: any) {
         logger.error('Failed to sync groups', { error });
-        res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 

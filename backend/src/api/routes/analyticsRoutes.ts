@@ -266,13 +266,14 @@ router.get('/system-status', async (req, res) => {
 router.get('/full', async (req, res) => {
     try {
         const timeRange = (req.query.timeRange as '24h' | '7d' | '30d') || '24h';
+        const botId = req.query.botId as string;
         const tenantId = req.user?.tenant_id;
 
         if (!tenantId) {
             return res.status(400).json({ success: false, message: 'Tenant context missing' });
         }
 
-        const data = await AnalyticsController.getAnalyticsData({ timeRange, tenantId });
+        const data = await AnalyticsController.getAnalyticsData({ timeRange, tenantId, botId });
 
         res.json({
             success: true,

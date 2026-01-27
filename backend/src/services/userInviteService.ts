@@ -27,7 +27,7 @@ class UserInviteService {
     async createInvite(email: string, role: string, invitedBy: string): Promise<{ invite_id: string; token: string }> {
         // Check if user already exists
         const existingUser = await query(
-            `SELECT id FROM users WHERE email = $1`,
+            `SELECT id FROM users WHERE email = ?`,
             [email]
         );
 
@@ -37,7 +37,7 @@ class UserInviteService {
 
         // Check if there's a pending invite
         const existingInvite = await query(
-            `SELECT id FROM user_invites WHERE email = $1 AND status = 'pending'`,
+            `SELECT id FROM user_invites WHERE email = ? AND status = 'pending'`,
             [email]
         );
 
@@ -53,15 +53,15 @@ class UserInviteService {
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + expiryDays);
 
-        // Create invite
-        const result = await query(
-            `INSERT INTO user_invites (email, token, role, invited_by, expires_at, status)
-             VALUES ($1, $2, $3, $4, $5, 'pending')
-             RETURNING id`,
-            [email, token, role, invitedBy, expiresAt]
-        );
+        // Generate ID
+        const inviteId = crypto.randomUUID();
 
-        const inviteId = result.rows[0].id;
+        // Create invite
+        await query(
+            `INSERT INTO user_invites (id, email, token, role, invited_by, expires_at, status)
+             VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+            [inviteId, email, token, role, invitedBy, expiresAt.toISOString()]
+        );
 
         // Log invite creation
         await auditLogService.log({
@@ -83,7 +83,7 @@ class UserInviteService {
      */
     async validateToken(token: string): Promise<{ valid: boolean; invite?: UserInvite; error?: string }> {
         const result = await query(
-            `SELECT * FROM user_invites WHERE token = $1`,
+            `SELECT * FROM user_invites WHERE token = ?`,
             [token]
         );
 
@@ -121,16 +121,16 @@ class UserInviteService {
         // Mark invite as accepted
         await query(
             `UPDATE user_invites 
-             SET status = 'accepted', accepted_at = NOW(), updated_at = NOW()
-             WHERE id = $1`,
+             SET status = 'accepted', accepted_at = datetime('now'), updated_at = datetime('now')
+             WHERE id = ?`,
             [validation.invite.id]
         );
 
         // Update user with invite info
         await query(
             `UPDATE users 
-             SET invited_by = $1, invite_accepted_at = NOW()
-             WHERE id = $2`,
+             SET invited_by = ?, invite_accepted_at = datetime('now')
+             WHERE id = ?`,
             [validation.invite.invited_by, userId]
         );
 
@@ -152,8 +152,8 @@ class UserInviteService {
     async revokeInvite(inviteId: string, revokedBy: string): Promise<void> {
         await query(
             `UPDATE user_invites 
-             SET status = 'revoked', updated_at = NOW()
-             WHERE id = $1 AND status = 'pending'`,
+             SET status = 'revoked', updated_at = datetime('now')
+             WHERE id = ? AND status = 'pending'`,
             [inviteId]
         );
 
@@ -174,13 +174,13 @@ class UserInviteService {
      */
     async deleteInvite(inviteId: string, deletedBy: string): Promise<void> {
         const result = await query(
-            `SELECT email FROM user_invites WHERE id = $1`,
+            `SELECT email FROM user_invites WHERE id = ?`,
             [inviteId]
         );
 
         const email = result.rows[0]?.email || 'Unknown';
 
-        await query(`DELETE FROM user_invites WHERE id = $1`, [inviteId]);
+        await query(`DELETE FROM user_invites WHERE id = ?`, [inviteId]);
 
         // Log deletion
         await auditLogService.log({
@@ -208,12 +208,12 @@ class UserInviteService {
         let paramIndex = 1;
 
         if (filters.status) {
-            conditions.push(`status = $${paramIndex++}`);
+            conditions.push(`status = ?`);
             params.push(filters.status);
         }
 
         if (filters.invited_by) {
-            conditions.push(`invited_by = $${paramIndex++}`);
+            conditions.push(`invited_by = ?`);
             params.push(filters.invited_by);
         }
 
@@ -239,7 +239,7 @@ class UserInviteService {
              LEFT JOIN users u ON ui.invited_by = u.id
              ${whereClause}
              ORDER BY ui.created_at DESC
-             LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+             LIMIT ? OFFSET ?`,
             [...params, limit, offset]
         );
 
@@ -254,7 +254,7 @@ class UserInviteService {
      */
     async getInviteById(inviteId: string): Promise<UserInvite | null> {
         const result = await query(
-            `SELECT * FROM user_invites WHERE id = $1`,
+            `SELECT * FROM user_invites WHERE id = ?`,
             [inviteId]
         );
 
@@ -267,9 +267,8 @@ class UserInviteService {
     async expireOldInvites(): Promise<number> {
         const result = await query(
             `UPDATE user_invites 
-             SET status = 'expired', updated_at = NOW()
-             WHERE status = 'pending' AND expires_at < NOW()
-             RETURNING id`
+             SET status = 'expired', updated_at = datetime('now')
+             WHERE status = 'pending' AND expires_at < datetime('now')`
         );
 
         const expiredCount = result.rows.length;
@@ -287,8 +286,8 @@ class UserInviteService {
     private async expireInvite(inviteId: string): Promise<void> {
         await query(
             `UPDATE user_invites 
-             SET status = 'expired', updated_at = NOW()
-             WHERE id = $1`,
+             SET status = 'expired', updated_at = datetime('now')
+             WHERE id = ?`,
             [inviteId]
         );
     }
@@ -316,9 +315,9 @@ class UserInviteService {
 
         await query(
             `UPDATE user_invites 
-             SET token = $1, expires_at = $2, updated_at = NOW()
-             WHERE id = $3`,
-            [newToken, newExpiresAt, inviteId]
+             SET token = ?, expires_at = ?, updated_at = datetime('now')
+             WHERE id = ?`,
+            [newToken, newExpiresAt.toISOString(), inviteId]
         );
 
         // Log resend

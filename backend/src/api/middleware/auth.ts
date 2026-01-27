@@ -28,7 +28,7 @@ declare global {
 /**
  * Authenticate JWT token
  */
-export function authenticate(req: Request, res: Response, next: NextFunction) {
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
     try {
         const authHeader = req.headers.authorization;
 
@@ -43,6 +43,19 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 
         try {
             const decoded = jwt.verify(token, getJwtSecret()) as AuthUser;
+
+            // Persistent Session Validation
+            const securityService = (await import('../../services/securityService')).default;
+            const isValid = await securityService.validateSession(token);
+
+            if (!isValid) {
+                logger.warn('Session revoked or not found', { userId: decoded.id });
+                return res.status(401).json({
+                    success: false,
+                    error: 'Session expired or revoked',
+                });
+            }
+
             req.user = decoded;
             next();
         } catch (error: any) {

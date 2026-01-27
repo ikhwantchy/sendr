@@ -52,19 +52,29 @@ export const createUser = async (req: Request, res: Response) => {
         // Hash password
         const passwordHash = await bcrypt.hash(password, 10);
 
-        // Get default tenant
-        const tenantResult = await query(
-            'SELECT id FROM tenants LIMIT 1'
-        );
+        let tenantId = '';
 
-        if (tenantResult.rows.length === 0) {
-            return res.status(500).json({
-                success: false,
-                message: 'No tenant found. Please contact support.'
-            });
+        // If creating a USER (Client), create a new tenant for them
+        if (role === 'USER') {
+            tenantId = uuidv4();
+            const slug = email.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            await query(
+                `INSERT INTO tenants (id, name, slug, created_at, updated_at)
+                 VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+                [tenantId, `${name}'s Workspace`, slug]
+            );
+        } else {
+            // If creating another ADMIN, put them in the default tenant (or the creator's tenant)
+            const tenantResult = await query('SELECT id FROM tenants LIMIT 1');
+            if (tenantResult.rows.length === 0) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'No tenant found.'
+                });
+            }
+            tenantId = tenantResult.rows[0].id;
         }
 
-        const tenantId = tenantResult.rows[0].id;
         const userId = uuidv4();
 
         // Create user
@@ -244,6 +254,52 @@ export const getAllSettings = async (req: Request, res: Response) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch settings',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * PUT /api/admin/settings
+ * Update multiple settings at once
+ */
+export const bulkUpdateSettings = async (req: Request, res: Response) => {
+    try {
+        const { settings: updates } = req.body;
+
+        if (!updates || typeof updates !== 'object') {
+            return res.status(400).json({
+                success: false,
+                message: 'Settings object is required'
+            });
+        }
+
+        const userId = req.user!.id;
+        const keys = Object.keys(updates);
+
+        for (const key of keys) {
+            // Find category for this key first
+            const result = await query('SELECT category FROM system_settings WHERE key = ?', [key]);
+            if (result.rows.length > 0) {
+                const category = result.rows[0].category;
+                await systemSettingsService.set({
+                    category,
+                    key,
+                    value: String(updates[key]),
+                    updated_by: userId
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: 'Settings updated successfully'
+        });
+    } catch (error: any) {
+        console.error('[Admin] Bulk update settings error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update settings',
             error: error.message
         });
     }

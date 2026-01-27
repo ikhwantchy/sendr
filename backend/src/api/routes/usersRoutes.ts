@@ -12,14 +12,14 @@ import {
     deleteUser,
     getUserStats
 } from '../../controllers/usersController';
-import { requireOwner } from '../../middleware/checkPermission';
+import { requireAdmin } from '../middleware/adminAuth';
 import { authenticate } from '../middleware/auth';
 
 const router = express.Router();
 
-// All routes require authentication and owner role
+// All routes require authentication and admin/owner role
 router.use(authenticate);
-router.use(requireOwner);
+router.use(requireAdmin);
 
 // List all users
 router.get('/', listUsers);

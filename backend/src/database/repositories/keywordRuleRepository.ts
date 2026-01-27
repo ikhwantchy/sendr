@@ -14,7 +14,7 @@ export interface KeywordRule {
     scope: 'global' | 'group' | 'contact';
     scope_target: string | null;
     priority: number;
-    is_active: boolean;
+    is_active: number;
     actions: any[];
     metadata: any;
     created_by: string | null;
@@ -64,13 +64,13 @@ class KeywordRuleRepository {
         return rule ? this.parseRule(rule) : null;
     }
 
-    async findByBot(tenantId: string, botId: string): Promise<KeywordRule[]> {
-        const result = await query(
-            `SELECT * FROM keyword_rules 
-       WHERE tenant_id = ? AND bot_id = ?
-       ORDER BY priority DESC, created_at ASC`,
-            [tenantId, botId]
-        );
+    async findByBot(tenantId: string | undefined, botId: string): Promise<KeywordRule[]> {
+        const sql = tenantId
+            ? 'SELECT * FROM keyword_rules WHERE tenant_id = ? AND bot_id = ? ORDER BY priority DESC, created_at ASC'
+            : 'SELECT * FROM keyword_rules WHERE bot_id = ? ORDER BY priority DESC, created_at ASC';
+
+        const params = tenantId ? [tenantId, botId] : [botId];
+        const result = await query(sql, params);
 
         return result.rows.map(rule => this.parseRule(rule));
     }
@@ -129,26 +129,27 @@ class KeywordRuleRepository {
     async update(id: string, tenantId: string, data: Partial<KeywordRule>): Promise<KeywordRule> {
         const fields: string[] = [];
         const values: any[] = [];
-        let paramIndex = 1;
 
         for (const [key, value] of Object.entries(data)) {
             if (value !== undefined && key !== 'id' && key !== 'tenant_id') {
+                fields.push(`${key} = ?`);
                 if (key === 'actions' || key === 'metadata') {
-                    fields.push(`${key} = $${paramIndex}`);
                     values.push(JSON.stringify(value));
+                } else if (key === 'is_active') {
+                    values.push(value ? 1 : 0);
                 } else {
-                    fields.push(`${key} = $${paramIndex}`);
                     values.push(value);
                 }
-                paramIndex++;
             }
         }
+
+        if (fields.length === 0) return await this.findById(id, tenantId) as KeywordRule;
 
         values.push(id, tenantId);
 
         await query(
             `UPDATE keyword_rules SET ${fields.join(', ')} 
-       WHERE id = $${paramIndex} AND tenant_id = $${paramIndex + 1}`,
+             WHERE id = ? AND tenant_id = ?`,
             values
         );
 

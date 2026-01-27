@@ -18,7 +18,11 @@ router.get('/', async (req, res) => {
 // GET /api/rules/bot/:botId - List rules by bot
 router.get('/bot/:botId', async (req, res) => {
     try {
-        const rules = await keywordRuleRepository.findByBot(req.user!.tenant_id, req.params.botId);
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
+        const rules = await keywordRuleRepository.findByBot(
+            isAdmin ? undefined : req.user!.tenant_id,
+            req.params.botId
+        );
         res.json({ success: true, data: rules });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
@@ -26,7 +30,7 @@ router.get('/bot/:botId', async (req, res) => {
 });
 
 // POST /api/rules - Create rule
-router.post('/', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+router.post('/', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         const rule = await keywordRuleRepository.create({
             ...req.body,
@@ -40,7 +44,7 @@ router.post('/', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
 });
 
 // PUT /api/rules/:id - Update rule
-router.put('/:id', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+router.put('/:id', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         const rule = await keywordRuleRepository.update(req.params.id, req.user!.tenant_id, req.body);
         res.json({ success: true, data: rule });
@@ -50,7 +54,7 @@ router.put('/:id', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
 });
 
 // PATCH /api/rules/:id/toggle - Toggle rule active status
-router.patch('/:id/toggle', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+router.patch('/:id/toggle', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         // Get current rule
         const currentRule = await keywordRuleRepository.findById(req.params.id, req.user!.tenant_id);
@@ -70,7 +74,7 @@ router.patch('/:id/toggle', requireRole(['OWNER', 'OPERATOR']), async (req, res)
 });
 
 // DELETE /api/rules/:id - Delete rule
-router.delete('/:id', requireRole(['OWNER', 'OPERATOR']), async (req, res) => {
+router.delete('/:id', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         await keywordRuleRepository.delete(req.params.id, req.user!.tenant_id);
         res.json({ success: true, message: 'Rule deleted' });

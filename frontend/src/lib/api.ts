@@ -22,20 +22,14 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        // Only redirect on 401 if it's NOT a login attempt
-        // This prevents the login page from reloading when invalid credentials are entered
         if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
             localStorage.removeItem('token')
             localStorage.removeItem('user')
             window.location.href = '/login'
         }
-
-        // Don't show toast for 404 errors - let components handle them
-        // This prevents "Endpoint not found" toasts on page load
         if (error.response?.status === 404) {
             console.warn('API endpoint not found:', error.config?.url)
         }
-
         return Promise.reject(error)
     }
 )
@@ -48,12 +42,15 @@ export const api = {
             apiClient.post('/auth/login', { email, password }),
         register: (data: any) =>
             apiClient.post('/auth/register', data),
+        profile: () =>
+            apiClient.get('/auth/profile'),
     },
 
     // Bots
     bots: {
         list: () => apiClient.get('/bots'),
         get: (id: string) => apiClient.get(`/bots/${id}`),
+        getByUser: (userId: string) => apiClient.get(`/bots/user/${userId}`),
         create: (data: any) => apiClient.post('/bots', data),
         connect: (id: string) => apiClient.post(`/bots/${id}/connect`),
         status: (id: string) => apiClient.get(`/bots/${id}/status`),
@@ -68,23 +65,11 @@ export const api = {
         // LLM Targets
         llmTargets: {
             list: (botId: string) => apiClient.get(`/bots/${botId}/llm-targets`),
-            add: (botId: string, data: {
-                config_name?: string,
-                target_type: 'group' | 'contact',
-                target_jid: string,
-                target_name?: string,
-                is_enabled?: number,
-                llm_config?: string
-            }) =>
-                apiClient.post(`/bots/${botId}/llm-targets`, data),
-            update: (botId: string, targetId: string, data: any) =>
-                apiClient.put(`/bots/${botId}/llm-targets/${targetId}`, data),
-            toggle: (botId: string, targetId: string) =>
-                apiClient.patch(`/bots/${botId}/llm-targets/${targetId}/toggle`),
-            remove: (botId: string, targetId: string) =>
-                apiClient.delete(`/bots/${botId}/llm-targets/${targetId}`),
-            bulkAdd: (botId: string, targets: Array<{ target_type: 'group' | 'contact', target_jid: string, target_name?: string }>) =>
-                apiClient.post(`/bots/${botId}/llm-targets/bulk`, { targets }),
+            add: (botId: string, data: any) => apiClient.post(`/bots/${botId}/llm-targets`, data),
+            update: (botId: string, targetId: string, data: any) => apiClient.put(`/bots/${botId}/llm-targets/${targetId}`, data),
+            toggle: (botId: string, targetId: string) => apiClient.patch(`/bots/${botId}/llm-targets/${targetId}/toggle`),
+            remove: (botId: string, targetId: string) => apiClient.delete(`/bots/${botId}/llm-targets/${targetId}`),
+            bulkAdd: (botId: string, targets: any[]) => apiClient.post(`/bots/${botId}/llm-targets/bulk`, { targets }),
         },
     },
 
@@ -134,7 +119,11 @@ export const api = {
     // Analytics
     analytics: {
         get: () => apiClient.get('/analytics'),
-        getFull: (timeRange: '30m' | '24h' | '7d' | '30d') => apiClient.get(`/analytics/full?timeRange=${timeRange}`),
+        getFull: (timeRange: string, botId?: string) => {
+            let url = `/analytics/full?timeRange=${timeRange}`;
+            if (botId) url += `&botId=${botId}`;
+            return apiClient.get(url);
+        },
         getDashboardStats: () => apiClient.get('/analytics/dashboard-stats'),
         getActivityLogs: (limit: number = 8, botId?: string) => {
             let url = `/analytics/activity-logs?limit=${limit}`;
@@ -144,7 +133,7 @@ export const api = {
         getSystemStatus: () => apiClient.get('/analytics/system-status'),
     },
 
-    // Users (Owner only)
+    // Users
     users: {
         list: () => apiClient.get('/users'),
         get: (id: string) => apiClient.get(`/users/${id}`),
@@ -159,8 +148,8 @@ export const api = {
         getUserPermissions: (userId: string) => apiClient.get(`/permissions/user/${userId}`),
         getBotPermissions: (botId: string) => apiClient.get(`/permissions/bot/${botId}`),
         checkAccess: (botId: string, userId: string) => apiClient.get(`/permissions/check/${botId}/${userId}`),
-        grant: (data: any) => apiClient.post('/permissions', data),
-        update: (id: string, data: any) => apiClient.put(`/permissions/${id}`, data),
+        updateBotPermission: (userId: string, botId: string, data: any) =>
+            apiClient.put(`/permissions/${userId}/${botId}`, data),
         revoke: (id: string) => apiClient.delete(`/permissions/${id}`),
     },
 
@@ -168,7 +157,20 @@ export const api = {
     sheets: {
         getTabs: (url: string) => apiClient.get(`/sheets/tabs?url=${encodeURIComponent(url)}`),
         previewEnhanced: (data: any) => apiClient.post('/sheets/preview-enhanced', data),
-        renderPreview: (data: { url: string; sheetName: string; template: string; sampleSize?: number }) =>
-            apiClient.post('/sheets/render-preview', data),
+        renderPreview: (data: any) => apiClient.post('/sheets/render-preview', data),
     },
+    // Security
+    security: {
+        getSessions: () => apiClient.get('/security/sessions'),
+        revokeSession: (id: string) => apiClient.post(`/security/sessions/${id}/revoke`),
+        revokeOtherSessions: () => apiClient.post('/security/sessions/revoke-others'),
+        getLogs: () => apiClient.get('/security/logs'),
+        setupTelegram: (chatId: string) => apiClient.post('/security/telegram/setup', { chatId }),
+    },
+
+    // Generic helpers
+    get: (url: string) => apiClient.get(url),
+    post: (url: string, data?: any) => apiClient.post(url, data),
+    put: (url: string, data?: any) => apiClient.put(url, data),
+    delete: (url: string) => apiClient.delete(url),
 }

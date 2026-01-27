@@ -44,7 +44,7 @@ class SystemSettingsService {
 
         try {
             const result = await query(
-                'SELECT value, value_type FROM system_settings WHERE category = $1 AND key = $2',
+                'SELECT value, data_type as value_type FROM system_settings WHERE category = ? AND key = ?',
                 [category, key]
             );
 
@@ -75,7 +75,7 @@ class SystemSettingsService {
             : 'WHERE category = $1 AND is_public = true';
 
         const result = await query(
-            `SELECT key, value, value_type FROM system_settings ${whereClause}`,
+            `SELECT key, value, data_type as value_type FROM system_settings ${whereClause}`,
             [category]
         );
 
@@ -94,7 +94,7 @@ class SystemSettingsService {
         const whereClause = includePrivate ? '' : 'WHERE is_public = true';
 
         const result = await query(
-            `SELECT category, key, value, value_type, description, is_public 
+            `SELECT category, key, value, data_type as value_type, description, is_public 
              FROM system_settings ${whereClause}
              ORDER BY category, key`
         );
@@ -127,17 +127,18 @@ class SystemSettingsService {
         // Determine value type
         const value_type = this.inferType(value);
 
-        // Update or insert
+        // Update or insert (SQLite UPSERT)
         await query(
-            `INSERT INTO system_settings (category, key, value, value_type, updated_by, updated_at)
-             VALUES ($1, $2, $3, $4, $5, NOW())
-             ON CONFLICT (category, key) 
+            `INSERT INTO system_settings (id, category, key, value, data_type, updated_by, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+             ON CONFLICT (key) 
              DO UPDATE SET 
-                value = EXCLUDED.value,
-                value_type = EXCLUDED.value_type,
-                updated_by = EXCLUDED.updated_by,
-                updated_at = NOW()`,
-            [category, key, value, value_type, updated_by]
+                value = excluded.value,
+                data_type = excluded.data_type,
+                category = excluded.category,
+                updated_by = excluded.updated_by,
+                updated_at = datetime('now')`,
+            [require('uuid').v4(), category, key, value, value_type, updated_by]
         );
 
         // Clear cache
@@ -145,7 +146,7 @@ class SystemSettingsService {
         this.cacheExpiry.delete(`${category}.${key}`);
 
         // Log change
-        await auditLogService.logSettingChanged(updated_by, category, key, oldValue, value);
+        await auditLogService.logSettingChanged(updated_by, 'default-tenant-id', category, key, oldValue, value);
     }
 
     /**
@@ -162,7 +163,7 @@ class SystemSettingsService {
      */
     async delete(category: string, key: string, deletedBy: string): Promise<void> {
         await query(
-            'DELETE FROM system_settings WHERE category = $1 AND key = $2',
+            'DELETE FROM system_settings WHERE category = ? AND key = ?',
             [category, key]
         );
 

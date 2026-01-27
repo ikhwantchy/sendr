@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { Copy, Check, ChevronDown, ChevronUp, Sparkles, Calendar, Megaphone, Bot, X } from 'lucide-react'
+import { Copy, Check, ChevronDown, ChevronUp, Sparkles, Calendar, Megaphone, Bot, X, BarChart3 } from 'lucide-react'
 
 interface CreateUserModalProps {
     isOpen: boolean
@@ -21,7 +21,8 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
             can_use_auto_reply: true,
             can_use_reminders: false,
             can_use_campaigns: false,
-            can_use_ai: false
+            can_use_ai: false,
+            can_view_analytics: false
         }
     })
     const [isPermissionsExpanded, setIsPermissionsExpanded] = useState(false)
@@ -73,7 +74,8 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
                 can_use_auto_reply: true,
                 can_use_reminders: false,
                 can_use_campaigns: false,
-                can_use_ai: false
+                can_use_ai: false,
+                can_view_analytics: false
             }
         })
         setIsPermissionsExpanded(false)
@@ -235,6 +237,7 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
                                         { key: 'can_use_reminders', label: 'Reminders', desc: 'Schedule messages and reminders', icon: Calendar },
                                         { key: 'can_use_campaigns', label: 'Campaigns', desc: 'Broadcast to multiple contacts', icon: Megaphone },
                                         { key: 'can_use_ai', label: 'AI Assistant', desc: 'Enable AI-powered conversations', icon: Bot },
+                                        { key: 'can_view_analytics', label: 'View Analytics', desc: 'View performance and usage stats', icon: BarChart3 },
                                     ].map((perm) => {
                                         const isChecked = formData.permissions[perm.key as keyof typeof formData.permissions];
                                         const Icon = perm.icon;

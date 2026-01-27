@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    BarChart, Bar, Cell, Brush
+    BarChart, Bar, Cell
 } from 'recharts'
 import {
     ArrowUpRight, ArrowDownRight, MessageSquare, Megaphone,
-    Bell, Activity, Calendar, Download
+    Bell, Activity, Calendar, Download, ChevronDown, Bot
 } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
+import { usePermissions } from '@/hooks/usePermissions'
 
 // Types
 type TimeRange = '30m' | '24h' | '7d' | '30d'
@@ -51,10 +51,24 @@ const CustomTooltip = ({ active, payload, label, hiddenSeries }: any) => {
 }
 
 export default function AnalyticsDashboard() {
+    const { hasModuleAccess } = usePermissions()
+    const [mounted, setMounted] = useState(false)
     const [timeRange, setTimeRange] = useState<TimeRange>('24h')
     const [loading, setLoading] = useState(true)
     const [data, setData] = useState<any>(null)
     const [hiddenSeries, setHiddenSeries] = useState<string[]>([])
+    const [bots, setBots] = useState<any[]>([])
+    const [selectedBotId, setSelectedBotId] = useState<string>('all')
+
+    useEffect(() => {
+        setMounted(true)
+        // Fetch bots for the filter
+        api.bots.list().then(res => {
+            if (res.data.success) {
+                setBots(res.data.data)
+            }
+        }).catch(err => console.error('Failed to fetch bots:', err))
+    }, [])
 
     const toggleSeries = (key: string) => {
         setHiddenSeries(prev =>
@@ -63,6 +77,7 @@ export default function AnalyticsDashboard() {
     }
 
     useEffect(() => {
+        if (!mounted) return
         fetchData() // Initial load
 
         // Auto-refresh every 3 seconds
@@ -71,12 +86,13 @@ export default function AnalyticsDashboard() {
         }, 3000)
 
         return () => clearInterval(interval)
-    }, [timeRange])
+    }, [mounted, timeRange, selectedBotId])
 
     const fetchData = async (isBackground = false) => {
         if (!isBackground) setLoading(true)
         try {
-            const res = await api.analytics.getFull(timeRange)
+            const botIdParam = selectedBotId === 'all' ? undefined : selectedBotId
+            const res = await api.analytics.getFull(timeRange, botIdParam)
             if (res.data.success) {
                 setData(res.data.data)
             }
@@ -91,13 +107,29 @@ export default function AnalyticsDashboard() {
         alert('Export functionality coming soon')
     }
 
+    if (!mounted) return null
+
+    if (!hasModuleAccess('analytics')) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+                <div className="w-16 h-16 bg-zinc-900 rounded-2xl flex items-center justify-center mb-4 border border-zinc-800">
+                    <Activity className="w-8 h-8 text-zinc-600" />
+                </div>
+                <h2 className="text-xl font-bold text-white mb-2">Access Restricted</h2>
+                <p className="text-zinc-500 max-w-sm">
+                    You don't have permission to view analytics. Please contact your administrator if you believe this is an error.
+                </p>
+            </div>
+        )
+    }
+
     // Default empty state if no data
     const trafficData = data?.trafficChart || []
     const messageDistribution = data?.messageDistribution || []
     const topBots = data?.topBots || []
     const summary = data?.summary || {
         totalMessages: 0,
-        lifetimeMessages: 0, // NEW
+        lifetimeMessages: 0,
         trend: 0,
         campaigns: 0,
         reminders: 0,
@@ -137,7 +169,60 @@ export default function AnalyticsDashboard() {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    {/* Bot Filter Dropdown */}
+                    <div className="relative">
+                        <button
+                            onClick={() => {
+                                const dropdown = document.getElementById('analytics-bot-dropdown')
+                                if (dropdown) {
+                                    dropdown.classList.toggle('hidden')
+                                }
+                            }}
+                            onBlur={(e) => {
+                                setTimeout(() => {
+                                    const dropdown = document.getElementById('analytics-bot-dropdown')
+                                    if (dropdown && !dropdown.contains(e.relatedTarget as Node)) {
+                                        dropdown.classList.add('hidden')
+                                    }
+                                }, 150)
+                            }}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900/80 border border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-100 hover:bg-zinc-800/80 transition-all"
+                        >
+                            <Bot className="w-3.5 h-3.5 text-blue-500" />
+                            <span>
+                                {selectedBotId === 'all' ? 'All Bots' : (bots.find(b => b.id === selectedBotId)?.name || 'Selected Bot')}
+                            </span>
+                            <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+                        </button>
+
+                        <div
+                            id="analytics-bot-dropdown"
+                            className="hidden absolute top-full right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1"
+                        >
+                            <button
+                                onClick={() => {
+                                    setSelectedBotId('all')
+                                    document.getElementById('analytics-bot-dropdown')?.classList.add('hidden')
+                                }}
+                                className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-800 transition-colors ${selectedBotId === 'all' ? 'text-blue-400 bg-blue-400/5' : 'text-zinc-400'}`}
+                            >
+                                All Bots
+                            </button>
+                            {bots.map((bot) => (
+                                <button
+                                    key={bot.id}
+                                    onClick={() => {
+                                        setSelectedBotId(bot.id)
+                                        document.getElementById('analytics-bot-dropdown')?.classList.add('hidden')
+                                    }}
+                                    className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-800 transition-colors ${selectedBotId === bot.id ? 'text-blue-400 bg-blue-400/5' : 'text-zinc-400'}`}
+                                >
+                                    {bot.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                     {/* Time Range Filter - Dropdown Style */}
                     <div className="relative">
                         <button
@@ -158,23 +243,21 @@ export default function AnalyticsDashboard() {
                             className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900/80 border border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-100 hover:bg-zinc-800/80 transition-all"
                         >
                             <span>
-                                {timeRange === '30m' ? '30M' :
-                                    timeRange === '24h' ? '24H' :
-                                        timeRange === '7d' ? '7D' : '30D'}
+                                {timeRange === '30m' ? 'Last 30m' :
+                                    timeRange === '24h' ? 'Last 24h' :
+                                        timeRange === '7d' ? 'Last 7d' : 'Last 30d'}
                             </span>
-                            <svg className="w-3 h-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
+                            <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
                         </button>
                         <div
                             id="analytics-time-range-dropdown"
-                            className="hidden absolute top-full right-0 mt-2 w-28 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg overflow-hidden z-20"
+                            className="hidden absolute top-full right-0 mt-2 w-32 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg overflow-hidden z-20"
                         >
                             {[
-                                { label: '30 Minutes', value: '30m' },
-                                { label: '24 Hours', value: '24h' },
-                                { label: '7 Days', value: '7d' },
-                                { label: '30 Days', value: '30d' }
+                                { label: 'Last 30m', value: '30m' },
+                                { label: 'Last 24h', value: '24h' },
+                                { label: 'Last 7d', value: '7d' },
+                                { label: 'Last 30d', value: '30d' }
                             ].map((option) => (
                                 <button
                                     key={option.value}
@@ -262,61 +345,10 @@ export default function AnalyticsDashboard() {
                                 onClick={() => toggleSeries('received')}
                                 hidden={hiddenSeries.includes('received')}
                             />
-
-                            {/* Zoom Buttons */}
-                            <div className="flex items-center gap-1 ml-2">
-                                <button
-                                    onClick={() => {
-                                        const levels: TimeRange[] = ['30m', '24h', '7d', '30d']
-                                        const currentIndex = levels.indexOf(timeRange)
-                                        if (currentIndex > 0) {
-                                            setTimeRange(levels[currentIndex - 1])
-                                        }
-                                    }}
-                                    disabled={timeRange === '30m'}
-                                    className={`p-1.5 rounded-md transition-all ${timeRange !== '30m'
-                                        ? 'bg-zinc-900/80 border border-zinc-800/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80'
-                                        : 'bg-zinc-900/30 border border-zinc-800/30 text-zinc-700 cursor-not-allowed'
-                                        }`}
-                                    title="Zoom In (More Detail)"
-                                >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-                                    </svg>
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        const levels: TimeRange[] = ['30m', '24h', '7d', '30d']
-                                        const currentIndex = levels.indexOf(timeRange)
-                                        if (currentIndex < levels.length - 1) {
-                                            setTimeRange(levels[currentIndex + 1])
-                                        }
-                                    }}
-                                    disabled={timeRange === '30d'}
-                                    className={`p-1.5 rounded-md transition-all ${timeRange !== '30d'
-                                        ? 'bg-zinc-900/80 border border-zinc-800/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80'
-                                        : 'bg-zinc-900/30 border border-zinc-800/30 text-zinc-700 cursor-not-allowed'
-                                        }`}
-                                    title="Zoom Out (Wider View)"
-                                >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
-                                    </svg>
-                                </button>
-                            </div>
                         </div>
                     </div>
 
-                    <style jsx global>{`
-                        .no-scrollbar::-webkit-scrollbar {
-                            display: none;
-                        }
-                        .no-scrollbar {
-                            -ms-overflow-style: none;
-                            scrollbar-width: none;
-                        }
-                    `}</style>
-                    <div className="h-[300px] w-full overflow-hidden no-scrollbar">
+                    <div className="h-[300px] w-full">
                         {loading && !data ? (
                             <div className="h-full w-full flex items-center justify-center bg-zinc-900/30 rounded-lg">
                                 <span className="text-zinc-600 text-sm animate-pulse">Loading data...</span>

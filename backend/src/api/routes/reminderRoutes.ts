@@ -49,6 +49,7 @@ router.get('/', async (req, res) => {
 router.get('/bot/:botId', async (req, res) => {
     try {
         const { botId } = req.params;
+        const isAdmin = (req as any).user.role === 'ADMIN' || (req as any).user.role === 'OWNER';
         const tenantId = (req as any).user.tenant_id;
 
         const result = await query(`
@@ -56,9 +57,9 @@ router.get('/bot/:botId', async (req, res) => {
                    (SELECT group_name FROM wa_groups WHERE group_jid = r.target_id AND bot_id = r.bot_id) as group_name
             FROM reminders r
             LEFT JOIN bots b ON r.bot_id = b.id
-            WHERE r.bot_id = ? AND r.tenant_id = ?
+            WHERE r.bot_id = ? ${isAdmin ? '' : 'AND r.tenant_id = ?'}
             ORDER BY r.created_at DESC
-        `, [botId, tenantId]);
+        `, isAdmin ? [botId] : [botId, tenantId]);
 
         res.json({
             success: true,

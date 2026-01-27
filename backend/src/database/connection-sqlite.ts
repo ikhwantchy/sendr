@@ -30,8 +30,6 @@ export async function initDatabase(): Promise<void> {
     // Always initialize schema (CREATE TABLE IF NOT EXISTS handles existing tables)
     await initSchema();
 
-    // CRITICAL: DO NOT saveDatabase() here. 
-    // It can overwrite the disk with an uninitialized state during concurrent boots.
   } catch (error) {
     logger.error('Failed to initialize SQLite database', { error });
     throw error;
@@ -61,12 +59,40 @@ async function initSchema(): Promise<void> {
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       name TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('OWNER', 'OPERATOR', 'VIEWER')),
+      role TEXT NOT NULL CHECK(role IN ('OWNER', 'ADMIN', 'OPERATOR', 'USER', 'VIEWER')),
+      permissions TEXT DEFAULT '{}',
       status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
       last_login_at TEXT,
+      two_factor_secret TEXT,
+      two_factor_enabled INTEGER DEFAULT 0,
+      telegram_chat_id TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+    );
+
+    -- User Sessions
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      last_active TEXT DEFAULT CURRENT_TIMESTAMP,
+      is_revoked INTEGER DEFAULT 0,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- Security Logs
+    CREATE TABLE IF NOT EXISTS security_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      event_type TEXT NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      metadata TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     );
 
     -- Bots
@@ -287,12 +313,27 @@ async function initSchema(): Promise<void> {
         FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
     );
 
-    -- Insert default tenant (user will be created by seed script)
+    -- Bot Permissions (for non-owner access control)
+    CREATE TABLE IF NOT EXISTS bot_permissions (
+        user_id TEXT NOT NULL,
+        bot_id TEXT NOT NULL,
+        can_view INTEGER DEFAULT 1,
+        can_edit INTEGER DEFAULT 0,
+        can_delete INTEGER DEFAULT 0,
+        can_create_campaigns INTEGER DEFAULT 0,
+        can_create_rules INTEGER DEFAULT 0,
+        can_view_analytics INTEGER DEFAULT 0,
+        can_use_reminders INTEGER DEFAULT 0,
+        can_use_ai INTEGER DEFAULT 0,
+        granted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, bot_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+    );
+
+    -- Insert default tenant
     INSERT OR IGNORE INTO tenants (id, name, slug) 
     VALUES ('default-tenant-id', 'Default Tenant', 'default');
-
-    -- NOTE: Default user is created by seed.ts with proper password hash
-    -- Removed auto-insert here to prevent dummy hash issues
   `;
 
   // Split schema into individual statements
@@ -320,23 +361,26 @@ async function initSchema(): Promise<void> {
       )
     `);
 
-  // MIGRATION: Add source column if it doesn't exist
-  try {
-    db.run("ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound'))");
-    logger.info('✅ MIGRATION: Added source column to messages table');
-  } catch (e) { }
+  // MIGRATIONS
+  const migrations = [
+    "ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound'))",
+    "ALTER TABLE bots ADD COLUMN ai_config TEXT DEFAULT '{\"enabled\":false}'",
+    "ALTER TABLE bots ADD COLUMN lid TEXT",
+    "ALTER TABLE bot_permissions ADD COLUMN can_use_reminders INTEGER DEFAULT 0",
+    "ALTER TABLE bot_permissions ADD COLUMN can_use_ai INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN two_factor_secret TEXT",
+    "ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN telegram_chat_id TEXT"
+  ];
 
-  // MIGRATION: Add ai_config column to bots if it doesn't exist
-  try {
-    db.run("ALTER TABLE bots ADD COLUMN ai_config TEXT DEFAULT '{\"enabled\":false}'");
-    logger.info('✅ MIGRATION: Added ai_config column to bots table');
-  } catch (e) { }
-
-  // MIGRATION: Add lid column to bots if it doesn't exist
-  try {
-    db.run("ALTER TABLE bots ADD COLUMN lid TEXT");
-    logger.info('✅ MIGRATION: Added lid column to bots table');
-  } catch (e) { }
+  for (const sql of migrations) {
+    try {
+      db.run(sql);
+      logger.info(`✅ MIGRATION SUCCESS: ${sql.substring(0, 40)}...`);
+    } catch (e) {
+      // Ignore "duplicate column" errors
+    }
+  }
 
   // DATA REPAIR: Backfill messages from reminder_logs (for historical charts)
   try {
@@ -356,18 +400,13 @@ async function initSchema(): Promise<void> {
           AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.id = 'rem-log-' || rl.id)
       `);
     logger.info('✅ DATA REPAIR: Backfilled reminders into messages');
-  } catch (e) {
-    logger.warn('Failed to backfill reminders', { error: e });
-  }
+  } catch (e) { }
 
-
-
-  logger.info('✅ Database schema created');
+  logger.info('✅ Database schema initialized');
 }
 
 export function saveDatabase(): void {
   if (!db) return;
-
   try {
     const data = db.export();
     const buffer = Buffer.from(data);
@@ -378,30 +417,21 @@ export function saveDatabase(): void {
   }
 }
 
-// Auto-save removed to prevent race conditions. Save on write instead.
-
 export async function query(sql: string, params: any[] = []): Promise<any> {
-  if (!db) {
-    await initDatabase();
-  }
-
+  if (!db) await initDatabase();
   try {
     const stmt = db!.prepare(sql);
     stmt.bind(params);
-
     const rows: any[] = [];
     while (stmt.step()) {
       rows.push(stmt.getAsObject());
     }
     stmt.free();
-
-    // Save after write operations
     if (sql.trim().toUpperCase().startsWith('INSERT') ||
       sql.trim().toUpperCase().startsWith('UPDATE') ||
       sql.trim().toUpperCase().startsWith('DELETE')) {
       saveDatabase();
     }
-
     return { rows, rowCount: rows.length };
   } catch (error) {
     logger.error('Query error', { error, sql, params });
@@ -409,13 +439,8 @@ export async function query(sql: string, params: any[] = []): Promise<any> {
   }
 }
 
-export async function transaction<T>(
-  callback: (client: any) => Promise<T>
-): Promise<T> {
-  if (!db) {
-    await initDatabase();
-  }
-
+export async function transaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
+  if (!db) await initDatabase();
   try {
     db!.run('BEGIN TRANSACTION');
     const result = await callback(db);
@@ -437,13 +462,9 @@ export async function closePool(): Promise<void> {
   }
 }
 
-// Initialize on import
-initDatabase().catch((error) => {
-  logger.error('Failed to initialize database on startup', { error });
-});
+initDatabase().catch(console.error);
 
-// Helper to log system activity
-export async function logActivity(type: 'bot' | 'rule' | 'campaign' | 'message' | 'error', message: string, metadata: any = {}) {
+export async function logActivity(type: string, message: string, metadata: any = {}) {
   if (!db) await initDatabase();
   try {
     const stmt = db?.prepare('INSERT INTO activity_logs (type, message, metadata) VALUES (?, ?, ?)');
@@ -451,7 +472,5 @@ export async function logActivity(type: 'bot' | 'rule' | 'campaign' | 'message' 
     stmt?.step();
     stmt?.free();
     saveDatabase();
-  } catch (error) {
-    console.error('Failed to log activity:', error);
-  }
+  } catch (error) { }
 }
