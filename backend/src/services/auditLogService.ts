@@ -77,57 +77,91 @@ class AuditLogService {
         const conditions: string[] = [];
         const params: any[] = [];
 
-        // Build WHERE clause
+        // Debug log
+        console.log('[AuditLog] Filters received:', {
+            start_date: filters.start_date,
+            end_date: filters.end_date
+        });
+
+        // Build WHERE clause (use al. prefix for audit_logs table)
         if (filters.tenant_id) {
-            conditions.push(`tenant_id = ?`);
+            conditions.push(`al.tenant_id = ?`);
             params.push(filters.tenant_id);
         }
 
         if (filters.user_id) {
-            conditions.push(`user_id = ?`);
+            conditions.push(`al.user_id = ?`);
             params.push(filters.user_id);
         }
 
         if (filters.action_category) {
-            conditions.push(`category = ?`);
+            conditions.push(`al.category = ?`);
             params.push(filters.action_category);
         }
 
         if (filters.action_type) {
-            conditions.push(`action = ?`);
+            conditions.push(`al.action = ?`);
             params.push(filters.action_type);
         }
 
         if (filters.resource_type) {
-            conditions.push(`resource_type = ?`);
+            conditions.push(`al.resource_type = ?`);
             params.push(filters.resource_type);
         }
 
         if (filters.resource_id) {
-            conditions.push(`resource_id = ?`);
+            conditions.push(`al.resource_id = ?`);
             params.push(filters.resource_id);
         }
 
         if (filters.status) {
-            conditions.push(`status = ?`);
+            conditions.push(`al.status = ?`);
             params.push(filters.status);
         }
 
         if (filters.start_date) {
-            conditions.push(`created_at >= ?`);
-            params.push(filters.start_date);
+            try {
+                // Convert ISO date to SQLite format (YYYY-MM-DD HH:MM:SS)
+                const startDate = new Date(filters.start_date);
+                if (!isNaN(startDate.getTime())) {
+                    const formattedStart = startDate.toISOString().replace('T', ' ').split('.')[0];
+                    console.log('[AuditLog] Formatted start_date:', formattedStart);
+                    conditions.push(`al.created_at >= ?`);
+                    params.push(formattedStart);
+                } else {
+                    console.log('[AuditLog] Invalid start_date:', filters.start_date);
+                }
+            } catch (e) {
+                console.error('[AuditLog] Error parsing start_date:', e);
+            }
         }
 
         if (filters.end_date) {
-            conditions.push(`created_at <= ?`);
-            params.push(filters.end_date);
+            try {
+                // Convert ISO date to SQLite format (YYYY-MM-DD HH:MM:SS)
+                const endDate = new Date(filters.end_date);
+                if (!isNaN(endDate.getTime())) {
+                    const formattedEnd = endDate.toISOString().replace('T', ' ').split('.')[0];
+                    console.log('[AuditLog] Formatted end_date:', formattedEnd);
+                    conditions.push(`al.created_at <= ?`);
+                    params.push(formattedEnd);
+                } else {
+                    console.log('[AuditLog] Invalid end_date:', filters.end_date);
+                }
+            } catch (e) {
+                console.error('[AuditLog] Error parsing end_date:', e);
+            }
         }
 
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+        
+        // Debug: log the query
+        console.log('[AuditLog] Where clause:', whereClause);
+        console.log('[AuditLog] Params:', params);
 
-        // Get total count
+        // Get total count (use alias 'al' to match WHERE clause)
         const countResult = await query(
-            `SELECT COUNT(*) as total FROM audit_logs ${whereClause}`,
+            `SELECT COUNT(*) as total FROM audit_logs al ${whereClause}`,
             params
         );
         const total = parseInt(countResult.rows[0].total);

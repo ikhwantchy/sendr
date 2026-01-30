@@ -22,7 +22,7 @@ export default function RecentActivityList({ title = 'Live Activity', logs = [],
     const getActivityIcon = (type: string) => {
         switch (type) {
             case 'bot': return <Bot className="w-3.5 h-3.5 text-blue-500" />
-            case 'rule': return <Zap className="w-3.5 h-3.5 text-amber-500" />
+            case 'rule': return <Zap className="w-3.5 h-3.5 text-yellow-400" />
             case 'campaign': return <MessageSquare className="w-3.5 h-3.5 text-emerald-500" />
             case 'error': return <Activity className="w-3.5 h-3.5 text-red-500" />
             default: return <Clock className="w-3.5 h-3.5 text-zinc-500" />

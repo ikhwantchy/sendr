@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
     Calendar, Users, Clock, Save, Plus, X, Upload,
@@ -8,12 +9,13 @@ import {
     Database, Wand2, ChevronDown, ChevronUp, RefreshCw, Type,
     Bold, Italic, Link, Image as ImageIcon, Smile, Globe,
     Strikethrough, Code, Search, ArrowRight, Lock, Eye, MessageSquare, Paperclip,
-    Cat, Coffee, Dumbbell, Car, Lightbulb, Heart, Hand
+    Cat, Coffee, Dumbbell, Car, Lightbulb, Heart, Hand, ChevronLeft, ExternalLink
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 import AdvancedFilters from './AdvancedFilters'
+import ContactTable, { ContactRow, ContactColumn, contactTableToParsedContacts, getContactTableVariables } from '@/components/ContactTable'
 
 // --- Types ---
 type TargetType = 'group' | 'contact'
@@ -33,6 +35,9 @@ interface FormData {
     contactMethod: ContactMethod
     selectedGroups: string[]
     manualContacts: string
+    // New: Contact Table data
+    tableContacts: ContactRow[]
+    tableColumns: ContactColumn[]
     contactSheetUrl: string
     sheetName: string // Optional tab name
     csvFile: File | null
@@ -74,6 +79,7 @@ interface CreateReminderWizardProps {
 
 // --- Constants ---
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const CONTACT_TABLE_STORAGE_KEY = 'reminder_contact_table_data'
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
     'Smileys': <Smile size={18} />,
@@ -88,6 +94,8 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
 
 export default function CreateReminderWizard({ botId, onClose, reminderId }: CreateReminderWizardProps) {
     const queryClient = useQueryClient()
+    const router = useRouter()
+    const searchParams = useSearchParams()
     const textareaRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const isTypingRef = useRef(false)
@@ -99,6 +107,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
     const [isContactPreviewOpen, setIsContactPreviewOpen] = useState(false)
     const [isGroupSelectorOpen, setIsGroupSelectorOpen] = useState(false)
     const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false)
     const [activeEmojiCategory, setActiveEmojiCategory] = useState<keyof typeof EMOJI_CATEGORIES>('Smileys')
     const [availableTabs, setAvailableTabs] = useState<Array<{ gid: string; name: string }>>([])
     const [isLoadingTabs, setIsLoadingTabs] = useState(false)
@@ -112,6 +121,12 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         contactMethod: 'manual',
         selectedGroups: [],
         manualContacts: '',
+        // Initialize contact table with phone column
+        tableContacts: [],
+        tableColumns: [
+            { id: 'phone', name: 'Phone', required: true },
+            { id: 'name_col', name: 'Name' }
+        ],
         contactSheetUrl: '',
         sheetName: '',
         csvFile: null,
@@ -194,12 +209,61 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         }
                     }
 
+                    // Parse manualContacts if available (for ContactTable)
+                    let loadedTableContacts: ContactRow[] = []
+                    let loadedTableColumns: ContactColumn[] = [
+                        { id: 'phone', name: 'Phone', required: true },
+                        { id: 'name_col', name: 'Name' }
+                    ]
+                    
+                    if (templateConfig.manualContacts && Array.isArray(templateConfig.manualContacts) && templateConfig.manualContacts.length > 0) {
+                        // Build columns from first contact's keys
+                        const firstContact = templateConfig.manualContacts[0]
+                        const columnNames = Object.keys(firstContact).filter(k => !['phone', 'jid'].includes(k.toLowerCase()))
+                        
+                        loadedTableColumns = [
+                            { id: 'phone', name: 'Phone', required: true },
+                        ]
+                        
+                        // Track added columns to prevent duplicates (case-insensitive)
+                        const addedColumns = new Set<string>(['phone'])
+                        
+                        columnNames.forEach((colName, idx) => {
+                            const lowerName = colName.toLowerCase()
+                            
+                            // Skip if column already added (case-insensitive check)
+                            if (addedColumns.has(lowerName)) return
+                            addedColumns.add(lowerName)
+                            
+                            if (lowerName === 'name') {
+                                loadedTableColumns.push({ id: 'name_col', name: 'Name' })
+                            } else {
+                                loadedTableColumns.push({ id: `col_${idx}`, name: colName })
+                            }
+                        })
+                        
+                        // Convert contacts to ContactRow format
+                        loadedTableContacts = templateConfig.manualContacts.map((c: any, idx: number) => {
+                            const row: ContactRow = { id: `row_${idx}`, phone: c.phone || '' }
+                            loadedTableColumns.forEach((col, colIdx) => {
+                                if (col.id !== 'phone') {
+                                    // Find matching key in contact data
+                                    const matchingKey = Object.keys(c).find(k => k.toLowerCase() === col.name.toLowerCase())
+                                    row[col.id] = matchingKey ? c[matchingKey] : ''
+                                }
+                            })
+                            return row
+                        })
+                    }
+
                     setFormData({
                         name: r.name || '',
                         targetType: r.target_type || 'group',
-                        contactMethod: 'manual',
-                        selectedGroups: r.target_id ? r.target_id.split(',') : [],
+                        contactMethod: loadedTableContacts.length > 0 ? 'manual' : (templateConfig.googleSheetsUrl ? 'sheet' : 'manual'),
+                        selectedGroups: r.target_type === 'group' && r.target_id ? r.target_id.split(',') : [],
                         manualContacts: '',
+                        tableContacts: loadedTableContacts,
+                        tableColumns: loadedTableColumns,
                         contactSheetUrl: templateConfig.googleSheetsUrl || '',
                         sheetName: templateConfig.sheetName || '',
                         csvFile: null,
@@ -238,6 +302,32 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
         loadReminderData()
     }, [reminderId])
+
+    // Load contact table data from localStorage (when returning from full-page contacts editor)
+    useEffect(() => {
+        const fromContacts = searchParams?.get('fromContacts')
+        if (fromContacts === 'true') {
+            try {
+                const stored = localStorage.getItem(CONTACT_TABLE_STORAGE_KEY)
+                if (stored) {
+                    const data = JSON.parse(stored)
+                    if (data.contacts && data.columns) {
+                        setFormData(prev => ({
+                            ...prev,
+                            tableContacts: data.contacts,
+                            tableColumns: data.columns,
+                            contactMethod: 'manual'
+                        }))
+                        toast.success(`Loaded ${data.contacts.filter((c: ContactRow) => c.phone?.trim()).length} contacts`)
+                    }
+                    // Clear localStorage after loading
+                    localStorage.removeItem(CONTACT_TABLE_STORAGE_KEY)
+                }
+            } catch (e) {
+                console.error('Failed to load contacts from storage:', e)
+            }
+        }
+    }, [searchParams])
 
     // Sync initial message to contentEditable on load (for edit mode)
     useEffect(() => {
@@ -435,6 +525,11 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
             // 1. Determine Target ID
             let targetId: string | null = null;
 
+            // 2. Prepare Template Config (declare early so we can add manualContacts)
+            const templateConfig: any = {
+                body: formData.message,
+            };
+
             if (formData.targetType === 'group') {
                 // Join all selected groups with comma
                 targetId = formData.selectedGroups.join(',') || null;
@@ -460,22 +555,24 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         return cleaned + '@s.whatsapp.net';
                     };
 
-                    const contacts = formData.manualContacts
-                        .split('\n')
-                        .filter(l => l.trim().length > 0)
-                        .map(phone => formatPhoneToJID(phone.trim()))
+                    // Get contacts with all fields (phone, name, custom columns)
+                    const parsedContacts = contactTableToParsedContacts(formData.tableContacts, formData.tableColumns)
+                    
+                    // Store full contact data for template replacement
+                    templateConfig.manualContacts = parsedContacts.map(c => ({
+                        ...c,
+                        jid: formatPhoneToJID(c.phone.trim())
+                    }));
+                    
+                    // targetId is just the JIDs for backwards compatibility
+                    targetId = parsedContacts
+                        .map(c => formatPhoneToJID(c.phone.trim()))
                         .join(',');
-                    targetId = contacts;
                 }
             }
 
-            // 2. Generate Schedule (cron or 'now')
+            // 3. Generate Schedule (cron or 'now')
             const schedule = generateCron(formData.frequency, formData.time, formData.days, formData.startDate);
-
-            // 3. Prepare Template Config
-            const templateConfig: any = {
-                body: formData.message,
-            };
 
             // Add image if attached
             if (formData.imagePreview) {
@@ -773,24 +870,75 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
 
     // --- Derived State for Preview ---
-    const getPreviewContactName = () => {
-        // Try to find a name in the csvPreview (Real or Simulated)
-        // Heuristic: First line usually header. Second line is data.
-        // If csvPreview is empty, use 'User'
+    const getPreviewContactName = (): string => {
+        // 1. First check ContactTable data (manual input)
+        if (formData.targetType === 'contact' && formData.contactMethod === 'manual') {
+            const firstContact = formData.tableContacts.find(c => c.phone?.trim())
+            if (firstContact) {
+                // Find a name-like column (not 'phone')
+                const nameCol = formData.tableColumns.find(col => 
+                    col.id !== 'phone' && col.name.toLowerCase().includes('name')
+                ) || formData.tableColumns.find(col => col.id !== 'phone')
+                
+                if (nameCol && firstContact[nameCol.id]?.trim()) {
+                    return firstContact[nameCol.id]
+                }
+            }
+        }
+        
+        // 2. Check CSV/Sheet data
         if ((formData.contactMethod === 'csv' && formData.csvCount > 0) || (formData.contactMethod === 'sheet' && formData.sheetContactCount > 0)) {
-            const dataLine = formData.csvPreview[1] || formData.csvPreview[0] // Fallback to 0 if 1 missing, though 0 might be header
+            const dataLine = formData.csvPreview[1] || formData.csvPreview[0]
             if (dataLine) {
-                // Try to split by comma
                 const parts = dataLine.split(',')
-                // If parts[0] is name-like (alpha), use it. Else parts[1]
-                if (parts[0] && isNaN(Number(parts[0].trim().replace(/['"+]/g, '')))) return parts[0].replace(/['"]/g, '')
+                if (parts[0] && isNaN(Number(parts[0].trim().replace(/['\"+]/g, '')))) {
+                    return parts[0].replace(/['\"]/g, '')
+                }
             }
         }
         return '{NAME}'
     }
 
-    const previewMessage = formData.message
-        .replace(/{NAME}/g, getPreviewContactName().replace(/"/g, ''))
+    // Get all preview replacements from ContactTable
+    const getPreviewReplacements = (): Record<string, string> => {
+        const replacements: Record<string, string> = {}
+        
+        if (formData.targetType === 'contact' && formData.contactMethod === 'manual') {
+            const firstContact = formData.tableContacts.find(c => c.phone?.trim())
+            if (firstContact) {
+                // Add Phone
+                if (firstContact.phone) {
+                    replacements['Phone'] = firstContact.phone
+                }
+                // Add all custom columns - use col.id to access the raw ContactRow data
+                formData.tableColumns.forEach(col => {
+                    if (col.id !== 'phone') {
+                        const value = firstContact[col.id]?.trim() || ''
+                        if (value) {
+                            // Map column name to its value (case-insensitive matching)
+                            replacements[col.name] = value
+                        }
+                    }
+                })
+            }
+        }
+        
+        return replacements
+    }
+
+    const previewMessage = (() => {
+        let msg = formData.message
+            .replace(/{NAME}/g, getPreviewContactName().replace(/\"/g, ''))
+        
+        // Replace ContactTable variables ({{ColumnName}} format)
+        const replacements = getPreviewReplacements()
+        Object.entries(replacements).forEach(([key, value]) => {
+            const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi')
+            msg = msg.replace(regex, value)
+        })
+        
+        return msg
+    })()
 
     // --- Sub-Components ---
 
@@ -814,84 +962,87 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
     // --- Main Render ---
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 lg:p-10 animate-in fade-in duration-200">
-            <div className="w-full max-w-7xl h-full max-h-[85vh] bg-[#09090b] rounded-2xl shadow-2xl border border-zinc-800 flex overflow-hidden ring-1 ring-white/10">
+        <div className="fixed inset-0 z-[100] bg-zinc-950 flex">
 
-                {/* --- Left Panel: Scrollable Form (60%) --- */}
-                <div className="w-[60%] flex flex-col h-full border-r border-zinc-800 relative bg-[#09090b]">
+                {/* --- Left Panel: Scrollable Form --- */}
+                <div className="flex-1 flex flex-col h-full border-r border-zinc-800 relative bg-zinc-950 overflow-hidden">
                     {/* Header */}
-                    <div className="shrink-0 bg-[#09090b] z-20 border-b border-zinc-800">
-                        <div className="h-16 flex items-center justify-between px-8">
-                            <h1 className="text-xl font-bold text-white tracking-tight">Create Reminder</h1>
-                            <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Progress Indicator */}
-                        <div className="px-8 pb-4">
-                            <div className="flex items-center gap-2">
-                                {[
-                                    { num: 1, label: 'Basic' },
-                                    { num: 2, label: 'Target' },
-                                    { num: 3, label: 'Content' },
-                                    { num: 4, label: 'Schedule' },
-                                    { num: 5, label: 'Message' }
-                                ].map((step, idx) => (
-                                    <div key={step.num} className="flex items-center flex-1">
-                                        <div className="flex items-center gap-2 flex-1">
-                                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold text-xs shrink-0">
-                                                {step.num}
-                                            </div>
-                                            <span className="text-xs text-zinc-500 font-medium">{step.label}</span>
-                                        </div>
-                                        {idx < 4 && <div className="w-4 h-[2px] bg-zinc-800 mx-1" />}
+                    <div className="shrink-0 bg-zinc-950/95 backdrop-blur-sm z-20 border-b border-zinc-800">
+                        <div className="max-w-6xl mx-auto px-6 py-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+                                        <ChevronLeft size={20} />
+                                    </button>
+                                    <div>
+                                        <h1 className="text-xl font-semibold text-white">{reminderId ? 'Edit Reminder' : 'Create Reminder'}</h1>
+                                        <p className="text-sm text-zinc-500">Set up automated messages for your contacts</p>
                                     </div>
-                                ))}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <button 
+                                        onClick={() => setIsPreviewOpen(!isPreviewOpen)}
+                                        className={`hidden lg:flex items-center gap-2 px-4 py-2 text-sm border rounded-lg font-medium transition-all ${
+                                            isPreviewOpen 
+                                                ? 'bg-zinc-800 border-zinc-700 text-white' 
+                                                : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600'
+                                        }`}
+                                    >
+                                        <Eye size={16} />
+                                        Preview
+                                    </button>
+                                    <button 
+                                        onClick={() => createMutation.mutate()} 
+                                        disabled={createMutation.isPending || !formData.name} 
+                                        className="flex items-center gap-2 px-5 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg disabled:opacity-50 transition-all"
+                                    >
+                                        <Save size={16} />
+                                        {createMutation.isPending ? 'Saving...' : (reminderId ? 'Update' : 'Save')}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Scrollable Content */}
-                    <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar scroll-smooth">
+                    <div className="flex-1 overflow-y-auto px-6 lg:px-12 py-8 pb-24 lg:pb-8">
+                        <div className="max-w-3xl mx-auto space-y-8">
 
                         {/* 1. Basic Details */}
-                        <section className="mb-10 pb-8 border-b border-zinc-800/50 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader step={1} title="Basic Details" desc="Name your reminder to easily identify it later." />
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Reminder Name *</label>
-                                    <input
-                                        type="text"
-                                        value={formData.name}
-                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
-                                        placeholder="e.g. Daily Team Standup"
-                                        required
-                                    />
-                                    <p className="mt-1.5 text-xs text-zinc-500">💡 Use a descriptive name like "Weekly Sales Report" or "H-3 Deadline Reminder"</p>
-                                </div>
+                            <div className="mt-5">
+                                <label className="block text-sm font-medium text-zinc-300 mb-2">Reminder Name <span className="text-red-400">*</span></label>
+                                <input
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                    className="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
+                                    placeholder="e.g. Daily Team Standup"
+                                    required
+                                />
                             </div>
                         </section>
 
                         {/* 2. Target Audience */}
-                        <section className="mb-10 pb-8 border-b border-zinc-800/50">
+                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader step={2} title="Target Audience" desc="Who should receive this reminder?" />
 
-                            <div className="flex bg-zinc-900 p-1 rounded-lg border border-zinc-800 mb-6 w-fit">
+                            <div className="mt-5 flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 w-fit">
                                 <button
                                     onClick={() => setFormData({ ...formData, targetType: 'group' })}
-                                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${formData.targetType === 'group' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${formData.targetType === 'group' ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                                 >
                                     WhatsApp Groups
                                 </button>
                                 <button
                                     onClick={() => setFormData({ ...formData, targetType: 'contact' })}
-                                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${formData.targetType === 'contact' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${formData.targetType === 'contact' ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                                 >
                                     Individual Contacts
                                 </button>
                             </div>
+
 
                             {formData.targetType === 'group' ? (
                                 <div className="space-y-4 animate-in fade-in">
@@ -962,13 +1113,40 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                     </div>
 
                                     {formData.contactMethod === 'manual' && (
-                                        <textarea
-                                            value={formData.manualContacts}
-                                            onChange={e => setFormData({ ...formData, manualContacts: e.target.value })}
-                                            placeholder="Enter phone numbers (one per line)..."
-                                            rows={6}
-                                            className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white font-mono text-sm focus:ring-1 focus:ring-blue-600 outline-none"
-                                        />
+                                        <div className="space-y-3">
+                                            {/* Compact inline table */}
+                                            <div className="max-h-[280px] overflow-auto border border-zinc-800">
+                                                <ContactTable
+                                                    contacts={formData.tableContacts}
+                                                    columns={formData.tableColumns}
+                                                    onChange={(contacts, columns) => setFormData({ ...formData, tableContacts: contacts, tableColumns: columns })}
+                                                />
+                                            </div>
+
+                                            {/* Open Full Table link */}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    try {
+                                                        localStorage.setItem(CONTACT_TABLE_STORAGE_KEY, JSON.stringify({
+                                                            contacts: formData.tableContacts,
+                                                            columns: formData.tableColumns,
+                                                            botId: botId,
+                                                            editId: reminderId || ''
+                                                        }))
+                                                    } catch (e) {
+                                                        console.error('Failed to save contact data:', e)
+                                                    }
+                                                    const params = new URLSearchParams()
+                                                    if (botId) params.set('botId', botId)
+                                                    if (reminderId) params.set('edit', reminderId)
+                                                    router.push(`/dashboard/reminders/create/contacts?${params.toString()}`)
+                                                }}
+                                                className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                                            >
+                                                Open full page editor →
+                                            </button>
+                                        </div>
                                     )}
 
                                     {formData.contactMethod === 'sheet' && (
@@ -1029,9 +1207,9 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         </section>
 
                         {/* 3. Message Content (Data Source) */}
-                        <section className="mb-10 pb-8 border-b border-zinc-800/50 animate-in fade-in slide-in-from-top-4">
+                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader step={3} title="Message Content" desc="Choose how to create your message - simple text or dynamic data from Google Sheets." />
-                            <div className="space-y-4">
+                            <div className="mt-5 space-y-4">
                                 <button
                                     onClick={() => setFormData({ ...formData, dataSource: formData.dataSource === 'static' ? 'google_sheets' : 'static' })}
                                     className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all relative overflow-hidden group
@@ -1053,20 +1231,6 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
                                 {formData.dataSource === 'google_sheets' && (
                                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-6 space-y-6 animate-in fade-in slide-in-from-top-2">
-
-                                        {/* Info Box - No API Key Required */}
-                                        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 flex items-start gap-3">
-                                            <Globe className="text-blue-400 shrink-0 mt-0.5" size={18} />
-                                            <div className="space-y-1">
-                                                <p className="text-sm font-medium text-blue-300">
-                                                    ✨ No API Key Required!
-                                                </p>
-                                                <p className="text-xs text-blue-200/80 leading-relaxed">
-                                                    Just make your Google Sheet <strong>public</strong> (Share → Anyone with the link can <strong>view</strong>).
-                                                    No service account or API configuration needed. Works for everyone! 🎉
-                                                </p>
-                                            </div>
-                                        </div>
 
                                         {/* 1. Connection Inputs */}
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1260,34 +1424,6 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                             </div>
                                         )}
 
-                                        {/* 4. Info Box & Tips */}
-                                        <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-blue-300 leading-relaxed shadow-sm space-y-3">
-                                            <div className="flex items-start gap-3">
-                                                <div className="p-1 bg-blue-500/20 rounded text-blue-400 mt-0.5"><Wand2 size={16} /></div>
-                                                <div>
-                                                    <strong className="block mb-1 text-blue-200">How Logic Works:</strong>
-                                                    The bot looks for a <strong>specific word</strong> (e.g. "SEND") in a <strong>specific column</strong> (e.g. "Status").
-                                                    <div className="mt-2 text-xs bg-black/20 p-2 rounded border border-blue-500/10 font-mono text-blue-200/70">
-                                                        =IF(AND(Deadline=TODAY(), BillPaid=FALSE), "SEND", "WAIT")
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Advanced Tip for Multi-Tab */}
-                                            <div className="flex items-start gap-3 pt-3 border-t border-blue-500/20">
-                                                <div className="p-1 bg-purple-500/20 rounded text-purple-400 mt-0.5"><Globe size={16} /></div>
-                                                <div>
-                                                    <strong className="block mb-1 text-purple-200">Need data from Multiple Tabs? (Schedules + Deadlines)</strong>
-                                                    <p className="text-xs text-blue-200/80 mb-1">
-                                                        The best way is to create a <strong>Master Tab</strong> (e.g. "Bot_Digest") in your Sheet that combines data using formulas like <code>=VSTACK(Schedule!A:E, Deadlines!A:E)</code>.
-                                                    </p>
-                                                    <p className="text-[10px] text-blue-200/60 font-bold">
-                                                        Then point this bot to that "Bot_Digest" tab name.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-
                                         {/* 5. Filter Mode Toggle */}
                                         <div className="pt-2 space-y-4">
                                             <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg border border-zinc-800">
@@ -1385,9 +1521,9 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         </section>
 
                         {/* 4. Schedule */}
-                        <section className="mb-10 pb-8 border-b border-zinc-800/50">
+                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader step={4} title="Schedule" desc="When should this reminder run?" />
-                            <div className="space-y-6">
+                            <div className="mt-5 space-y-6">
                                 {/* Schedule Type Selector */}
                                 <div className="grid grid-cols-3 gap-3">
                                     <button
@@ -1522,10 +1658,10 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         </section>
 
                         {/* 5. Message Content */}
-                        <section className="mb-20">
+                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader step={5} title="Message" desc="Compose your message with formatting and variables." />
 
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-600/50 transition-all">
+                            <div className="mt-5 bg-zinc-800/50 border border-zinc-700 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-600/50 transition-all">
                                 {/* Digest Mode Toggle */}
                                 <div className="px-4 py-3 border-b border-zinc-800 bg-[#18181b]/50 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
@@ -1649,9 +1785,17 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                 <div className="px-3 py-2 bg-[#18181b] border-t border-zinc-800 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-2 overflow-x-auto flex-1">
                                         <span className="text-zinc-500 uppercase mr-2 font-bold flex-shrink-0">Variables:</span>
-                                        {['{{#LOOP}}', '{{/LOOP}}', '{{Nama}}', '{{Status}}', '{{index}}', '{TODAY}'].map(tag => (
-                                            <button key={tag} onClick={() => insertText(tag)} className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-blue-400 rounded hover:bg-zinc-700 flex-shrink-0">{tag}</button>
-                                        ))}
+                                        {/* Dynamic variables from ContactTable */}
+                                        {formData.targetType === 'contact' && formData.contactMethod === 'manual' && formData.tableColumns.length > 0 ? (
+                                            formData.tableColumns.map(col => (
+                                                <button key={col.id} onClick={() => insertText(`{{${col.name}}}`)} className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-blue-400 rounded hover:bg-zinc-700 flex-shrink-0">{`{{${col.name}}}`}</button>
+                                            ))
+                                        ) : (
+                                            // Default variables for Google Sheets mode
+                                            ['{{#LOOP}}', '{{/LOOP}}', '{{Nama}}', '{{Status}}', '{{index}}', '{TODAY}'].map(tag => (
+                                                <button key={tag} onClick={() => insertText(tag)} className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-blue-400 rounded hover:bg-zinc-700 flex-shrink-0">{tag}</button>
+                                            ))
+                                        )}
                                     </div>
                                     <div className={`text-[10px] font-medium tracking-wide flex-shrink-0 ${formData.message.length >= 2000 ? 'text-red-500' : 'text-zinc-600'}`}>
                                         {formData.message.length} / 2000
@@ -1659,20 +1803,24 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                 </div>
                             </div>
                         </section>
-                    </div >
 
-                    <div className="absolute bottom-0 left-0 right-0 p-6 bg-[#09090b]/95 backdrop-blur border-t border-zinc-800 z-30">
-                        <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg disabled:opacity-50">
+                        </div>
+                    </div>
+
+                    {/* Mobile Save Button */}
+                    <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 z-30">
+                        <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !formData.name} className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg disabled:opacity-50">
                             {createMutation.isPending
-                                ? (reminderId ? 'Updating...' : 'Creating...')
-                                : (reminderId ? 'Update Reminder' : 'Create Reminder')
+                                ? (reminderId ? 'Updating...' : 'Saving...')
+                                : (reminderId ? 'Update Reminder' : 'Save Reminder')
                             } <Save size={18} />
                         </button>
                     </div>
-                </div >
+                </div>
 
-                {/* --- Right Panel: Fixed Preview (40%) --- */}
-                < div className="w-[40%] bg-[#0b141a] relative flex flex-col h-full border-l border-zinc-800" >
+                {/* --- Right Panel: Preview - Toggle with button --- */}
+                {isPreviewOpen && (
+                <div className="hidden lg:flex w-[380px] shrink-0 bg-[#0b141a] relative flex-col h-full border-l border-zinc-800 animate-in slide-in-from-right-5 duration-200">
                     <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10">
                         <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center overflow-hidden">
                             <img src="/brobot-logo.png" alt="BroBot" className="w-full h-full object-cover" />
@@ -1722,9 +1870,16 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                             // 1. Basic Variables
                                             finalMsg = finalMsg
                                                 .replace(/{TODAY}/g, new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }))
-                                                .replace(/{NAME}/g, 'John Doe');
+                                                .replace(/{NAME}/g, getPreviewContactName());
 
-                                            // 2. Digest Loop Simulation (Legacy)
+                                            // 2. Replace ContactTable variables ({{ColumnName}} format)
+                                            const replacements = getPreviewReplacements();
+                                            Object.entries(replacements).forEach(([key, value]) => {
+                                                const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
+                                                finalMsg = finalMsg.replace(regex, value);
+                                            });
+
+                                            // 3. Digest Loop Simulation (Legacy)
                                             if (formData.isDigestMode) {
                                                 const loopRegex = /{{#LOOP}}([\s\S]*?){{\/LOOP}}/g;
                                                 finalMsg = finalMsg.replace(loopRegex, (_, template) => {
@@ -1761,8 +1916,8 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         <div className="flex-1 bg-[#2a3942] rounded-lg h-9 px-3 flex items-center text-[#8696a0] text-sm">Type a message</div>
                         <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white"><ArrowRight size={16} /></div>
                     </div>
-                </div >
-            </div >
-        </div >
+                </div>
+                )}
+        </div>
     )
 }

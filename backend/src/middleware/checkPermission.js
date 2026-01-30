@@ -79,6 +79,18 @@ const checkBotAccess = (action) => {
                 case 'view_analytics':
                     hasPermission = userPermission.can_view_analytics;
                     break;
+                case 'use_reminders':
+                    hasPermission = userPermission.can_use_reminders;
+                    break;
+                case 'use_ai':
+                    hasPermission = userPermission.can_use_ai;
+                    break;
+                case 'manage_contacts':
+                    hasPermission = userPermission.can_manage_contacts;
+                    break;
+                case 'manage_datasources':
+                    hasPermission = userPermission.can_manage_datasources;
+                    break;
                 default:
                     hasPermission = false;
             }

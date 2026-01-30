@@ -88,71 +88,74 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
     // Success screen after user created
     if (createdUser) {
         return (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-[#111111] rounded-2xl border border-zinc-800 max-w-md w-full p-6 shadow-2xl">
-                    <h2 className="text-xl font-bold text-white mb-2">User Created Successfully</h2>
-                    <p className="text-sm text-zinc-400 mb-6 font-medium">User has been added to the system</p>
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 overflow-y-auto">
+                <div className="min-h-full flex items-center justify-center p-4 py-8">
+                    <div className="bg-[#111111] rounded-2xl border border-zinc-800 max-w-md w-full p-6 shadow-2xl">
+                        <h2 className="text-xl font-bold text-white mb-2">User Created Successfully</h2>
+                        <p className="text-sm text-zinc-400 mb-6 font-medium">User has been added to the system</p>
 
-                    <div className="space-y-3 mb-6">
-                        <div className="bg-[#0a0a0a] rounded-xl p-4 border border-zinc-800">
-                            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Name</p>
-                            <p className="text-sm text-zinc-100 font-medium">{createdUser.name}</p>
-                        </div>
+                        <div className="space-y-3 mb-6">
+                            <div className="bg-[#0a0a0a] rounded-xl p-4 border border-zinc-800">
+                                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Name</p>
+                                <p className="text-sm text-zinc-100 font-medium">{createdUser.name}</p>
+                            </div>
 
-                        <div className="bg-[#0a0a0a] rounded-xl p-4 border border-zinc-800">
-                            <div className="flex items-center justify-between">
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Email</p>
-                                    <p className="text-sm text-zinc-100 font-medium truncate">{createdUser.email}</p>
+                            <div className="bg-[#0a0a0a] rounded-xl p-4 border border-zinc-800">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Email</p>
+                                        <p className="text-sm text-zinc-100 font-medium truncate">{createdUser.email}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleCopy(createdUser.email, 'email')}
+                                        className="ml-3 p-2 hover:bg-zinc-800 rounded-lg transition-colors flex-shrink-0"
+                                    >
+                                        {copied === 'email' ? (
+                                            <Check className="w-4 h-4 text-emerald-400" />
+                                        ) : (
+                                            <Copy className="w-4 h-4 text-zinc-500" />
+                                        )}
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={() => handleCopy(createdUser.email, 'email')}
-                                    className="ml-3 p-2 hover:bg-zinc-800 rounded-lg transition-colors flex-shrink-0"
-                                >
-                                    {copied === 'email' ? (
-                                        <Check className="w-4 h-4 text-emerald-400" />
-                                    ) : (
-                                        <Copy className="w-4 h-4 text-zinc-500" />
-                                    )}
-                                </button>
+                            </div>
+
+                            <div className="bg-emerald-500/5 rounded-xl p-4 border border-emerald-500/20 text-center">
+                                <p className="text-sm text-emerald-400 font-bold">Account is ready! 🔥</p>
+                                <p className="text-xs text-zinc-500 mt-1">Share the credentials with the user.</p>
                             </div>
                         </div>
 
-                        <div className="bg-emerald-500/5 rounded-xl p-4 border border-emerald-500/20 text-center">
-                            <p className="text-sm text-emerald-400 font-bold">Account is ready! 🔥</p>
-                            <p className="text-xs text-zinc-500 mt-1">Share the credentials with the user.</p>
-                        </div>
+                        <button
+                            onClick={handleClose}
+                            className="w-full h-[48px] bg-white text-black rounded-xl font-bold text-[15px] hover:bg-zinc-200 transition-all active:scale-[0.98]"
+                        >
+                            Done
+                        </button>
                     </div>
-
-                    <button
-                        onClick={handleClose}
-                        className="w-full h-[48px] bg-white text-black rounded-xl font-bold text-[15px] hover:bg-zinc-200 transition-all active:scale-[0.98]"
-                    >
-                        Done
-                    </button>
                 </div>
             </div>
         )
     }
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#111111] rounded-2xl border border-zinc-800 max-w-md w-full shadow-2xl overflow-hidden">
-                {/* Header */}
-                <div className="p-6 pb-2 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-[22px] font-bold text-white tracking-tight">Create New User</h2>
-                        <p className="text-sm text-zinc-500 mt-1 font-medium">Add a new user to your workspace</p>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 overflow-y-auto">
+            <div className="min-h-full flex items-center justify-center p-4 py-8">
+                <div className="bg-[#111111] rounded-2xl border border-zinc-800 max-w-md w-full shadow-2xl">
+                    {/* Header */}
+                    <div className="p-6 pb-2 flex items-center justify-between">
+                        <div>
+                            <h2 className="text-[22px] font-bold text-white tracking-tight">Create New User</h2>
+                            <p className="text-sm text-zinc-500 mt-1 font-medium">Add a new user to your workspace</p>
+                        </div>
+                        <button
+                            onClick={handleClose}
+                            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-zinc-800/50 text-zinc-500 hover:text-white transition-all"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
                     </div>
-                    <button
-                        onClick={handleClose}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-zinc-800/50 text-zinc-500 hover:text-white transition-all"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
 
-                <form onSubmit={handleSubmit} className="p-6 pt-2 space-y-5">
+                    <form onSubmit={handleSubmit} className="p-6 pt-2 space-y-5">
                     <div className="grid gap-4">
                         <div className="space-y-1.5">
                             <label className="text-[13px] font-semibold text-zinc-400">
@@ -303,6 +306,7 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
                         </button>
                     </div>
                 </form>
+                </div>
             </div>
         </div>
     )

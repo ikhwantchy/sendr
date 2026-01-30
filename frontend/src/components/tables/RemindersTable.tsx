@@ -122,14 +122,14 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
-                    <thead className="bg-zinc-900/30 border-b border-zinc-800">
-                        <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Status</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Name</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Schedule</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Target</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Next Run</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">Actions</th>
+                    <thead>
+                        <tr className="border-b border-zinc-800/50">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Status</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Reminder</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Schedule</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Target</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Next Run</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-zinc-400">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -145,7 +145,7 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                                         className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors"
                                     >
                                         {/* Status Toggle */}
-                                        <td className="px-4 py-3">
+                                        <td className="py-4 px-4">
                                             <div className="flex items-center gap-3">
                                                 <button
                                                     onClick={() => toggleMutation.mutate(reminder.id)}
@@ -165,9 +165,9 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                                         </td>
 
                                         {/* Name */}
-                                        <td className="px-4 py-3">
+                                        <td className="py-4 px-4">
                                             <div className="flex items-center gap-2">
-                                                <Clock className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                                <Clock className="w-4 h-4 text-cyan-400 flex-shrink-0" />
                                                 <span className="text-zinc-100 font-medium truncate max-w-[200px]">
                                                     {reminder.name}
                                                 </span>
@@ -175,7 +175,7 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                                         </td>
 
                                         {/* Schedule */}
-                                        <td className="px-4 py-3">
+                                        <td className="py-4 px-4">
                                             <div className="flex items-center gap-2">
                                                 <Calendar className="w-3.5 h-3.5 text-zinc-600" />
                                                 <span className="text-zinc-400 text-sm">
@@ -185,7 +185,7 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                                         </td>
 
                                         {/* Target */}
-                                        <td className="px-4 py-3">
+                                        <td className="py-4 px-4">
                                             <div className="flex items-center gap-2">
                                                 <Target className="w-3.5 h-3.5 text-zinc-600" />
                                                 <span className="text-zinc-400 text-sm truncate max-w-[150px]">
@@ -195,7 +195,7 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                                         </td>
 
                                         {/* Next Run */}
-                                        <td className="px-4 py-3">
+                                        <td className="py-4 px-4">
                                             <div className="flex items-center gap-2">
                                                 {reminder.next_run_at && isActive ? (
                                                     <span className="text-zinc-400 text-sm">
@@ -215,7 +215,7 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                                         </td>
 
                                         {/* Actions */}
-                                        <td className="px-4 py-3">
+                                        <td className="py-4 px-4">
                                             <div className="flex items-center justify-end gap-2">
                                                 {deleteConfirm === reminder.id ? (
                                                     <>

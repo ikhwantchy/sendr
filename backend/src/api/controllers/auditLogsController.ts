@@ -25,6 +25,12 @@ export const getAuditLogs = async (req: Request, res: Response) => {
             offset
         } = req.query;
 
+        // DEBUG: Log all received query params
+        console.log('[AuditLogs] ===== DEBUG =====');
+        console.log('[AuditLogs] Raw query params:', req.query);
+        console.log('[AuditLogs] start_date:', start_date);
+        console.log('[AuditLogs] end_date:', end_date);
+
         const filters: any = {};
         if (user_id) filters.user_id = user_id as string;
         if (action_category) filters.action_category = action_category as string;
@@ -37,7 +43,11 @@ export const getAuditLogs = async (req: Request, res: Response) => {
         if (limit) filters.limit = parseInt(limit as string);
         if (offset) filters.offset = parseInt(offset as string);
 
+        console.log('[AuditLogs] Filters object:', filters);
+
         const { logs, total } = await auditLogService.getLogs(filters);
+
+        console.log('[AuditLogs] Result: logs count =', logs.length, ', total =', total);
 
         res.json({
             success: true,
@@ -50,6 +60,7 @@ export const getAuditLogs = async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         console.error('[AuditLogs] Get logs error:', error);
+        console.error('[AuditLogs] Error stack:', error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch audit logs',

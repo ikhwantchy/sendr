@@ -127,14 +127,14 @@ export default function RulesTable({ botId }: RulesTableProps) {
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
-                    <thead className="bg-zinc-900/30 border-b border-zinc-800">
-                        <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Status</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Trigger</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Reply</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Type</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Created</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">Actions</th>
+                    <thead>
+                        <tr className="border-b border-zinc-800/50">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Status</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Trigger</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Reply</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Type</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Created</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-zinc-400">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -143,7 +143,7 @@ export default function RulesTable({ botId }: RulesTableProps) {
                                 key={rule.id}
                                 className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors"
                             >
-                                <td className="px-4 py-3">
+                                <td className="py-4 px-4">
                                     <div className="flex items-center gap-3">
                                         <button
                                             onClick={() =>
@@ -167,9 +167,9 @@ export default function RulesTable({ botId }: RulesTableProps) {
                                 </td>
 
                                 {/* Trigger */}
-                                <td className="px-4 py-3">
+                                <td className="py-4 px-4">
                                     <div className="flex items-center gap-2">
-                                        <Zap className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                        <Zap className="w-4 h-4 text-yellow-400 flex-shrink-0" />
                                         <span className="text-zinc-100 font-medium truncate max-w-[200px]">
                                             "{rule.trigger}"
                                         </span>
@@ -177,21 +177,21 @@ export default function RulesTable({ botId }: RulesTableProps) {
                                 </td>
 
                                 {/* Reply */}
-                                <td className="px-4 py-3">
+                                <td className="py-4 px-4">
                                     <div className="text-zinc-400 text-sm truncate max-w-[300px]">
                                         {rule.reply}
                                     </div>
                                 </td>
 
                                 {/* Match Type */}
-                                <td className="px-4 py-3">
+                                <td className="py-4 px-4">
                                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-zinc-800/50 text-zinc-400 border border-zinc-700/50">
                                         {getMatchTypeLabel(rule.match_type)}
                                     </span>
                                 </td>
 
                                 {/* Created Date */}
-                                <td className="px-4 py-3">
+                                <td className="py-4 px-4">
                                     <div className="text-zinc-500 text-sm font-mono">
                                         {new Date(rule.created_at).toLocaleDateString('en-US', {
                                             month: 'short',
@@ -201,7 +201,7 @@ export default function RulesTable({ botId }: RulesTableProps) {
                                 </td>
 
                                 {/* Actions */}
-                                <td className="px-4 py-3">
+                                <td className="py-4 px-4">
                                     <div className="flex items-center justify-end gap-2">
                                         {deleteConfirm === rule.id ? (
                                             <>

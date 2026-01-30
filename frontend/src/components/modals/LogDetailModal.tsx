@@ -33,7 +33,7 @@ export default function LogDetailModal({
             case 'message': return { icon: <MessageSquare size={20} />, color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' }
             case 'bot': return { icon: <Bot size={20} />, color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' }
             case 'error': return { icon: <Activity size={20} />, color: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/20' }
-            case 'rule': return { icon: <Zap size={20} />, color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20' }
+            case 'rule': return { icon: <Zap size={20} />, color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' }
             case 'campaign': return { icon: <Megaphone size={20} />, color: 'text-purple-500', bg: 'bg-purple-500/10', border: 'border-purple-500/20' }
             default: return { icon: <Activity size={20} />, color: 'text-zinc-400', bg: 'bg-zinc-800', border: 'border-zinc-700' }
         }

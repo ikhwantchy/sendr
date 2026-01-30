@@ -234,8 +234,31 @@ class ReminderSchedulerService {
                 } else if (isFromSheet && sheetRows.length > 0) {
                     // Just use the first matching row if not in digest mode but from sheet
                     finalMessage = templateEngineService.processTemplate(templateText, sheetRows[0]);
+                } else if (templateConfig.manualContacts && Array.isArray(templateConfig.manualContacts) && templateConfig.manualContacts.length > 0) {
+                    // --- CASE C: Manual Contacts with Variables ---
+                    console.log('📤 Processing manual contacts with variables...');
+                    console.log('📤 Manual contacts data:', JSON.stringify(templateConfig.manualContacts));
+                    
+                    for (const contact of templateConfig.manualContacts) {
+                        const targetJid = contact.jid || contact.phone;
+                        if (!targetJid) continue;
+                        
+                        // Process template with contact data (includes Name, Jabatan, etc.)
+                        const personalizedMessage = templateEngineService.processTemplate(templateText, contact);
+                        console.log(`📤 Sending to ${targetJid}: "${personalizedMessage}"`);
+                        
+                        try {
+                            await this.sendMessageWithRetry(reminder.bot_id, targetJid, personalizedMessage, templateConfig.image_url);
+                        } catch (sendError: any) {
+                            console.error(`❌ Failed to send to ${targetJid}:`, sendError.message);
+                        }
+                    }
+                    
+                    await this.logExecution(reminderId, 'success', `Sent to ${templateConfig.manualContacts.length} contacts`);
+                    console.log(`✅ Reminder processed successfully: ${reminderId}`);
+                    return; // Early return since we already handled everything
                 } else {
-                    // Static message
+                    // Static message (no variables to replace)
                     finalMessage = templateEngineService.processTemplate(templateText, {});
                 }
 

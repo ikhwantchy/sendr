@@ -6,13 +6,11 @@ import { api } from '@/lib/api'
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import CreateRuleModal from '@/components/modals/CreateRuleModal'
 import EditRuleModal from '@/components/modals/EditRuleModal'
 import DeleteConfirmationModal from '@/components/modals/DeleteConfirmationModal'
 import CampaignsTable from '@/components/tables/CampaignsTable'
 import RulesTable from '@/components/tables/RulesTable'
 import RemindersTable from '@/components/tables/RemindersTable'
-import CreateCampaignWizard from '@/components/CreateCampaignWizard'
 import ActivityChart from '@/components/ActivityChart'
 import RecentActivityList from '@/components/RecentActivityList'
 import AIConfigTable from '@/components/AIConfigTable'
@@ -40,7 +38,8 @@ import {
     Clock,
     Users,
     ChevronDown,
-    Plus
+    Plus,
+    RefreshCw
 } from 'lucide-react'
 
 export default function BotDetailPage() {
@@ -52,10 +51,8 @@ export default function BotDetailPage() {
     const [activeTab, setActiveTab] = useState<string>('overview')
 
     // Modal states
-    const [showCreateRuleModal, setShowCreateRuleModal] = useState(false)
     const [showEditRuleModal, setShowEditRuleModal] = useState(false)
     const [selectedRule, setSelectedRule] = useState<any>(null)
-    const [showCreateCampaignWizard, setShowCreateCampaignWizard] = useState(false)
 
     // Delete Confirmation State
     const [ruleToDelete, setRuleToDelete] = useState<string | null>(null)
@@ -91,6 +88,7 @@ export default function BotDetailPage() {
     })
 
     const [openFilter, setOpenFilter] = useState<string | null>(null)
+    const [isBotPausing, setIsBotPausing] = useState(false)
 
     const queryClient = useQueryClient()
 
@@ -194,6 +192,27 @@ export default function BotDetailPage() {
             toast.error('Failed to delete reminder')
         } finally {
             setIsDeletingReminder(false)
+        }
+    }
+
+    // Pause/Resume Bot Handler
+    const handleToggleBotPause = async () => {
+        setIsBotPausing(true)
+        try {
+            if (bot.is_paused) {
+                await api.bots.resume(botId)
+                toast.success('Bot resumed successfully')
+            } else {
+                await api.bots.pause(botId)
+                toast.success('Bot paused successfully')
+            }
+            // Force immediate refetch
+            await queryClient.invalidateQueries({ queryKey: ['bot', botId] })
+            await queryClient.refetchQueries({ queryKey: ['bot', botId] })
+        } catch (error) {
+            toast.error('Failed to update bot status')
+        } finally {
+            setIsBotPausing(false)
         }
     }
 
@@ -399,12 +418,43 @@ export default function BotDetailPage() {
                         </div>
                     )}
                     <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${isConnected
-                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                        ? bot.is_paused
+                            ? 'bg-orange-500/10 border-orange-500/20 text-orange-500'
+                            : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
                         : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
                         }`}>
                         <Circle className="w-2 h-2 fill-current" />
-                        <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
+                        <span>{isConnected ? (bot.is_paused ? 'Paused' : 'Connected') : 'Disconnected'}</span>
                     </div>
+                    {(isConnected || bot.is_paused) && (
+                        <button
+                            onClick={handleToggleBotPause}
+                            disabled={isBotPausing}
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                                bot.is_paused 
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' 
+                                    : 'bg-orange-500/10 border-orange-500/30 text-orange-400 hover:bg-orange-500/20'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                            {isBotPausing ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                            ) : bot.is_paused ? (
+                                <Play className="w-3 h-3" />
+                            ) : (
+                                <Pause className="w-3 h-3" />
+                            )}
+                            <span>{bot.is_paused ? 'Resume' : 'Pause'}</span>
+                        </button>
+                    )}
+                    {!isConnected && !bot.is_paused && bot.phone_number && (
+                        <Link
+                            href={`/dashboard/bots/${botId}/connect`}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20"
+                        >
+                            <RefreshCw className="w-3 h-3" />
+                            <span>Reconnect</span>
+                        </Link>
+                    )}
                 </div>
             </div>
 
@@ -626,7 +676,7 @@ export default function BotDetailPage() {
                     <div className="space-y-6">
                         <div className="flex items-center justify-between">
                             <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Auto-Reply Rules</h2>
-                            <button onClick={() => setShowCreateRuleModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-100 rounded-lg text-sm">
+                            <button onClick={() => router.push(`/dashboard/rules/create?botId=${botId}`)} className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-100 rounded-lg text-sm">
                                 <Plus className="w-4 h-4" />
                                 New Rule
                             </button>
@@ -639,7 +689,7 @@ export default function BotDetailPage() {
                     <div className="space-y-6">
                         <div className="flex items-center justify-between">
                             <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Campaigns</h2>
-                            <button onClick={() => setShowCreateCampaignWizard(true)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm"><Plus className="w-4 h-4" />New Campaign</button>
+                            <button onClick={() => router.push(`/dashboard/campaigns/create?botId=${botId}`)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm"><Plus className="w-4 h-4" />New Campaign</button>
                         </div>
                         <CampaignsTable botId={botId} />
                     </div>
@@ -679,9 +729,7 @@ export default function BotDetailPage() {
                 )}
             </div>
 
-            {showCreateRuleModal && <CreateRuleModal botId={botId} onClose={() => setShowCreateRuleModal(false)} />}
             {showEditRuleModal && selectedRule && <EditRuleModal botId={botId} rule={selectedRule} onClose={() => { setShowEditRuleModal(false); setSelectedRule(null); }} />}
-            {showCreateCampaignWizard && <CreateCampaignWizard initialBotId={botId} onClose={() => { setShowCreateCampaignWizard(false); queryClient.invalidateQueries({ queryKey: ['campaigns', botId] }); }} />}
         </div>
     )
 }

@@ -314,7 +314,8 @@ router.post('/:id/pause', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), a
         }
 
         await whatsappAdapter.pauseBot(id);
-        await botRepository.update(id, { status: 'disconnected' });
+        // Update is_paused flag WITHOUT changing connection status
+        await botRepository.update(id, { is_paused: 1 });
         await logActivity('bot', `${bot.name} paused`, { bot_id: id });
 
         res.json({ success: true, message: 'Bot paused successfully' });
@@ -343,14 +344,12 @@ router.post('/:id/resume', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), 
             if (permCheck.rows.length === 0) return res.status(403).json({ success: false, error: 'Permission denied' });
         }
 
-        if (!bot.phone_number) {
-            return res.status(400).json({ success: false, error: 'Bot has no saved session' });
-        }
-
-        await whatsappAdapter.initializeBot(id);
+        // Resume the bot - unpause it
+        await whatsappAdapter.resumeBot(id);
+        await botRepository.update(id, { is_paused: 0 });
         await logActivity('bot', `${bot.name} resumed`, { bot_id: id });
 
-        res.json({ success: true, message: 'Bot is resuming connection...' });
+        res.json({ success: true, message: 'Bot resumed successfully' });
     } catch (error: any) {
         logger.error('Failed to resume bot', { error });
         res.status(500).json({ success: false, error: error.message });

@@ -16,8 +16,11 @@ import './core/engine/ruleEngine';
 import './core/engine/actionEngine';
 import './core/engine/aiEngine';
 
-// ✅ Import message worker (Bull queue)
+// ✅ Import message worker (Bull queue) - for reminders
 import './queue/messageWorker';
+
+// ✅ Import campaign worker (Bull queue) - SEPARATE from reminder
+import './queue/campaignWorker';
 
 // ✅ Import group integration
 import { initializeGroupIntegration } from './integrations/groupIntegration';
@@ -163,6 +166,15 @@ const server = app.listen(PORT, async () => {
         logger.info('✅ Reminder scheduler initialized');
     } catch (error: any) {
         logger.error('❌ Failed to initialize reminder scheduler', { error: error.message });
+    }
+
+    // ✅ Initialize campaign scheduler (ISOLATED from reminder)
+    try {
+        const campaignSchedulerService = (await import('./services/campaignSchedulerService')).default;
+        await campaignSchedulerService.initialize();
+        logger.info('📣 Campaign scheduler initialized');
+    } catch (error: any) {
+        logger.error('❌ Failed to initialize campaign scheduler', { error: error.message });
     }
 });
 

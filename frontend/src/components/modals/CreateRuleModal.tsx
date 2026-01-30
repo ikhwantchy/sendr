@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import RichTextEditor from '@/components/editors/RichTextEditor'
-import { X, Image as ImageIcon, Trash2, MessageSquare, Zap, Globe, Users, User, Plus, Search, ArrowRight, Upload, Save } from 'lucide-react'
+import { X, Image as ImageIcon, Trash2, MessageSquare, Zap, Globe, Users, User, Plus, Search, ArrowRight, Upload, Save, ChevronLeft, Eye } from 'lucide-react'
 
 interface CreateRuleModalProps {
     botId?: string // Optional
@@ -25,6 +25,9 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
 
     // State for universal usage
     const [selectedBotId, setSelectedBotId] = useState<string>(botId || '')
+
+    // Preview panel state
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
     // Update selectedBotId if prop changes
     useEffect(() => {
@@ -177,32 +180,60 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
     }
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 lg:p-10 animate-in fade-in duration-200">
-            <div className="w-full max-w-7xl h-full max-h-[85vh] bg-[#09090b] rounded-2xl shadow-2xl border border-zinc-800 flex overflow-hidden ring-1 ring-white/10">
+        <div className="fixed inset-0 z-[100] bg-zinc-950 flex">
 
-                {/* --- Left Panel: Scrollable Form (60%) --- */}
-                <div className="w-[60%] flex flex-col h-full border-r border-zinc-800 relative bg-[#09090b]">
+                {/* --- Left Panel: Scrollable Form --- */}
+                <div className="flex-1 flex flex-col h-full border-r border-zinc-800 relative bg-zinc-950 overflow-hidden">
                     {/* Header */}
-                    <div className="h-16 flex items-center justify-between px-8 border-b border-zinc-800 shrink-0 bg-[#09090b] z-20">
-                        <h1 className="text-xl font-bold text-white tracking-tight">Create New Rule</h1>
-                        <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors">
-                            <X size={20} />
-                        </button>
+                    <div className="shrink-0 bg-zinc-950 z-20 border-b border-zinc-800">
+                        <div className="h-16 flex items-center justify-between px-6 lg:px-8">
+                            <div className="flex items-center gap-4">
+                                <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors">
+                                    <ChevronLeft size={20} />
+                                </button>
+                                <h1 className="text-xl font-bold text-white tracking-tight">Create New Rule</h1>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={() => setIsPreviewOpen(!isPreviewOpen)}
+                                    className={`hidden lg:flex items-center gap-2 px-4 py-2.5 border rounded-lg font-medium transition-all ${
+                                        isPreviewOpen 
+                                            ? 'bg-zinc-800 border-zinc-700 text-white' 
+                                            : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600'
+                                    }`}
+                                >
+                                    <Eye size={16} />
+                                    {isPreviewOpen ? 'Hide Preview' : 'Preview'}
+                                </button>
+                                <button 
+                                    onClick={() => createMutation.mutate(formData)}
+                                    disabled={createMutation.isPending}
+                                    className="hidden lg:flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg disabled:opacity-50 transition-all"
+                                >
+                                    {createMutation.isPending ? (
+                                        <><Zap size={16} className="animate-spin" /> Creating...</>
+                                    ) : (
+                                        <><Save size={16} /> Create Rule</>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Content */}
-                    <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto px-6 lg:px-12 py-8 pb-24 lg:pb-8">
+                        <div className="max-w-3xl mx-auto space-y-8">
 
                         {/* Bot Selection (If not provided) */}
                         {!botId && bots && (
-                            <section className="mb-10 pb-8 border-b border-zinc-800/50">
+                            <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                                 <SectionHeader title="Select Bot" desc="Which bot should this rule apply to?" />
                                 <div className="space-y-4">
                                     <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Target Bot</label>
                                     <select
                                         value={selectedBotId}
                                         onChange={(e) => setSelectedBotId(e.target.value)}
-                                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:ring-1 focus:ring-blue-600 outline-none transition-all text-sm appearance-none cursor-pointer placeholder-zinc-600"
+                                        className="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all text-sm appearance-none cursor-pointer placeholder-zinc-600"
                                     >
                                         <option value="">Select a Bot...</option>
                                         {bots.map((b: any) => (
@@ -214,7 +245,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                         )}
 
                         {/* Trigger & Scope */}
-                        <section className="mb-10 pb-8 border-b border-zinc-800/50">
+                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader title="Trigger Condition" desc="Define the keywords that trigger this rule." />
 
                             <div className="space-y-6">
@@ -226,7 +257,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                                         value={formData.trigger}
                                         onChange={(e) => setFormData({ ...formData, trigger: e.target.value })}
                                         placeholder="e.g. /price, hello, !help"
-                                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:ring-1 focus:ring-blue-600 outline-none transition-all"
+                                        className="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
                                     />
                                 </div>
 
@@ -245,7 +276,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                                                 onClick={() => setFormData({ ...formData, match_type: type.id as any })}
                                                 className={`py-3 px-2 rounded-lg border text-sm font-medium transition-all ${formData.match_type === type.id
                                                     ? 'bg-zinc-100 text-black border-zinc-100'
-                                                    : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                                                    : 'bg-zinc-800/50 border-zinc-700 text-zinc-500 hover:text-zinc-300'
                                                     }`}
                                             >
                                                 {type.label}
@@ -256,10 +287,10 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                             </div>
                         </section>
 
-                        <section className="mb-10 pb-8 border-b border-zinc-800/50">
+                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader title="Target Audience" desc="Who should be able to trigger this rule?" />
 
-                            <div className="flex bg-zinc-900 p-1 rounded-lg border border-zinc-800 mb-6 w-fit">
+                            <div className="flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 mb-6 w-fit">
                                 {[
                                     { id: 'global', label: 'Everyone' },
                                     { id: 'group', label: 'WhatsApp Groups' },
@@ -270,7 +301,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                                         type="button"
                                         onClick={() => setTargetType(t.id as any)}
                                         className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${targetType === t.id
-                                            ? 'bg-zinc-800 text-white shadow-sm'
+                                            ? 'bg-zinc-700 text-white shadow-sm'
                                             : 'text-zinc-500 hover:text-zinc-300'
                                             }`}
                                     >
@@ -281,7 +312,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
 
                             {/* Global Config Options */}
                             {targetType === 'global' && (
-                                <div className="mt-4 flex flex-col sm:flex-row gap-4 animate-in fade-in p-4 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+                                <div className="mt-4 flex flex-col sm:flex-row gap-4 animate-in fade-in p-4 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
                                     <label className="flex items-center gap-3 text-sm text-zinc-300 cursor-pointer hover:text-white transition-colors">
                                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${globalConfig.private ? 'bg-blue-600 border-blue-600' : 'border-zinc-600 bg-zinc-800'}`}>
                                             {globalConfig.private && <Zap size={12} className="text-white fill-current" />}
@@ -340,7 +371,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                                     </div>
 
                                     {isGroupSelectorOpen && (
-                                        <div className="bg-zinc-900 border border-zinc-800 rounded-lg max-h-48 overflow-y-auto shadow-xl p-2 animate-in zoom-in-95">
+                                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg max-h-48 overflow-y-auto shadow-xl p-2 animate-in zoom-in-95">
                                             {groupsData?.length === 0 && <div className="p-2 text-xs text-zinc-500 text-center">No groups found</div>}
                                             {groupsData?.filter(g => !selectedGroups.includes(g.jid)).map(g => (
                                                 <button
@@ -350,7 +381,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                                                         setSelectedGroups([...selectedGroups, g.jid])
                                                         setIsGroupSelectorOpen(false)
                                                     }}
-                                                    className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 rounded-md flex items-center justify-between group"
+                                                    className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 rounded-md flex items-center justify-between group"
                                                 >
                                                     {g.name}
                                                     <Plus size={14} className="opacity-0 group-hover:opacity-100 text-zinc-500" />
@@ -369,14 +400,14 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                                         onChange={(e) => setSpecificContacts(e.target.value)}
                                         placeholder="Enter phone numbers (e.g. 628123456789), one per line or comma separated..."
                                         rows={3}
-                                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white font-mono text-sm focus:ring-1 focus:ring-blue-600 outline-none"
+                                        className="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700 rounded-lg text-white font-mono text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none"
                                     />
                                 </div>
                             )}
                         </section>
 
                         {/* Response Action */}
-                        <section className="mb-24">
+                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader title="Response Action" desc="What should the bot do when triggered?" />
 
                             <div className="space-y-4">
@@ -396,7 +427,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                                         <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Attachment (Optional)</label>
                                     </div>
                                     {!previewUrl ? (
-                                        <div className="border border-dashed border-zinc-800 rounded-lg p-6 hover:bg-zinc-900/50 transition-colors text-center cursor-pointer relative group">
+                                        <div className="border border-dashed border-zinc-700 rounded-lg p-6 hover:bg-zinc-800/30 transition-colors text-center cursor-pointer relative group">
                                             <input
                                                 type="file"
                                                 className="absolute inset-0 opacity-0 cursor-pointer"
@@ -404,7 +435,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                                                 accept="image/*"
                                             />
                                             <div className="flex flex-col items-center gap-2">
-                                                <div className="p-3 bg-zinc-900 rounded-full group-hover:bg-zinc-800 transition-colors">
+                                                <div className="p-3 bg-zinc-800/50 rounded-full group-hover:bg-zinc-700 transition-colors">
                                                     <ImageIcon className="text-zinc-500 group-hover:text-zinc-300" size={24} />
                                                 </div>
                                                 <p className="text-sm text-zinc-500 group-hover:text-zinc-400">Click to upload image</p>
@@ -412,7 +443,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                                         </div>
                                     ) : (
                                         <div className="relative w-fit group">
-                                            <img src={previewUrl} alt="Preview" className="h-32 rounded-lg border border-zinc-800 object-cover" />
+                                            <img src={previewUrl} alt="Preview" className="h-32 rounded-lg border border-zinc-700 object-cover" />
                                             <button
                                                 type="button"
                                                 onClick={removeImage}
@@ -425,10 +456,11 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                                 </div>
                             </div>
                         </section>
+                        </div>
                     </div>
 
-                    {/* Footer Actions - Floating */}
-                    <div className="absolute bottom-0 left-0 right-0 p-6 bg-[#09090b]/95 backdrop-blur border-t border-zinc-800 z-30">
+                    {/* Mobile Save Button */}
+                    <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 z-30">
                         <button
                             onClick={() => createMutation.mutate(formData)}
                             disabled={createMutation.isPending}
@@ -443,8 +475,9 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                     </div>
                 </div>
 
-                {/* --- Right Panel: Preview (40%) --- */}
-                <div className="w-[40%] bg-[#0b141a] relative flex flex-col h-full border-l border-zinc-800 hidden lg:flex">
+                {/* --- Right Panel: Preview (conditional) --- */}
+                {isPreviewOpen && (
+                <div className="w-[400px] bg-[#0b141a] relative flex flex-col h-full border-l border-zinc-800 hidden lg:flex">
                     {/* Preview Header */}
                     <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10 shrink-0">
                         <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center overflow-hidden">
@@ -548,7 +581,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                         </div>
                     </div>
                 </div>
-            </div>
+                )}
         </div>
     )
 }

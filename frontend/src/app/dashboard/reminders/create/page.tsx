@@ -1,9 +1,10 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import CreateReminderWizard from '@/components/CreateReminderWizard'
 
-export default function CreateReminderPage() {
+function CreateReminderContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const botId = searchParams.get('botId')
@@ -40,5 +41,17 @@ export default function CreateReminderPage() {
             reminderId={editId || undefined}
             onClose={handleClose}
         />
+    )
+}
+
+export default function CreateReminderPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center min-h-screen bg-[#09090b]">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+            </div>
+        }>
+            <CreateReminderContent />
+        </Suspense>
     )
 }

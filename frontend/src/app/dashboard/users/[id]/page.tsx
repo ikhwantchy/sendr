@@ -6,20 +6,35 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import {
     ArrowLeft, Bot, MessageSquare, Megaphone,
-    Bell, Activity, Shield, Info, ExternalLink,
-    ChevronRight, Zap, CloudLightning, Loader2, Eye
+    Bell, Activity, Shield, Zap, CloudLightning, Loader2, Eye,
+    Plus, Trash2, Settings, X, Check, ChevronDown, RefreshCw,
+    Database, Users as UsersIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
+
+// Permission definitions with descriptions
+const PERMISSION_DEFINITIONS = [
+    { key: 'can_view', label: 'Show Bot', icon: Eye, activeClass: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400', activeBg: 'bg-emerald-500/20', description: 'User can see this bot in their dashboard' },
+    { key: 'can_view_analytics', label: 'Analytics', icon: Activity, activeClass: 'bg-blue-500/10 border-blue-500/30 text-blue-400', activeBg: 'bg-blue-500/20', description: 'View bot analytics and statistics' },
+    { key: 'can_create_rules', label: 'Auto-Reply', icon: Zap, activeClass: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400', activeBg: 'bg-yellow-500/20', description: 'Create and manage auto-reply rules' },
+    { key: 'can_use_reminders', label: 'Reminders', icon: Bell, activeClass: 'bg-purple-500/10 border-purple-500/30 text-purple-400', activeBg: 'bg-purple-500/20', description: 'Create and manage scheduled reminders' },
+    { key: 'can_create_campaigns', label: 'Campaigns', icon: Megaphone, activeClass: 'bg-orange-500/10 border-orange-500/30 text-orange-400', activeBg: 'bg-orange-500/20', description: 'Create and run broadcast campaigns' },
+    { key: 'can_use_ai', label: 'AI Assistant', icon: CloudLightning, activeClass: 'bg-pink-500/10 border-pink-500/30 text-pink-400', activeBg: 'bg-pink-500/20', description: 'Use AI-powered assistant features' },
+    { key: 'can_manage_contacts', label: 'Contacts', icon: UsersIcon, activeClass: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400', activeBg: 'bg-cyan-500/20', description: 'View and manage contacts' },
+    { key: 'can_manage_datasources', label: 'Data Sources', icon: Database, activeClass: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400', activeBg: 'bg-indigo-500/20', description: 'Connect Google Sheets and data sources' },
+]
 
 export default function UserDetailPage() {
     const { id } = useParams()
     const router = useRouter()
     const queryClient = useQueryClient()
     const [mounted, setMounted] = useState(false)
+    const [showCreateBotModal, setShowCreateBotModal] = useState(false)
+    const [newBotName, setNewBotName] = useState('')
 
     useEffect(() => { setMounted(true) }, [])
 
-    const { data: detail, isLoading } = useQuery({
+    const { data: detail, isLoading, refetch } = useQuery({
         queryKey: ['user-detail', id],
         queryFn: async () => {
             const response = await api.users.get(id as string)
@@ -33,18 +48,62 @@ export default function UserDetailPage() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['user-detail', id] })
-            toast.success('Permissions saved')
+            toast.success('Permissions updated')
         },
         onError: (err: any) => {
             toast.error(err.response?.data?.error || 'Failed to save permissions')
         }
     })
 
+    const createBotMutation = useMutation({
+        mutationFn: async (data: { name: string, target_tenant_id: string }) => {
+            return await api.bots.create(data)
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['user-detail', id] })
+            queryClient.invalidateQueries({ queryKey: ['users'] })
+            setShowCreateBotModal(false)
+            setNewBotName('')
+            toast.success('Bot created successfully!')
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.error || 'Failed to create bot')
+        }
+    })
+
+    const deleteBotMutation = useMutation({
+        mutationFn: async (botId: string) => {
+            return await api.bots.delete(botId)
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['user-detail', id] })
+            queryClient.invalidateQueries({ queryKey: ['users'] })
+            toast.success('Bot deleted successfully!')
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.error || 'Failed to delete bot')
+        }
+    })
+
+    const handleCreateBot = () => {
+        if (!newBotName.trim()) {
+            toast.error('Bot name is required')
+            return
+        }
+        createBotMutation.mutate({
+            name: newBotName,
+            target_tenant_id: detail?.user?.tenant_id
+        })
+    }
+
     if (!mounted || isLoading) {
         return (
             <div className="p-8 flex flex-col items-center justify-center min-h-[60vh] text-zinc-500 gap-4">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                <p className="text-sm font-medium">Initializing Control Center...</p>
+                <div className="relative w-12 h-12">
+                    <div className="absolute inset-0 rounded-full border-2 border-zinc-800"></div>
+                    <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
+                </div>
+                <p className="text-sm font-medium">Loading user details...</p>
             </div>
         )
     }
@@ -54,115 +113,196 @@ export default function UserDetailPage() {
     const { user, bots, analytics, permissions } = detail
 
     return (
-        <div className="p-8 min-h-screen bg-black text-white space-y-8 animate-in fade-in duration-500">
+        <div className="p-8 min-h-screen bg-black text-white space-y-8">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
                     <button
                         onClick={() => router.back()}
-                        className="p-2.5 hover:bg-zinc-900 rounded-xl transition-all border border-zinc-800 hover:border-zinc-700 active:scale-95"
+                        className="p-2.5 hover:bg-zinc-900 rounded-xl transition-all border border-zinc-800 hover:border-zinc-700"
                     >
                         <ArrowLeft className="w-5 h-5 text-zinc-400" />
                     </button>
                     <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                            <h1 className="text-2xl font-bold tracking-tight text-white">{user.name}</h1>
-                            <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[10px] font-bold rounded-md border border-blue-500/20 uppercase tracking-wider">
-                                {user.role}
-                            </span>
+                        <div className="flex items-center gap-3 mb-1">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-zinc-700/50 font-medium text-zinc-300">
+                                {(user.name || 'U')[0].toUpperCase()}
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold tracking-tight text-white">{user.name}</h1>
+                                <p className="text-zinc-500 text-sm">{user.email}</p>
+                            </div>
                         </div>
-                        <p className="text-zinc-500 text-sm">{user.email}</p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="px-4 py-2 bg-zinc-900/50 border border-zinc-800 rounded-xl flex items-center gap-3">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-bold text-zinc-500 uppercase">Status</span>
-                            <span className="text-xs font-semibold text-emerald-500">Active Account</span>
-                        </div>
-                        <div className="w-px h-8 bg-zinc-800" />
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-bold text-zinc-500 uppercase">Member Since</span>
-                            <span className="text-xs font-semibold text-zinc-300">{new Date(user.created_at).toLocaleDateString()}</span>
-                        </div>
-                    </div>
+                    <span className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                        user.role === 'OWNER' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' :
+                        user.role === 'ADMIN' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
+                        'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                    }`}>
+                        <Shield className="w-3 h-3 inline mr-1.5" />
+                        {user.role}
+                    </span>
+                    <span className="text-xs text-zinc-500 bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-800">
+                        Member since {new Date(user.created_at).toLocaleDateString()}
+                    </span>
+                    <button
+                        onClick={() => refetch()}
+                        className="p-2 bg-zinc-900 border border-zinc-800/50 rounded-lg text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
 
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Traffic" value={analytics.total_messages} icon={<MessageSquare className="w-4 h-4" />} color="text-blue-500" />
+                <StatCard title="Total Messages" value={analytics.total_messages} icon={<MessageSquare className="w-4 h-4" />} color="text-blue-500" />
                 <StatCard title="Auto Replies" value={analytics.auto_replies} icon={<Zap className="w-4 h-4" />} color="text-yellow-500" />
                 <StatCard title="Campaigns" value={analytics.campaigns} icon={<Megaphone className="w-4 h-4" />} color="text-orange-500" />
                 <StatCard title="Reminders" value={analytics.reminders} icon={<Bell className="w-4 h-4" />} color="text-purple-500" />
             </div>
 
             {/* Bot List Section */}
-            <div className="space-y-6">
-                <div className="flex items-center justify-between border-b border-zinc-900 pb-4">
-                    <h2 className="text-lg font-bold text-zinc-100 flex items-center gap-2.5">
-                        <div className="p-1.5 bg-zinc-900 rounded-lg">
-                            <Bot className="w-5 h-5 text-zinc-400" />
-                        </div>
-                        Assigned Bots ({bots.length})
-                    </h2>
+            <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-zinc-800/50 flex justify-between items-center">
+                    <div>
+                        <h3 className="text-lg font-medium text-zinc-200 flex items-center gap-2">
+                            <Bot className="w-5 h-5 text-zinc-500" />
+                            Assigned Bots
+                        </h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">{bots.length} bot{bots.length !== 1 ? 's' : ''} assigned to this user</p>
+                    </div>
+                    <button
+                        onClick={() => setShowCreateBotModal(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-colors"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Create Bot
+                    </button>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6">
-                    {bots.map((bot: any) => (
-                        <MemoizedBotCard
-                            key={bot.id}
-                            bot={bot}
-                            permissions={permissions}
-                            onUpdate={(data) => updatePermissionMutation.mutate({ botId: bot.id, data })}
-                            isUpdating={updatePermissionMutation.isPending && updatePermissionMutation.variables?.botId === bot.id}
-                        />
-                    ))}
-
-                    {bots.length === 0 && (
-                        <div className="p-20 text-center bg-zinc-950/50 border border-dashed border-zinc-800 rounded-3xl">
-                            <Bot className="w-12 h-12 text-zinc-800 mx-auto mb-4" />
-                            <p className="text-zinc-500">No bots assigned to this user yet.</p>
+                {bots.length === 0 ? (
+                    <div className="text-center py-16">
+                        <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-800/50 rounded-2xl mb-4">
+                            <Bot className="w-8 h-8 text-zinc-600" />
                         </div>
-                    )}
-                </div>
+                        <h3 className="text-lg font-semibold text-zinc-100 mb-2">No Bots Assigned</h3>
+                        <p className="text-zinc-400 text-sm mb-4">Create a bot to get started</p>
+                        <button
+                            onClick={() => setShowCreateBotModal(true)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Create First Bot
+                        </button>
+                    </div>
+                ) : (
+                    <div className="divide-y divide-zinc-800/50">
+                        {bots.map((bot: any) => (
+                            <BotPermissionCard
+                                key={bot.id}
+                                bot={bot}
+                                permissions={permissions}
+                                onUpdate={(data) => updatePermissionMutation.mutate({ botId: bot.id, data })}
+                                onDelete={() => {
+                                    if (confirm(`Are you sure you want to delete "${bot.name}"? This action cannot be undone.`)) {
+                                        deleteBotMutation.mutate(bot.id)
+                                    }
+                                }}
+                                isUpdating={updatePermissionMutation.isPending && updatePermissionMutation.variables?.botId === bot.id}
+                                isDeleting={deleteBotMutation.isPending && deleteBotMutation.variables === bot.id}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
+
+            {/* Create Bot Modal */}
+            {showCreateBotModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
+                        <div className="px-6 py-4 border-b border-zinc-800/50 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-blue-500/10 rounded-lg">
+                                    <Bot className="w-5 h-5 text-blue-400" />
+                                </div>
+                                <div>
+                                    <h3 className="font-medium text-white">Create Bot for User</h3>
+                                    <p className="text-xs text-zinc-500">Will be assigned to {user.name}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowCreateBotModal(false)} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2 block">Bot Name</label>
+                                <input
+                                    type="text"
+                                    value={newBotName}
+                                    onChange={(e) => setNewBotName(e.target.value)}
+                                    placeholder="e.g., Customer Support Bot"
+                                    className="w-full bg-zinc-900/50 border border-zinc-800/50 text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-zinc-700"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="p-3 bg-zinc-900/30 border border-zinc-800/50 rounded-lg">
+                                <p className="text-xs text-zinc-500">
+                                    After creation, you can configure the bot's permissions to control what features the user can access.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-zinc-800/50 flex gap-3">
+                            <button
+                                onClick={() => setShowCreateBotModal(false)}
+                                className="flex-1 py-2.5 text-zinc-400 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg font-medium text-sm transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleCreateBot}
+                                disabled={createBotMutation.isPending || !newBotName.trim()}
+                                className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {createBotMutation.isPending ? (
+                                    <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</>
+                                ) : (
+                                    <><Plus className="w-4 h-4" /> Create Bot</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
-    )
-}
-
-function MemoizedBotCard({ bot, permissions, onUpdate, isUpdating }: any) {
-    const initialPerms = useMemo(() => {
-        return permissions.find((p: any) => p.bot_id === bot.id) || {
-            can_view: 0, can_edit: 0, can_delete: 0, can_view_analytics: 0,
-            can_create_rules: 0, can_use_reminders: 0, can_create_campaigns: 0, can_use_ai: 0
-        }
-    }, [permissions, bot.id]);
-
-    return (
-        <BotControlCard
-            bot={bot}
-            initialPerms={initialPerms}
-            onUpdate={onUpdate}
-            isUpdating={isUpdating}
-        />
     )
 }
 
 function StatCard({ title, value, icon, color }: any) {
     return (
-        <div className="bg-[#0e0e11] border border-zinc-800/50 p-6 rounded-2xl group">
-            <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-3">
+        <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 hover:border-zinc-800 transition-colors">
+            <div className="flex items-center gap-2 text-zinc-500 text-xs font-medium uppercase tracking-wider mb-3">
                 <div className={`p-1.5 rounded-lg bg-zinc-900 ${color}`}>{icon}</div>
                 {title}
             </div>
-            <div className="text-3xl font-bold text-white tabular-nums tracking-tight">{value.toLocaleString()}</div>
+            <div className="text-3xl font-bold text-white tabular-nums tracking-tight">{(value || 0).toLocaleString()}</div>
         </div>
     )
 }
 
-function BotControlCard({ bot, initialPerms, onUpdate, isUpdating }: { bot: any, initialPerms: any, onUpdate: (data: any) => void, isUpdating: boolean }) {
+function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, isDeleting }: { bot: any, permissions: any[], onUpdate: (data: any) => void, onDelete: () => void, isUpdating: boolean, isDeleting: boolean }) {
+    const initialPerms = useMemo(() => {
+        return permissions.find((p: any) => p.bot_id === bot.id) || {
+            can_view: 0, can_edit: 0, can_delete: 0, can_view_analytics: 0,
+            can_create_rules: 0, can_use_reminders: 0, can_create_campaigns: 0, 
+            can_use_ai: 0, can_manage_contacts: 0, can_manage_datasources: 0
+        }
+    }, [permissions, bot.id])
+
     const [perms, setPerms] = useState(() => ({
         can_view: !!initialPerms.can_view,
         can_edit: !!initialPerms.can_edit,
@@ -172,7 +312,11 @@ function BotControlCard({ bot, initialPerms, onUpdate, isUpdating }: { bot: any,
         can_use_reminders: !!initialPerms.can_use_reminders,
         can_create_campaigns: !!initialPerms.can_create_campaigns,
         can_use_ai: !!initialPerms.can_use_ai,
+        can_manage_contacts: !!initialPerms.can_manage_contacts,
+        can_manage_datasources: !!initialPerms.can_manage_datasources,
     }))
+
+    const [expanded, setExpanded] = useState(true)
 
     useEffect(() => {
         if (!isUpdating) {
@@ -185,6 +329,8 @@ function BotControlCard({ bot, initialPerms, onUpdate, isUpdating }: { bot: any,
                 can_use_reminders: !!initialPerms.can_use_reminders,
                 can_create_campaigns: !!initialPerms.can_create_campaigns,
                 can_use_ai: !!initialPerms.can_use_ai,
+                can_manage_contacts: !!initialPerms.can_manage_contacts,
+                can_manage_datasources: !!initialPerms.can_manage_datasources,
             })
         }
     }, [initialPerms, isUpdating])
@@ -196,72 +342,181 @@ function BotControlCard({ bot, initialPerms, onUpdate, isUpdating }: { bot: any,
         onUpdate(newState)
     }
 
+    const activeCount = Object.values(perms).filter(Boolean).length
+
     return (
-        <div className={`bg-[#0e0e11] border border-zinc-800 rounded-2xl transition-all duration-300 ${isUpdating ? 'opacity-70 grayscale-[0.5]' : 'hover:border-zinc-700'} ${!perms.can_view ? 'border-dashed opacity-60' : ''}`}>
-            <div className="p-6 flex flex-col lg:flex-row justify-between gap-8">
-                {/* Bot Identity */}
-                <div className="flex gap-5 min-w-[260px]">
-                    <div className="w-16 h-16 bg-zinc-900 rounded-2xl flex items-center justify-center border border-zinc-800 shrink-0">
-                        <Bot className="w-8 h-8 text-zinc-400" />
+        <div className={`transition-all duration-300 ${isUpdating || isDeleting ? 'opacity-70' : ''}`}>
+            {/* Bot Header */}
+            <div 
+                className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-zinc-900/30 transition-colors"
+                onClick={() => setExpanded(!expanded)}
+            >
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-zinc-900 rounded-xl flex items-center justify-center border border-zinc-800">
+                        <Bot className="w-6 h-6 text-zinc-400" />
                     </div>
-                    <div className="space-y-1">
-                        <h3 className="text-xl font-bold text-white tracking-tight">{bot.name}</h3>
+                    <div>
                         <div className="flex items-center gap-2">
-                            <div className={`w-1.5 h-1.5 rounded-full ${bot.status === 'connected' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{bot.status}</span>
+                            <h4 className="text-white font-semibold">{bot.name}</h4>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${
+                                bot.status === 'connected' 
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                    : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                            }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${bot.status === 'connected' ? 'bg-emerald-500' : 'bg-zinc-500'}`} />
+                                {bot.status}
+                            </span>
                         </div>
-                        <p className="text-[10px] font-mono text-zinc-700">ID: {bot.id.substring(0, 13)}...</p>
+                        <p className="text-xs text-zinc-500 font-mono">ID: {bot.id.substring(0, 12)}...</p>
                     </div>
                 </div>
-
-                {/* Feature Grid */}
-                <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Shield className="w-3.5 h-3.5 text-blue-500" />
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Bot Access & Features</span>
-                        {isUpdating && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 ml-auto" />}
+                <div className="flex items-center gap-4">
+                    <div className="text-right">
+                        <p className="text-sm font-medium text-zinc-300">{activeCount} permissions</p>
+                        <p className="text-xs text-zinc-500">{perms.can_view ? 'Visible to user' : 'Hidden from user'}</p>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                        {/* THE CRITICAL FIRST TOGGLE: Visibility */}
-                        <FeatureToggle
-                            icon={<Eye className="w-4 h-4" />}
-                            label="Show Bot"
-                            active={perms.can_view}
-                            onToggle={() => toggle('can_view')}
-                            highlight="border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
-                        />
-                        <FeatureToggle icon={<Activity className="w-4 h-4" />} label="Analytics" active={perms.can_view_analytics} onToggle={() => toggle('can_view_analytics')} />
-                        <FeatureToggle icon={<Zap className="w-4 h-4" />} label="Auto-Reply" active={perms.can_create_rules} onToggle={() => toggle('can_create_rules')} />
-                        <FeatureToggle icon={<Bell className="w-4 h-4" />} label="Reminders" active={perms.can_use_reminders} onToggle={() => toggle('can_use_reminders')} />
-                        <FeatureToggle icon={<Megaphone className="w-4 h-4" />} label="Campaigns" active={perms.can_create_campaigns} onToggle={() => toggle('can_create_campaigns')} />
-                        <FeatureToggle icon={<CloudLightning className="w-4 h-4" />} label="AI Assistant" active={perms.can_use_ai} onToggle={() => toggle('can_use_ai')} />
-                    </div>
+                    {(isUpdating || isDeleting) && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                        disabled={isDeleting}
+                        className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
+                        title="Delete bot"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                    <ChevronDown className={`w-5 h-5 text-zinc-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
                 </div>
             </div>
+
+            {/* Permissions Grid */}
+            {expanded && (
+                <div className="px-6 pb-6">
+                    <div className="p-4 bg-zinc-900/30 border border-zinc-800/50 rounded-xl">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Shield className="w-4 h-4 text-blue-500" />
+                            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Feature Access Control</span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {PERMISSION_DEFINITIONS.map((perm) => {
+                                const Icon = perm.icon
+                                const isActive = perms[perm.key as keyof typeof perms]
+                                return (
+                                    <button
+                                        key={perm.key}
+                                        onClick={(e) => { e.stopPropagation(); toggle(perm.key as keyof typeof perms) }}
+                                        disabled={isUpdating}
+                                        className={`group relative flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-200 ${
+                                            isActive
+                                                ? perm.activeClass
+                                                : 'bg-zinc-900/50 border-zinc-800 text-zinc-600 hover:border-zinc-700'
+                                        }`}
+                                        title={perm.description}
+                                    >
+                                        <div className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${
+                                            isActive ? perm.activeBg : 'bg-zinc-800'
+                                        }`}>
+                                            <Icon className="w-5 h-5" />
+                                        </div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">{perm.label}</span>
+                                        {isActive && (
+                                            <div className="absolute top-2 right-2">
+                                                <Check className="w-3 h-3 text-emerald-400" />
+                                            </div>
+                                        )}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    const allEnabled = {
+                                        can_view: true, can_edit: true, can_delete: true,
+                                        can_view_analytics: true, can_create_rules: true,
+                                        can_use_reminders: true, can_create_campaigns: true,
+                                        can_use_ai: true, can_manage_contacts: true, can_manage_datasources: true
+                                    }
+                                    setPerms(allEnabled)
+                                    onUpdate(allEnabled)
+                                }}
+                                disabled={isUpdating}
+                                className="px-3 py-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                Full Access
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    const viewOnly = {
+                                        can_view: true, can_edit: false, can_delete: false,
+                                        can_view_analytics: true, can_create_rules: false,
+                                        can_use_reminders: false, can_create_campaigns: false,
+                                        can_use_ai: false, can_manage_contacts: false, can_manage_datasources: false
+                                    }
+                                    setPerms(viewOnly)
+                                    onUpdate(viewOnly)
+                                }}
+                                disabled={isUpdating}
+                                className="px-3 py-1.5 text-xs font-medium text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                View Only
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    const operator = {
+                                        can_view: true, can_edit: false, can_delete: false,
+                                        can_view_analytics: true, can_create_rules: true,
+                                        can_use_reminders: true, can_create_campaigns: true,
+                                        can_use_ai: false, can_manage_contacts: true, can_manage_datasources: false
+                                    }
+                                    setPerms(operator)
+                                    onUpdate(operator)
+                                }}
+                                disabled={isUpdating}
+                                className="px-3 py-1.5 text-xs font-medium text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                Operator
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    const campaignManager = {
+                                        can_view: true, can_edit: false, can_delete: false,
+                                        can_view_analytics: true, can_create_rules: false,
+                                        can_use_reminders: true, can_create_campaigns: true,
+                                        can_use_ai: false, can_manage_contacts: true, can_manage_datasources: true
+                                    }
+                                    setPerms(campaignManager)
+                                    onUpdate(campaignManager)
+                                }}
+                                disabled={isUpdating}
+                                className="px-3 py-1.5 text-xs font-medium text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                Campaign Manager
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    const allDisabled = {
+                                        can_view: false, can_edit: false, can_delete: false,
+                                        can_view_analytics: false, can_create_rules: false,
+                                        can_use_reminders: false, can_create_campaigns: false,
+                                        can_use_ai: false, can_manage_contacts: false, can_manage_datasources: false
+                                    }
+                                    setPerms(allDisabled)
+                                    onUpdate(allDisabled)
+                                }}
+                                disabled={isUpdating}
+                                className="px-3 py-1.5 text-xs font-medium text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                Revoke All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
-    )
-}
-
-function FeatureToggle({ icon, label, active, onToggle, highlight }: any) {
-    const activeClass = highlight || 'bg-blue-600/10 border-blue-500/40 text-blue-400'
-
-    return (
-        <button
-            onClick={onToggle}
-            className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border transition-all duration-300 ${active
-                    ? `${activeClass} shadow-[0_0_20px_rgba(59,130,246,0.1)]`
-                    : 'bg-zinc-900/40 border-zinc-800 text-zinc-600 hover:border-zinc-700'
-                }`}
-        >
-            <div className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${active ? 'bg-current opacity-20' : 'bg-zinc-800 text-zinc-500'
-                }`}>
-                {/* Overlay for color but keeping opacity low for icon visibility */}
-            </div>
-            <div className={`absolute top-4 w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${active ? '' : 'text-zinc-500'
-                }`}>
-                {icon}
-            </div>
-            <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
-        </button>
     )
 }

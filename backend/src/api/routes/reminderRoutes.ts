@@ -4,8 +4,7 @@ import { query } from '../../database/connection';
 import { authenticate } from '../middleware/auth';
 import googleSheetsService from '../../services/googleSheetsService';
 import reminderSchedulerService from '../../services/reminderSchedulerService';
-
-
+const { checkBotAccess } = require('../../middleware/checkPermission');
 
 const router = Router();
 
@@ -46,7 +45,7 @@ router.get('/', async (req, res) => {
  * GET /api/reminders/bot/:botId
  * Get reminders for a specific bot
  */
-router.get('/bot/:botId', async (req, res) => {
+router.get('/bot/:botId', checkBotAccess('use_reminders'), async (req, res) => {
     try {
         const { botId } = req.params;
         const isAdmin = (req as any).user.role === 'ADMIN' || (req as any).user.role === 'OWNER';
@@ -77,7 +76,7 @@ router.get('/bot/:botId', async (req, res) => {
 /**
  * GET /api/reminders/by-bot/:botId (Alias for compatibility)
  */
-router.get('/by-bot/:botId', async (req, res) => {
+router.get('/by-bot/:botId', checkBotAccess('use_reminders'), async (req, res) => {
     try {
         const { botId } = req.params;
         const tenantId = (req as any).user.tenant_id;

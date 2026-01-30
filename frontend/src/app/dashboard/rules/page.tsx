@@ -5,8 +5,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { useRouter, useSearchParams } from 'next/navigation'
-import CreateRuleModal from '@/components/modals/CreateRuleModal'
 import EditRuleModal from '@/components/modals/EditRuleModal'
+import { 
+    Plus, RefreshCw, Loader2, ChevronDown, Bot, 
+    Zap, Trash2, Pencil, MessageSquare, Search
+} from 'lucide-react'
 
 export default function RulesPage() {
     const router = useRouter()
@@ -14,20 +17,21 @@ export default function RulesPage() {
     const queryClient = useQueryClient()
 
     // State
-    const [showCreateModal, setShowCreateModal] = useState(false)
     const [editingRule, setEditingRule] = useState<any>(null)
     const [selectedBotId, setSelectedBotId] = useState<string>('all')
 
-    const botIdParam = searchParams.get('bot')
+    const botIdParam = searchParams?.get('bot')
 
     // Fetch rules
-    const { data: rules, isLoading: isLoadingRules } = useQuery({
+    const { data: rules, isLoading: isLoadingRules, isFetching, refetch } = useQuery({
         queryKey: ['rules'],
         queryFn: async () => {
             const response = await api.rules.list()
             return response.data.data || []
         },
     })
+
+    const isRefreshing = isFetching && !isLoadingRules
 
     // Fetch bots for dropdown
     const { data: bots, isLoading: isLoadingBots } = useQuery({
@@ -70,162 +74,203 @@ export default function RulesPage() {
     }
 
     return (
-        <div className="p-8">
+        <div className="p-8 min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100">
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Automation Rules</h1>
-                    <p className="text-gray-600 mt-1">Create keyword-based automation rules</p>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white tracking-tight">Automation Rules</h1>
+                        {isRefreshing && (
+                            <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                        )}
+                    </div>
+                    <p className="text-zinc-500 text-sm mt-1">Create keyword-based automation rules</p>
                 </div>
-                <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all flex items-center space-x-2"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span>Create Rule</span>
-                </button>
+                <div className="flex items-center gap-3">
+                    {/* Bot Filter Dropdown */}
+                    <div className="relative">
+                        <button
+                            onClick={() => {
+                                const dropdown = document.getElementById('rules-bot-dropdown')
+                                if (dropdown) dropdown.classList.toggle('hidden')
+                            }}
+                            onBlur={(e) => {
+                                setTimeout(() => {
+                                    const dropdown = document.getElementById('rules-bot-dropdown')
+                                    if (dropdown && !dropdown.contains(e.relatedTarget as Node)) {
+                                        dropdown.classList.add('hidden')
+                                    }
+                                }, 150)
+                            }}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 transition-all"
+                        >
+                            <Bot className="w-3.5 h-3.5 text-blue-500" />
+                            <span>
+                                {selectedBotId === 'all' ? 'All Bots' : (bots?.find((b: any) => b.id === selectedBotId)?.name || 'Selected Bot')}
+                            </span>
+                            <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+                        </button>
+
+                        <div
+                            id="rules-bot-dropdown"
+                            className="hidden absolute top-full right-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1"
+                        >
+                            <button
+                                onClick={() => {
+                                    setSelectedBotId('all')
+                                    document.getElementById('rules-bot-dropdown')?.classList.add('hidden')
+                                }}
+                                className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${selectedBotId === 'all' ? 'text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-400/5' : 'text-zinc-600 dark:text-zinc-400'}`}
+                            >
+                                All Bots ({rules?.length || 0} rules)
+                            </button>
+                            {bots?.map((bot: any) => {
+                                const botRuleCount = rules?.filter((r: any) => r.bot_id === bot.id).length || 0
+                                return (
+                                    <button
+                                        key={bot.id}
+                                        onClick={() => {
+                                            setSelectedBotId(bot.id)
+                                            document.getElementById('rules-bot-dropdown')?.classList.add('hidden')
+                                        }}
+                                        className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${selectedBotId === bot.id ? 'text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-400/5' : 'text-zinc-600 dark:text-zinc-400'}`}
+                                    >
+                                        {bot.name} ({botRuleCount} rules)
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Refresh Button */}
+                    <button
+                        onClick={() => refetch()}
+                        disabled={isFetching}
+                        className={`p-2 bg-white dark:bg-zinc-900 border rounded-lg transition-all ${isFetching
+                            ? 'border-blue-500/50 text-blue-400'
+                            : 'border-zinc-200 dark:border-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700'
+                            }`}
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+                    </button>
+
+                    {/* Create Button */}
+                    <button
+                        onClick={() => {
+                            const botParam = selectedBotId !== 'all' ? selectedBotId : (botIdParam || '')
+                            router.push(`/dashboard/rules/create${botParam ? `?botId=${botParam}` : ''}`)
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Create Rule
+                    </button>
+                </div>
             </div>
 
-            {/* Bot Filter */}
-            <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Filter by Bot
-                </label>
-                <select
-                    value={selectedBotId}
-                    onChange={(e) => setSelectedBotId(e.target.value)}
-                    className="w-full max-w-md px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                >
-                    <option value="all">All Bots ({rules?.length || 0} rules)</option>
-                    {bots?.map((bot: any) => {
-                        const botRuleCount = rules?.filter((r: any) => r.bot_id === bot.id).length || 0
-                        return (
-                            <option key={bot.id} value={bot.id}>
-                                {bot.name} ({botRuleCount} rules)
-                            </option>
-                        )
-                    })}
-                </select>
-            </div>
-
-            {/* Rules List */}
+            {/* Rules Table */}
             {isLoadingRules ? (
-                <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                <div className="flex items-center justify-center py-16">
+                    <div className="relative w-12 h-12">
+                        <div className="absolute inset-0 rounded-full border-2 border-zinc-200 dark:border-zinc-800"></div>
+                        <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
+                    </div>
                 </div>
             ) : filteredRules && filteredRules.length > 0 ? (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Bot Name
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Rule Name
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Keyword
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Match Type
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Scope
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Status
-                                </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredRules.map((rule: any) => (
-                                <tr key={rule.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            <div className="flex-shrink-0 h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                                                </svg>
-                                            </div>
-                                            <div className="ml-3">
-                                                <div className="text-sm font-medium text-gray-900">{getBotName(rule.bot_id)}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-medium text-gray-900">{rule.name}</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <code className="px-2 py-1 bg-gray-100 rounded text-sm text-gray-700">
-                                            {rule.keyword}
-                                        </code>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">
-                                            {rule.match_type}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                        {rule.scope}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`px-2 py-1 text-xs font-medium rounded ${rule.is_active
-                                            ? 'bg-green-100 text-green-700'
-                                            : 'bg-gray-100 text-gray-700'
-                                            }`}>
-                                            {rule.is_active ? 'Active' : 'Inactive'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                        <button
-                                            onClick={() => setEditingRule(rule)}
-                                            className="text-blue-600 hover:text-blue-900"
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(rule.id, rule.name)}
-                                            className="text-red-600 hover:text-red-900"
-                                        >
-                                            Delete
-                                        </button>
-                                    </td>
+                <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl overflow-hidden shadow-sm dark:shadow-none">
+                    <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800/50 flex justify-between items-center">
+                        <div>
+                            <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200">Rules</h3>
+                            <p className="text-xs text-zinc-500 mt-0.5">{filteredRules.length} rule{filteredRules.length !== 1 ? 's' : ''} found</p>
+                        </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                        <table className="w-full table-fixed">
+                            <thead>
+                                <tr className="border-b border-zinc-200 dark:border-zinc-800/50 bg-zinc-50 dark:bg-transparent">
+                                    <th className="w-[180px] text-left py-3 px-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">Bot</th>
+                                    <th className="w-[160px] text-left py-3 px-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">Rule Name</th>
+                                    <th className="w-[140px] text-left py-3 px-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">Keyword</th>
+                                    <th className="w-[100px] text-left py-3 px-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">Match</th>
+                                    <th className="w-[100px] text-left py-3 px-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">Scope</th>
+                                    <th className="w-[80px] text-left py-3 px-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">Status</th>
+                                    <th className="w-[100px] text-right py-3 px-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">Actions</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {filteredRules.map((rule: any) => (
+                                    <tr key={rule.id} className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 flex items-center justify-center">
+                                                    <MessageSquare className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+                                                </div>
+                                                <span className="text-zinc-800 dark:text-zinc-100 font-medium truncate">{getBotName(rule.bot_id)}</span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <span className="text-zinc-800 dark:text-zinc-100 font-medium">{rule.name}</span>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <code className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700/50 rounded text-xs text-zinc-700 dark:text-zinc-300 font-mono">
+                                                {rule.keyword}
+                                            </code>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 text-purple-600 dark:text-purple-400">
+                                                {rule.match_type}
+                                            </span>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <span className="text-zinc-500 dark:text-zinc-400 text-sm capitalize">{rule.scope}</span>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${rule.is_active
+                                                ? 'bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                                : 'bg-zinc-100 dark:bg-zinc-500/10 border border-zinc-200 dark:border-zinc-500/20 text-zinc-500 dark:text-zinc-400'
+                                                }`}>
+                                                {rule.is_active ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => setEditingRule(rule)}
+                                                    className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:border-amber-300 dark:hover:border-amber-500/50 transition-all flex items-center justify-center text-zinc-500 dark:text-zinc-400 hover:text-amber-500 dark:hover:text-amber-400"
+                                                    title="Edit"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(rule.id, rule.name)}
+                                                    className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-300 dark:hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-500 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             ) : (
-                <div className="text-center py-12 bg-white rounded-xl border-2 border-dashed border-gray-300">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
+                <div className="bg-white dark:bg-[#18181b] border border-zinc-200 dark:border-zinc-800 rounded-xl p-12 text-center shadow-sm dark:shadow-none">
+                    <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Zap className="w-8 h-8 text-zinc-400 dark:text-zinc-600" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No rules yet</h3>
-                    <p className="text-gray-600 mb-4">Create your first automation rule</p>
+                    <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-2">No Rules Yet</h3>
+                    <p className="text-zinc-500 text-sm mb-6">Create your first automation rule to get started</p>
                     <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                        onClick={() => router.push('/dashboard/rules/create')}
+                        className="px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
                     >
                         Create Rule
                     </button>
                 </div>
-            )}
-
-            {/* Create Modal */}
-            {showCreateModal && (
-                <CreateRuleModal
-                    botId={selectedBotId !== 'all' ? selectedBotId : (botIdParam || undefined)}
-                    bots={bots || []}
-                    onClose={() => setShowCreateModal(false)}
-                />
             )}
 
             {/* Edit Modal */}

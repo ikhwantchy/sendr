@@ -103,6 +103,7 @@ async function initSchema(): Promise<void> {
       phone_number TEXT,
       lid TEXT,
       status TEXT DEFAULT 'disconnected' CHECK(status IN ('disconnected', 'connecting', 'connected', 'error')),
+      is_paused INTEGER DEFAULT 0,
       qr_code TEXT,
       qr_expires_at TEXT,
       session_data TEXT,
@@ -291,6 +292,13 @@ async function initSchema(): Promise<void> {
         total_contacts INTEGER DEFAULT 0,
         sent_count INTEGER DEFAULT 0,
         failed_count INTEGER DEFAULT 0,
+        delay_preset TEXT DEFAULT 'moderate',
+        anti_spam_config TEXT,
+        contact_source TEXT DEFAULT 'manual',
+        sheets_url TEXT,
+        sheets_tab TEXT,
+        image_url TEXT,
+        scheduled_at TEXT,
         started_at TEXT,
         completed_at TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -308,6 +316,7 @@ async function initSchema(): Promise<void> {
         variables TEXT,
         status TEXT DEFAULT 'pending',
         sent_at TEXT,
+        wa_message_id TEXT,
         error TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
@@ -364,13 +373,26 @@ async function initSchema(): Promise<void> {
   // MIGRATIONS
   const migrations = [
     "ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound'))",
-    "ALTER TABLE bots ADD COLUMN ai_config TEXT DEFAULT '{\"enabled\":false}'",
+    "ALTER TABLE bots ADD COLUMN ai_config TEXT DEFAULT '{\\\"enabled\\\":false}'",
     "ALTER TABLE bots ADD COLUMN lid TEXT",
     "ALTER TABLE bot_permissions ADD COLUMN can_use_reminders INTEGER DEFAULT 0",
     "ALTER TABLE bot_permissions ADD COLUMN can_use_ai INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN two_factor_secret TEXT",
     "ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER DEFAULT 0",
-    "ALTER TABLE users ADD COLUMN telegram_chat_id TEXT"
+    "ALTER TABLE users ADD COLUMN telegram_chat_id TEXT",
+    // Campaign enhancements
+    "ALTER TABLE campaigns ADD COLUMN delay_preset TEXT DEFAULT 'moderate'",
+    "ALTER TABLE campaigns ADD COLUMN anti_spam_config TEXT",
+    "ALTER TABLE campaigns ADD COLUMN contact_source TEXT DEFAULT 'manual'",
+    "ALTER TABLE campaigns ADD COLUMN sheets_url TEXT",
+    "ALTER TABLE campaigns ADD COLUMN sheets_tab TEXT",
+    "ALTER TABLE campaigns ADD COLUMN image_url TEXT",
+    "ALTER TABLE campaigns ADD COLUMN scheduled_at TEXT",
+    // New permissions for enhanced user management
+    "ALTER TABLE bot_permissions ADD COLUMN can_manage_contacts INTEGER DEFAULT 0",
+    "ALTER TABLE bot_permissions ADD COLUMN can_manage_datasources INTEGER DEFAULT 0",
+    "ALTER TABLE bots ADD COLUMN is_paused INTEGER DEFAULT 0",
+    "ALTER TABLE campaign_recipients ADD COLUMN wa_message_id TEXT"
   ];
 
   for (const sql of migrations) {

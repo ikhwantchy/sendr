@@ -6,7 +6,64 @@
 
 @layer base {
   :root {
-    /* Ghost Aesthetic - Zinc Scale (High-End Minimalist) */
+    /* Light Theme - Clean Professional */
+    --background: 0 0% 100%;
+    /* White */
+    --foreground: 240 10% 3.9%;
+    /* Zinc 950 */
+
+    /* Card - Subtle elevation */
+    --card: 0 0% 98%;
+    /* Near white */
+    --card-foreground: 240 10% 3.9%;
+
+    /* Popover */
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+
+    /* Primary - Blue accent */
+    --primary: 217 91% 60%;
+    /* Blue-500 */
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Light zinc */
+    --secondary: 240 4.8% 95.9%;
+    /* Zinc-100 */
+    --secondary-foreground: 240 5.9% 10%;
+
+    /* Accent - Emerald for success states */
+    --accent: 142 76% 36%;
+    /* Emerald-600 */
+    --accent-foreground: 0 0% 100%;
+
+    /* Muted - Low contrast text */
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    /* Zinc-500 */
+
+    /* Destructive - Red */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success - Emerald */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning - Amber */
+    --warning: 38 92% 50%;
+    --warning-foreground: 240 10% 3.9%;
+
+    /* Border - Subtle */
+    --border: 240 5.9% 90%;
+    /* Zinc-200 */
+    --input: 240 5.9% 90%;
+    --ring: 217 91% 60%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    /* Dark Theme - Ghost Aesthetic (Zinc Scale) */
     --background: 240 10% 3.9%;
     /* #09090b - Zinc 950 */
     --foreground: 240 5.3% 96.1%;
@@ -58,8 +115,6 @@
     /* Zinc-800 */
     --input: 240 3.7% 15.9%;
     --ring: 217 91% 60%;
-
-    --radius: 0.75rem;
   }
 }
 
@@ -322,3 +377,149 @@
     }
   }
 }
+
+/* =====================================================
+   LIGHT MODE COLOR OVERRIDES
+   Soft light theme with warm gray tones (not pure white)
+   Color palette based on zinc scale inverted with softer tones
+   ===================================================== */
+
+/* 
+   Light Mode Color Mapping:
+   - bg-black      → #f8f9fa (soft off-white)
+   - bg-zinc-950   → #f1f3f5 (light gray)
+   - bg-zinc-900   → #e9ecef (slightly darker)
+   - bg-zinc-800   → #dee2e6 (card backgrounds)
+   - bg-zinc-700   → #ced4da (borders/dividers)
+*/
+
+/* Background colors - Soft light tones */
+html:not(.dark) .bg-black { background-color: #f8f9fa !important; }
+html:not(.dark) .bg-zinc-950 { background-color: #f1f3f5 !important; }
+html:not(.dark) .bg-zinc-900 { background-color: #e9ecef !important; }
+html:not(.dark) .bg-zinc-900\/50 { background-color: rgba(233, 236, 239, 0.6) !important; }
+html:not(.dark) .bg-zinc-900\/30 { background-color: rgba(233, 236, 239, 0.4) !important; }
+html:not(.dark) .bg-zinc-900\/80 { background-color: rgba(233, 236, 239, 0.85) !important; }
+html:not(.dark) .bg-zinc-800 { background-color: #dee2e6 !important; }
+html:not(.dark) .bg-zinc-800\/50 { background-color: rgba(222, 226, 230, 0.6) !important; }
+html:not(.dark) .bg-zinc-800\/40 { background-color: rgba(222, 226, 230, 0.5) !important; }
+html:not(.dark) .bg-zinc-800\/80 { background-color: rgba(222, 226, 230, 0.85) !important; }
+html:not(.dark) .bg-zinc-700 { background-color: #ced4da !important; }
+
+/* Text colors - Dark readable text */
+html:not(.dark) .text-zinc-50 { color: #212529 !important; }
+html:not(.dark) .text-zinc-100 { color: #212529 !important; }
+html:not(.dark) .text-zinc-200 { color: #343a40 !important; }
+html:not(.dark) .text-zinc-300 { color: #495057 !important; }
+html:not(.dark) .text-zinc-400 { color: #6c757d !important; }
+html:not(.dark) .text-zinc-500 { color: #868e96 !important; }
+html:not(.dark) .text-zinc-600 { color: #adb5bd !important; }
+html:not(.dark) .text-white { color: #212529 !important; }
+
+/* Border colors - Subtle gray borders */
+html:not(.dark) .border-zinc-900 { border-color: #dee2e6 !important; }
+html:not(.dark) .border-zinc-800 { border-color: #ced4da !important; }
+html:not(.dark) .border-zinc-800\/50 { border-color: rgba(206, 212, 218, 0.6) !important; }
+html:not(.dark) .border-zinc-700 { border-color: #adb5bd !important; }
+
+/* Hover states */
+html:not(.dark) .hover\:bg-zinc-800:hover { background-color: #ced4da !important; }
+html:not(.dark) .hover\:bg-zinc-900:hover { background-color: #dee2e6 !important; }
+html:not(.dark) .hover\:bg-zinc-900\/50:hover { background-color: rgba(233, 236, 239, 0.7) !important; }
+html:not(.dark) .hover\:bg-zinc-900\/80:hover { background-color: rgba(233, 236, 239, 0.9) !important; }
+html:not(.dark) .hover\:bg-zinc-800\/50:hover { background-color: rgba(222, 226, 230, 0.7) !important; }
+html:not(.dark) .hover\:bg-zinc-800\/40:hover { background-color: rgba(222, 226, 230, 0.6) !important; }
+html:not(.dark) .hover\:bg-zinc-700:hover { background-color: #adb5bd !important; }
+html:not(.dark) .hover\:text-zinc-100:hover { color: #212529 !important; }
+html:not(.dark) .hover\:text-zinc-300:hover { color: #495057 !important; }
+html:not(.dark) .hover\:border-zinc-700:hover { border-color: #868e96 !important; }
+
+/* Focus states */
+html:not(.dark) .focus\:border-zinc-700:focus { border-color: #868e96 !important; }
+
+/* Group hover */
+html:not(.dark) .group:hover .group-hover\:text-zinc-300 { color: #495057 !important; }
+html:not(.dark) .group:hover .group-hover\:border-zinc-700 { border-color: #868e96 !important; }
+html:not(.dark) .group:hover .group-hover\:scale-105 { transform: scale(1.05); }
+
+/* Active states for sidebar */
+html:not(.dark) .bg-zinc-800\/80 { background-color: rgba(206, 212, 218, 0.85) !important; }
+
+/* Glass effect for light mode */
+html:not(.dark) .glass { 
+  background: rgba(248, 249, 250, 0.8) !important; 
+  border-color: rgba(206, 212, 218, 0.6) !important; 
+}
+html:not(.dark) .glass-strong { 
+  background: rgba(241, 243, 245, 0.95) !important; 
+  border-color: rgba(206, 212, 218, 0.7) !important; 
+}
+
+/* Input fields */
+html:not(.dark) input,
+html:not(.dark) textarea,
+html:not(.dark) select {
+  background-color: #f8f9fa !important;
+  border-color: #ced4da !important;
+  color: #212529 !important;
+}
+html:not(.dark) input:focus,
+html:not(.dark) textarea:focus,
+html:not(.dark) select:focus {
+  border-color: #3b82f6 !important;
+  outline: none !important;
+}
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #868e96 !important;
+}
+
+/* Buttons */
+html:not(.dark) .bg-blue-500 { background-color: #3b82f6 !important; }
+html:not(.dark) .bg-blue-600 { background-color: #2563eb !important; }
+html:not(.dark) .hover\:bg-blue-600:hover { background-color: #2563eb !important; }
+html:not(.dark) .text-blue-500 { color: #3b82f6 !important; }
+html:not(.dark) .text-blue-400 { color: #60a5fa !important; }
+html:not(.dark) .hover\:text-blue-400:hover { color: #3b82f6 !important; }
+
+/* Status badges - keep colors vibrant */
+html:not(.dark) .bg-emerald-500\/10 { background-color: rgba(16, 185, 129, 0.15) !important; }
+html:not(.dark) .bg-red-500\/10 { background-color: rgba(239, 68, 68, 0.15) !important; }
+html:not(.dark) .bg-orange-500\/10 { background-color: rgba(249, 115, 22, 0.15) !important; }
+html:not(.dark) .bg-blue-500\/10 { background-color: rgba(59, 130, 246, 0.15) !important; }
+html:not(.dark) .bg-purple-500\/10 { background-color: rgba(168, 85, 247, 0.15) !important; }
+
+/* Icon backgrounds */
+html:not(.dark) .bg-blue-500\/10 { background-color: rgba(59, 130, 246, 0.12) !important; }
+html:not(.dark) .bg-purple-500\/10 { background-color: rgba(168, 85, 247, 0.12) !important; }
+html:not(.dark) .bg-emerald-500\/10 { background-color: rgba(16, 185, 129, 0.12) !important; }
+
+/* Scrollbar for light mode */
+html:not(.dark)::-webkit-scrollbar-thumb { background-color: #ced4da; }
+html:not(.dark)::-webkit-scrollbar-thumb:hover { background-color: #adb5bd; }
+html:not(.dark) ::-webkit-scrollbar-thumb { background-color: #ced4da; }
+html:not(.dark) ::-webkit-scrollbar-thumb:hover { background-color: #adb5bd; }
+
+/* Cards and panels */
+html:not(.dark) .rounded-xl { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important; }
+html:not(.dark) .rounded-2xl { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important; }
+
+/* Chart and visualization backgrounds */
+html:not(.dark) .recharts-wrapper { background-color: transparent !important; }
+
+/* Dropdown and popover */
+html:not(.dark) .shadow-2xl { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important; }
+html:not(.dark) .shadow-xl { box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06) !important; }
+
+/* Toast notifications - keep visible */
+html:not(.dark) [data-sonner-toast] {
+  background-color: #f8f9fa !important;
+  border-color: #ced4da !important;
+  color: #212529 !important;
+}
+
+/* Override hardcoded bg-[#09090b] */
+html:not(.dark) .bg-\[\#09090b\] { background-color: #f8f9fa !important; }
+
+/* Override min-h-screen backgrounds */
+html:not(.dark) .min-h-screen { background-color: #f8f9fa; }

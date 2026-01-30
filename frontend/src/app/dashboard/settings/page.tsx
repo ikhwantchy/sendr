@@ -70,7 +70,7 @@ export default function SystemSettingsPage() {
                 <select
                     value={value}
                     onChange={(e) => handleChange(setting.key, e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-100 focus:outline-none focus:border-purple-500"
+                    className="w-full px-4 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
                 >
                     <option value="true">Enabled</option>
                     <option value="false">Disabled</option>
@@ -84,7 +84,7 @@ export default function SystemSettingsPage() {
                     type="number"
                     value={value}
                     onChange={(e) => handleChange(setting.key, e.target.value)}
-                    className="w-full px-4 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-100 focus:outline-none focus:border-purple-500"
+                    className="w-full px-4 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
                 />
             );
         }
@@ -96,7 +96,7 @@ export default function SystemSettingsPage() {
                     value={value}
                     onChange={(e) => handleChange(setting.key, e.target.value)}
                     placeholder="••••••••"
-                    className="w-full px-4 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-100 focus:outline-none focus:border-purple-500"
+                    className="w-full px-4 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
                 />
             );
         }
@@ -106,7 +106,7 @@ export default function SystemSettingsPage() {
                 type="text"
                 value={value}
                 onChange={(e) => handleChange(setting.key, e.target.value)}
-                className="w-full px-4 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-100 focus:outline-none focus:border-purple-500"
+                className="w-full px-4 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
             />
         );
     };
@@ -129,11 +129,11 @@ export default function SystemSettingsPage() {
     }
 
     return (
-        <div className="p-6 max-w-5xl mx-auto">
+        <div className="p-6 max-w-5xl mx-auto min-h-screen bg-zinc-50 dark:bg-black">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-zinc-100">System Settings</h1>
+                    <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">System Settings</h1>
                     <p className="text-zinc-500 mt-1">Configure system-wide settings and preferences</p>
                 </div>
                 <button
@@ -147,16 +147,16 @@ export default function SystemSettingsPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 mb-6 border-b border-zinc-800">
+            <div className="flex gap-2 mb-6 border-b border-zinc-200 dark:border-zinc-800">
                 {tabs.map((tab) => {
                     const Icon = tab.icon;
                     return (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-2 font-medium transition-colors ${activeTab === tab.id
-                                ? 'text-purple-400 border-b-2 border-purple-400'
-                                : 'text-zinc-500 hover:text-zinc-300'
+className={`flex items-center gap-2 px-4 py-2 font-medium transition-colors ${activeTab === tab.id
+                                ? 'text-purple-500 dark:text-purple-400 border-b-2 border-purple-500 dark:border-purple-400'
+                                : 'text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'
                                 }`}
                         >
                             <Icon size={18} />
@@ -169,13 +169,13 @@ export default function SystemSettingsPage() {
             {/* Settings Form */}
             <div className="space-y-4">
                 {getSettingsByCategory(activeTab).map((setting) => (
-                    <div key={setting.key} className="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
+                    <div key={setting.key} className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
                         <div className="mb-2">
-                            <label className="block text-sm font-medium text-zinc-300">
+                            <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-300">
                                 {setting.key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                             </label>
                             {setting.description && (
-                                <p className="text-xs text-zinc-600 mt-1">{setting.description}</p>
+                                <p className="text-xs text-zinc-500 dark:text-zinc-600 mt-1">{setting.description}</p>
                             )}
                         </div>
                         {renderInput(setting)}
@@ -183,7 +183,7 @@ export default function SystemSettingsPage() {
                 ))}
 
                 {getSettingsByCategory(activeTab).length === 0 && (
-                    <div className="text-center py-12 bg-zinc-900 rounded-lg border border-zinc-800">
+                    <div className="text-center py-12 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
                         <p className="text-zinc-500">No settings available in this category</p>
                     </div>
                 )}

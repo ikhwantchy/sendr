@@ -76,7 +76,7 @@ export default function ActivityHistoryPage() {
         }
 
         switch (log.type) {
-            case 'rule': return <Zap className="w-4 h-4 text-amber-500" />
+            case 'rule': return <Zap className="w-4 h-4 text-yellow-400" />
             case 'campaign': return <Megaphone className="w-4 h-4 text-purple-500" />
             case 'message': return <MessageCircle className="w-4 h-4 text-emerald-500" />
             case 'reminder': return <Clock className="w-4 h-4 text-cyan-500" />
@@ -96,7 +96,7 @@ export default function ActivityHistoryPage() {
         }
 
         switch (log.type) {
-            case 'rule': return 'bg-amber-500/10'
+            case 'rule': return 'bg-yellow-500/10'
             case 'campaign': return 'bg-purple-500/10'
             case 'message': return 'bg-emerald-500/10'
             case 'reminder': return 'bg-cyan-500/10'
@@ -118,7 +118,7 @@ export default function ActivityHistoryPage() {
                         <div className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" title="Deleted Message" />
                     )}
 
-                    <span className={`text-sm truncate select-none ${isDeleted ? 'text-zinc-500 line-through decoration-zinc-700' : 'text-zinc-200'} ${isBotEvent ? 'font-medium' : ''}`}>
+                    <span className={`text-sm truncate select-none ${isDeleted ? 'text-zinc-400 dark:text-zinc-500 line-through decoration-zinc-400 dark:decoration-zinc-700' : 'text-zinc-700 dark:text-zinc-200'} ${isBotEvent ? 'font-medium' : ''}`}>
                         {msg}
                     </span>
                 </div>
@@ -127,7 +127,7 @@ export default function ActivityHistoryPage() {
                     {isDeleted ? (
                         <span className="text-[10px] font-bold text-red-500/80 tracking-wider flex items-center gap-1.5">
                             DELETED
-                            <span className="w-0.5 h-0.5 rounded-full bg-zinc-700" />
+                            <span className="w-0.5 h-0.5 rounded-full bg-zinc-400 dark:bg-zinc-700" />
                             <span className="font-normal text-zinc-500 normal-case tracking-normal">Click to view content</span>
                         </span>
                     ) : (

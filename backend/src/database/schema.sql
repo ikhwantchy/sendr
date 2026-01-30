@@ -213,6 +213,7 @@ CREATE TABLE campaign_logs (
     status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'sent', 'failed', 'replied')),
     message_content TEXT,
     error_message TEXT,
+    wa_message_id TEXT,
     sent_at TIMESTAMP,
     replied_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

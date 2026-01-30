@@ -8,7 +8,7 @@ import {
 } from 'recharts'
 import {
     ArrowUpRight, ArrowDownRight, MessageSquare, Megaphone,
-    Bell, Activity, Calendar, Download, ChevronDown, Bot
+    Bell, Activity, Calendar, Download, ChevronDown, Bot, RefreshCw, Loader2
 } from 'lucide-react'
 import { usePermissions } from '@/hooks/usePermissions'
 
@@ -27,8 +27,8 @@ interface KPICardProps {
 const CustomTooltip = ({ active, payload, label, hiddenSeries }: any) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-lg shadow-xl">
-                <p className="text-zinc-400 text-xs mb-2">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-3 rounded-lg shadow-xl">
+                <p className="text-zinc-600 dark:text-zinc-400 text-xs mb-2">
                     {/* Try to format label nicely */}
                     {label}
                 </p>
@@ -38,8 +38,8 @@ const CustomTooltip = ({ active, payload, label, hiddenSeries }: any) => {
                             className="w-2 h-2 rounded-full"
                             style={{ backgroundColor: entry.color }}
                         />
-                        <span className="text-zinc-300 capitalize">{entry.name}:</span>
-                        <span className="text-zinc-100 font-mono font-medium">
+                        <span className="text-zinc-700 dark:text-zinc-300 capitalize">{entry.name}:</span>
+                        <span className="text-zinc-900 dark:text-zinc-100 font-mono font-medium">
                             {entry.value.toLocaleString()}
                         </span>
                     </div>
@@ -55,6 +55,7 @@ export default function AnalyticsDashboard() {
     const [mounted, setMounted] = useState(false)
     const [timeRange, setTimeRange] = useState<TimeRange>('24h')
     const [loading, setLoading] = useState(true)
+    const [isRefreshing, setIsRefreshing] = useState(false)
     const [data, setData] = useState<any>(null)
     const [hiddenSeries, setHiddenSeries] = useState<string[]>([])
     const [bots, setBots] = useState<any[]>([])
@@ -90,6 +91,7 @@ export default function AnalyticsDashboard() {
 
     const fetchData = async (isBackground = false) => {
         if (!isBackground) setLoading(true)
+        if (isBackground && data) setIsRefreshing(true)
         try {
             const botIdParam = selectedBotId === 'all' ? undefined : selectedBotId
             const res = await api.analytics.getFull(timeRange, botIdParam)
@@ -100,7 +102,12 @@ export default function AnalyticsDashboard() {
             console.error('Failed to fetch analytics:', error)
         } finally {
             if (!isBackground) setLoading(false)
+            setIsRefreshing(false)
         }
+    }
+
+    const handleRefresh = () => {
+        fetchData(true)
     }
 
     const exportData = () => {
@@ -112,10 +119,10 @@ export default function AnalyticsDashboard() {
     if (!hasModuleAccess('analytics')) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-                <div className="w-16 h-16 bg-zinc-900 rounded-2xl flex items-center justify-center mb-4 border border-zinc-800">
+                <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-900 rounded-2xl flex items-center justify-center mb-4 border border-zinc-200 dark:border-zinc-800">
                     <Activity className="w-8 h-8 text-zinc-600" />
                 </div>
-                <h2 className="text-xl font-bold text-white mb-2">Access Restricted</h2>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">Access Restricted</h2>
                 <p className="text-zinc-500 max-w-sm">
                     You don't have permission to view analytics. Please contact your administrator if you believe this is an error.
                 </p>
@@ -157,13 +164,18 @@ export default function AnalyticsDashboard() {
     }
 
     return (
-        <div className="p-8 space-y-8 min-h-screen bg-black text-zinc-100 font-sans">
+        <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-white mb-1">
-                        Analytics Overview
-                    </h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-1">
+                            Analytics Overview
+                        </h1>
+                        {isRefreshing && (
+                            <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                        )}
+                    </div>
                     <p className="text-zinc-500 text-sm">
                         Performance metrics and traffic analysis
                     </p>
@@ -187,7 +199,7 @@ export default function AnalyticsDashboard() {
                                     }
                                 }, 150)
                             }}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900/80 border border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-100 hover:bg-zinc-800/80 transition-all"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-all"
                         >
                             <Bot className="w-3.5 h-3.5 text-blue-500" />
                             <span>
@@ -198,14 +210,14 @@ export default function AnalyticsDashboard() {
 
                         <div
                             id="analytics-bot-dropdown"
-                            className="hidden absolute top-full right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1"
+                            className="hidden absolute top-full right-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1"
                         >
                             <button
                                 onClick={() => {
                                     setSelectedBotId('all')
                                     document.getElementById('analytics-bot-dropdown')?.classList.add('hidden')
                                 }}
-                                className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-800 transition-colors ${selectedBotId === 'all' ? 'text-blue-400 bg-blue-400/5' : 'text-zinc-400'}`}
+                                className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${selectedBotId === 'all' ? 'text-blue-500 bg-blue-50 dark:bg-blue-400/5' : 'text-zinc-600 dark:text-zinc-400'}`}
                             >
                                 All Bots
                             </button>
@@ -216,7 +228,7 @@ export default function AnalyticsDashboard() {
                                         setSelectedBotId(bot.id)
                                         document.getElementById('analytics-bot-dropdown')?.classList.add('hidden')
                                     }}
-                                    className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-800 transition-colors ${selectedBotId === bot.id ? 'text-blue-400 bg-blue-400/5' : 'text-zinc-400'}`}
+                                    className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${selectedBotId === bot.id ? 'text-blue-500 bg-blue-50 dark:bg-blue-400/5' : 'text-zinc-600 dark:text-zinc-400'}`}
                                 >
                                     {bot.name}
                                 </button>
@@ -240,7 +252,7 @@ export default function AnalyticsDashboard() {
                                     }
                                 }, 150)
                             }}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900/80 border border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-100 hover:bg-zinc-800/80 transition-all"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-all"
                         >
                             <span>
                                 {timeRange === '30m' ? 'Last 30m' :
@@ -251,7 +263,7 @@ export default function AnalyticsDashboard() {
                         </button>
                         <div
                             id="analytics-time-range-dropdown"
-                            className="hidden absolute top-full right-0 mt-2 w-32 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg overflow-hidden z-20"
+                            className="hidden absolute top-full right-0 mt-2 w-32 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-lg overflow-hidden z-20"
                         >
                             {[
                                 { label: 'Last 30m', value: '30m' },
@@ -265,9 +277,9 @@ export default function AnalyticsDashboard() {
                                         setTimeRange(option.value as TimeRange)
                                         document.getElementById('analytics-time-range-dropdown')?.classList.add('hidden')
                                     }}
-                                    className={`w-full px-4 py-2 text-xs text-left transition-colors ${timeRange === option.value
-                                        ? 'bg-zinc-800 text-zinc-100'
-                                        : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+className={`w-full px-4 py-2 text-xs text-left transition-colors ${timeRange === option.value
+                                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
+                                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-200'
                                         }`}
                                 >
                                     {option.label}
@@ -276,9 +288,21 @@ export default function AnalyticsDashboard() {
                         </div>
                     </div>
 
+                    {/* Refresh Button */}
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        className={`p-2 bg-white dark:bg-zinc-900 border rounded-lg transition-all ${isRefreshing
+                            ? 'border-blue-500/50 text-blue-500 dark:text-blue-400'
+                            : 'border-zinc-200 dark:border-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700'
+                            }`}
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    </button>
+
                     <button
                         onClick={exportData}
-                        className="p-2 bg-zinc-900 border border-zinc-800/50 rounded-lg text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors"
+                        className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
                     >
                         <Download className="w-4 h-4" />
                     </button>
@@ -317,9 +341,9 @@ export default function AnalyticsDashboard() {
             {/* Charts Section */}
             < div className="grid grid-cols-1 lg:grid-cols-3 gap-6" >
                 {/* Primary Chart: Traffic Volume */}
-                < div className="lg:col-span-2 bg-zinc-950 border border-zinc-900 rounded-xl p-6" >
+                < div className="lg:col-span-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-6" >
                     <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-medium text-zinc-200">Traffic Volume</h3>
+                        <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200">Traffic Volume</h3>
                         <div className="flex flex-wrap items-center gap-4 text-xs">
                             <LegendItem
                                 color="bg-blue-500"
@@ -350,7 +374,7 @@ export default function AnalyticsDashboard() {
 
                     <div className="h-[300px] w-full">
                         {loading && !data ? (
-                            <div className="h-full w-full flex items-center justify-center bg-zinc-900/30 rounded-lg">
+                            <div className="h-full w-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-900/30 rounded-lg">
                                 <span className="text-zinc-600 text-sm animate-pulse">Loading data...</span>
                             </div>
                         ) : trafficData.length > 0 ? (
@@ -448,12 +472,12 @@ export default function AnalyticsDashboard() {
                 </div >
 
                 {/* Secondary Chart: Distribution */}
-                < div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 flex flex-col" >
-                    <h3 className="text-lg font-medium text-zinc-200 mb-6">Message Type</h3>
+                < div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-6 flex flex-col" >
+                    <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200 mb-6">Message Type</h3>
 
                     <div className="flex-1 min-h-[200px]">
                         {loading && !data ? (
-                            <div className="h-full w-full flex items-center justify-center bg-zinc-900/30 rounded-lg">
+                            <div className="h-full w-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-900/30 rounded-lg">
                                 <span className="text-zinc-600 text-sm animate-pulse">Loading...</span>
                             </div>
                         ) : (
@@ -487,15 +511,15 @@ export default function AnalyticsDashboard() {
             </div >
 
             {/* Leaderboard Table */}
-            < div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden" >
+            < div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl overflow-hidden" >
                 <div className="px-6 py-4 border-b border-zinc-800/50 flex justify-between items-center">
-                    <h3 className="text-lg font-medium text-zinc-200">Top Performing Bots</h3>
+                    <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200">Top Performing Bots</h3>
                     <div className="text-xs text-zinc-500">Based on processed volume</div>
                 </div>
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-zinc-900/50 text-zinc-500 font-medium">
+                        <thead className="bg-zinc-100 dark:bg-zinc-900/50 text-zinc-600 dark:text-zinc-500 font-medium">
                             <tr>
                                 <th className="px-6 py-3">Bot Name</th>
                                 <th className="px-6 py-3">Status</th>
@@ -503,7 +527,7 @@ export default function AnalyticsDashboard() {
                                 <th className="px-6 py-3 text-right">Volume</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
+                        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/50 text-zinc-700 dark:text-zinc-300">
                             {loading && !data ? (
                                 <tr>
                                     <td colSpan={4} className="px-6 py-8 text-center text-zinc-500">
@@ -512,14 +536,14 @@ export default function AnalyticsDashboard() {
                                 </tr>
                             ) : topBots.length > 0 ? (
                                 topBots.map((bot: any) => (
-                                    <tr key={bot.id} className="hover:bg-zinc-900/30 transition-colors">
-                                        <td className="px-6 py-4 font-medium text-white">{bot.name}</td>
+                                    <tr key={bot.id} className="hover:bg-zinc-100 dark:hover:bg-zinc-900/30 transition-colors">
+                                        <td className="px-6 py-4 font-medium text-zinc-900 dark:text-white">{bot.name}</td>
                                         <td className="px-6 py-4">
                                             <Badge status={bot.status} />
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-24 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                                                <div className="w-24 h-2 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
                                                     <div
                                                         className="h-full bg-indigo-500 rounded-full"
                                                         style={{ width: `${bot.activityScore}%` }}
@@ -564,9 +588,9 @@ function LegendItem({ color, label, onClick, hidden }: { color: string, label: s
 
 function KPICard({ title, value, trend, icon, loading }: KPICardProps) {
     return (
-        <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 relative overflow-hidden group hover:border-zinc-800 transition-colors">
+        <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-6 relative overflow-hidden group hover:border-zinc-300 dark:hover:border-zinc-800 transition-colors shadow-sm dark:shadow-none">
             <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-zinc-900 rounded-lg text-zinc-100 group-hover:bg-zinc-800 transition-colors">
+                <div className="p-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-zinc-700 dark:text-zinc-100 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800 transition-colors">
                     {icon}
                 </div>
                 {trend !== undefined && (
@@ -580,9 +604,9 @@ function KPICard({ title, value, trend, icon, loading }: KPICardProps) {
 
             <div className="space-y-1">
                 {loading && value === undefined ? (
-                    <div className="h-8 w-24 bg-zinc-900 rounded animate-pulse" />
+                    <div className="h-8 w-24 bg-zinc-200 dark:bg-zinc-900 rounded animate-pulse" />
                 ) : (
-                    <h3 className="text-3xl font-bold text-white tracking-tight">
+                    <h3 className="text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">
                         {typeof value === 'number' ? value.toLocaleString() : value}
                     </h3>
                 )}

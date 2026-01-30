@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
@@ -8,7 +8,6 @@ import {
     Shield,
     Smartphone,
     Globe,
-    Clock,
     Trash2,
     Send,
     Key,
@@ -18,17 +17,77 @@ import {
     ShieldCheck,
     Fingerprint,
     History,
-    LogOut
+    LogOut,
+    ChevronDown,
+    RefreshCw,
+    Laptop,
+    Clock,
+    MapPin,
+    AlertTriangle,
+    Check,
+    X,
+    Copy,
+    ExternalLink
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
+// KPI Card Component - Same as Analytics
+interface KPICardProps {
+    title: string
+    value: number | string
+    icon: React.ReactNode
+    loading?: boolean
+    color?: string
+    onClick?: () => void
+    active?: boolean
+    badge?: string
+    badgeColor?: string
+}
+
+function KPICard({ title, value, icon, loading, color = 'text-zinc-900 dark:text-white', onClick, active, badge, badgeColor = 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400' }: KPICardProps) {
+    return (
+        <div
+            onClick={onClick}
+            className={`bg-white dark:bg-zinc-950 border rounded-xl p-6 relative overflow-hidden group transition-all cursor-pointer shadow-sm dark:shadow-none
+                ${active ? 'border-blue-500/50 ring-1 ring-blue-500/20' : 'border-zinc-200 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800'}`}
+        >
+            <div className="flex justify-between items-start mb-4">
+                <div className="p-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-zinc-700 dark:text-zinc-100 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800 transition-colors">
+                    {icon}
+                </div>
+                {badge && (
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${badgeColor}`}>
+                        {badge}
+                    </span>
+                )}
+            </div>
+
+            <div className="space-y-1">
+                {loading ? (
+                    <div className="h-8 w-24 bg-zinc-200 dark:bg-zinc-900 rounded animate-pulse" />
+                ) : (
+                    <h3 className={`text-2xl font-bold tracking-tight ${color}`}>
+                        {typeof value === 'number' ? value.toLocaleString() : value}
+                    </h3>
+                )}
+                <p className="text-sm text-zinc-500 font-medium">{title}</p>
+            </div>
+        </div>
+    )
+}
+
 export default function SecurityPage() {
-    const [activeTab, setActiveTab] = useState('sessions')
+    const [mounted, setMounted] = useState(false)
+    const [activeSection, setActiveSection] = useState<'sessions' | '2fa' | 'alerts' | 'logs'>('sessions')
     const [telegramChatId, setTelegramChatId] = useState('')
     const queryClient = useQueryClient()
 
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
     // Fetch Sessions
-    const { data: sessions = [], isLoading: sessionsLoading } = useQuery({
+    const { data: sessions = [], isLoading: sessionsLoading, refetch: refetchSessions } = useQuery({
         queryKey: ['security', 'sessions'],
         queryFn: async () => {
             const response = await api.get('/security/sessions')
@@ -61,9 +120,21 @@ export default function SecurityPage() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['security', 'sessions'] })
-            toast.success('Session revoked')
+            toast.success('Session revoked successfully')
         },
         onError: () => toast.error('Failed to revoke session')
+    })
+
+    // Revoke All Sessions Mutation
+    const revokeAllSessions = useMutation({
+        mutationFn: async () => {
+            await api.post('/security/sessions/revoke-all')
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['security', 'sessions'] })
+            toast.success('All other sessions revoked')
+        },
+        onError: () => toast.error('Failed to revoke sessions')
     })
 
     // Unlink Telegram Mutation
@@ -73,7 +144,7 @@ export default function SecurityPage() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['security', 'telegram'] })
-            toast.success('Telegram unlinked')
+            toast.success('Telegram unlinked successfully')
         },
         onError: () => toast.error('Failed to unlink Telegram')
     })
@@ -83,7 +154,7 @@ export default function SecurityPage() {
         mutationFn: async () => {
             await api.post('/security/telegram/test')
         },
-        onSuccess: () => toast.success('Test alert sent'),
+        onSuccess: () => toast.success('Test alert sent to Telegram'),
         onError: () => toast.error('Failed to send test alert')
     })
 
@@ -100,337 +171,479 @@ export default function SecurityPage() {
         onError: () => toast.error('Failed to setup Telegram')
     })
 
-    const tabs = [
-        { id: 'sessions', name: 'Active Sessions', icon: Monitor },
-        { id: '2fa', name: 'Two-Factor Auth', icon: Fingerprint },
-        { id: 'alerts', name: 'Security Alerts', icon: Send },
-        { id: 'logs', name: 'Security History', icon: History },
-    ]
+    // Calculate stats
+    const activeSessions = sessions.length
+    const failedLogins = logs.filter((l: any) => l.event_type?.includes('FAILED')).length
+    const successLogins = logs.filter((l: any) => !l.event_type?.includes('FAILED')).length
+
+    if (!mounted) return null
 
     return (
-        <div className="p-6 md:p-8 animate-fade-in max-w-7xl mx-auto min-h-screen bg-black text-zinc-100">
-            {/* Header */}
-            <div className="mb-10">
-                <div className="flex items-center gap-4 mb-3">
-                    <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.1)]">
-                        <Shield className="w-8 h-8 text-blue-500" />
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Security Center</h1>
-                        <p className="text-zinc-500 text-sm mt-1">Manage your account security, active sessions, and proactive alerts.</p>
-                    </div>
+        <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
+            {/* Header - Same style as Analytics */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-1">
+                        Security Center
+                    </h1>
+                    <p className="text-zinc-500 text-sm">
+                        Manage sessions, authentication, and security alerts
+                    </p>
                 </div>
-            </div>
 
-            {/* Quick Status Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                <div className="bg-zinc-900/40 border border-zinc-800/50 p-6 rounded-[2rem] backdrop-blur-xl group hover:border-zinc-700/50 transition-all duration-300">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-500 group-hover:scale-110 transition-transform">
-                            <ShieldCheck className="w-5 h-5" />
-                        </div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full">Secure</span>
-                    </div>
-                    <h3 className="text-sm font-semibold mb-1">Account Protection</h3>
-                    <p className="text-xs text-zinc-500">Your account is currently protected by session tracking.</p>
-                </div>
-                <div className="bg-zinc-900/40 border border-zinc-800/50 p-6 rounded-[2rem] backdrop-blur-xl group hover:border-zinc-700/50 transition-all duration-300">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="p-2 bg-yellow-500/10 rounded-xl text-yellow-500 group-hover:scale-110 transition-transform">
-                            <Fingerprint className="w-5 h-5" />
-                        </div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded-full">Recommended</span>
-                    </div>
-                    <h3 className="text-sm font-semibold mb-1">2FA Status</h3>
-                    <p className="text-xs text-zinc-500">Enable 2FA to add an extra layer of security to your login.</p>
-                </div>
-                <div className="bg-zinc-900/40 border border-zinc-800/50 p-6 rounded-[2rem] backdrop-blur-xl group hover:border-zinc-700/50 transition-all duration-300">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500 group-hover:scale-110 transition-transform">
-                            <Send className="w-5 h-5" />
-                        </div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 bg-zinc-800 px-2 py-1 rounded-full">Setup Required</span>
-                    </div>
-                    <h3 className="text-sm font-semibold mb-1">Telegram Alerts</h3>
-                    <p className="text-xs text-zinc-500">Link Telegram to get instant notifications on suspicious logins.</p>
-                </div>
-            </div>
-
-            {/* Main Tabs */}
-            <div className="flex flex-col md:flex-row gap-8">
-                {/* Tabs Sidebar */}
-                <div className="w-full md:w-64 space-y-2">
-                    {tabs.map((tab) => (
+                <div className="flex flex-wrap items-center gap-3">
+                    {/* Section Dropdown */}
+                    <div className="relative">
                         <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-300 ${activeTab === tab.id
-                                ? 'bg-zinc-900 text-white shadow-xl shadow-black/20 border border-zinc-800/50'
-                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/40'
-                                }`}
+                            onClick={() => {
+                                const dropdown = document.getElementById('security-section-dropdown')
+                                if (dropdown) dropdown.classList.toggle('hidden')
+                            }}
+                            onBlur={(e) => {
+                                setTimeout(() => {
+                                    const dropdown = document.getElementById('security-section-dropdown')
+                                    if (dropdown && !dropdown.contains(e.relatedTarget as Node)) {
+                                        dropdown.classList.add('hidden')
+                                    }
+                                }, 150)
+                            }}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-all"
                         >
-                            <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-blue-500' : 'text-zinc-600'}`} />
-                            {tab.name}
+                            <Shield className="w-3.5 h-3.5 text-blue-500" />
+                            <span>
+                                {activeSection === 'sessions' ? 'Active Sessions' :
+                                    activeSection === '2fa' ? 'Two-Factor Auth' :
+                                        activeSection === 'alerts' ? 'Telegram Alerts' : 'Security Logs'}
+                            </span>
+                            <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
                         </button>
-                    ))}
-                </div>
 
-                {/* Tab Content */}
-                <div className="flex-1 min-h-[500px]">
-                    {activeTab === 'sessions' && (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
-                            <div className="flex items-center justify-between mb-2">
-                                <h2 className="text-xl font-bold">Active Sessions</h2>
-                                <button className="text-xs font-bold text-red-500 hover:text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl transition-all">
-                                    Logout of All Other Devices
+                        <div
+                            id="security-section-dropdown"
+                            className="hidden absolute top-full right-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1"
+                        >
+                            {[
+                                { id: 'sessions', label: 'Active Sessions', icon: Monitor },
+                                { id: '2fa', label: 'Two-Factor Auth', icon: Fingerprint },
+                                { id: 'alerts', label: 'Telegram Alerts', icon: Send },
+                                { id: 'logs', label: 'Security Logs', icon: History }
+                            ].map((item) => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => {
+                                        setActiveSection(item.id as any)
+                                        document.getElementById('security-section-dropdown')?.classList.add('hidden')
+                                    }}
+                                    className={`w-full flex items-center gap-2 text-left px-4 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${activeSection === item.id ? 'text-blue-500 bg-blue-50 dark:bg-blue-400/5' : 'text-zinc-600 dark:text-zinc-400'}`}
+                                >
+                                    <item.icon className="w-3.5 h-3.5" />
+                                    {item.label}
                                 </button>
-                            </div>
-                            {sessionsLoading ? (
-                                <div className="flex items-center justify-center py-20">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                                </div>
-                            ) : sessions.length === 0 ? (
-                                <div className="text-center py-20 bg-zinc-900/20 border border-dashed border-zinc-800 rounded-[2rem]">
-                                    <Monitor className="w-12 h-12 text-zinc-700 mx-auto mb-4 opacity-50" />
-                                    <p className="text-zinc-500 font-medium">No active sessions found.</p>
-                                </div>
-                            ) : (
-                                <div className="grid gap-3">
-                                    {sessions.map((session: any) => (
-                                        <div key={session.id} className="bg-zinc-900/30 border border-zinc-800/50 rounded-[1.5rem] p-5 flex items-center justify-between group hover:bg-zinc-900/50 transition-all">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-zinc-950/50 rounded-2xl flex items-center justify-center border border-zinc-800 group-hover:border-zinc-700 transition-colors">
-                                                    <Globe className="w-6 h-6 text-zinc-500" />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-sm">{session.ip_address || 'Unknown IP'}</span>
-                                                        <span className="text-[10px] bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">Active Now</span>
-                                                    </div>
-                                                    <p className="text-xs text-zinc-500 mt-1 max-w-[300px] truncate">{session.user_agent || 'Unknown Device'}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-6">
-                                                <div className="text-right hidden sm:block">
-                                                    <p className="text-[10px] uppercase font-bold text-zinc-600 tracking-wider">Last Activity</p>
-                                                    <p className="text-xs text-zinc-400">{formatDistanceToNow(new Date(session.last_active))} ago</p>
-                                                </div>
-                                                <button
-                                                    onClick={() => revokeSession.mutate(session.id)}
-                                                    className="p-3 bg-red-500/5 hover:bg-red-500/10 text-red-500/50 hover:text-red-500 rounded-2xl transition-all"
-                                                    title="Revoke Session"
-                                                >
-                                                    <LogOut className="w-5 h-5" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            ))}
                         </div>
-                    )}
+                    </div>
 
-                    {activeTab === '2fa' && (
-                        <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-                            <div className="bg-zinc-900/40 border border-zinc-800/50 p-8 rounded-[2rem] text-center max-w-2xl mx-auto border-dashed">
-                                <Key className="w-16 h-16 text-zinc-700 mx-auto mb-6 opacity-50" />
-                                <h2 className="text-2xl font-bold mb-3">Strong Authentication</h2>
-                                <p className="text-zinc-500 mb-8 max-w-md mx-auto">Add an extra layer of security to your account by requiring a code from your mobile phone to login.</p>
-                                <button className="inline-flex items-center gap-2 px-8 py-3.5 bg-white text-black font-bold rounded-2xl hover:bg-zinc-200 transition-all shadow-xl shadow-white/5">
-                                    <Smartphone className="w-5 h-5" />
-                                    Setup 2FA Now
-                                </button>
-                                <div className="mt-8 flex items-center justify-center gap-6 opacity-40">
-                                    <span className="text-xs font-medium">Google Authenticator</span>
-                                    <span className="text-xs font-medium">Authy</span>
-                                    <span className="text-xs font-medium">Microsoft Authenticator</span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'alerts' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-                            <div className="bg-zinc-900/40 border border-zinc-800/50 p-8 rounded-[2rem]">
-                                <div className="flex items-center gap-4 mb-6">
-                                    <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center">
-                                        <Send className="w-6 h-6 text-blue-500" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-bold">Telegram Alerts</h2>
-                                        <p className="text-sm text-zinc-500">Get notified via Telegram when security events occur.</p>
-                                    </div>
-                                </div>
-
-                                {telegramStatus?.systemConfigured === false && (
-                                    <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-start gap-3">
-                                        <AlertCircle className="w-5 h-5 text-yellow-500 mt-0.5" />
-                                        <div>
-                                            <h4 className="font-bold text-yellow-500 text-sm">System Not Configured</h4>
-                                            <p className="text-xs text-yellow-500/80 leading-relaxed mt-1">
-                                                The Telegram Bot Token is not configured on the server. Alerts will not be sent until the system administrator configures it in System Settings or Environment Variables with properly valid Token.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {telegramStatusLoading ? (
-                                    <div className="flex items-center justify-center py-10">
-                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                                    </div>
-                                ) : telegramStatus?.connected ? (
-                                    <div className="space-y-6">
-                                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-5 rounded-2xl flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                                                    <CheckCircle2 className="w-6 h-6" />
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-bold text-emerald-500 text-lg">Connected Active</h4>
-                                                    <p className="text-xs text-emerald-500/70 font-mono mt-0.5">Chat ID: {telegramStatus.chatId}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                                                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">Online</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-wrap gap-3">
-                                            <button
-                                                onClick={() => testTelegram.mutate()}
-                                                disabled={testTelegram.isPending}
-                                                className="flex items-center gap-2 px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold rounded-xl transition-all disabled:opacity-50"
-                                            >
-                                                <Send className="w-4 h-4" />
-                                                {testTelegram.isPending ? 'Sending...' : 'Send Test Alert'}
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    if (confirm('Are you sure you want to unlink Telegram alerts?')) {
-                                                        unlinkTelegram.mutate()
-                                                    }
-                                                }}
-                                                disabled={unlinkTelegram.isPending}
-                                                className="flex items-center gap-2 px-5 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold rounded-xl transition-all disabled:opacity-50"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                                {unlinkTelegram.isPending ? 'Unlinking...' : 'Unlink Device'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">Your Chat ID</label>
-                                            <div className="flex gap-3">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Enter your Telegram Chat ID"
-                                                    value={telegramChatId}
-                                                    onChange={(e) => setTelegramChatId(e.target.value)}
-                                                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
-                                                />
-                                                <button
-                                                    onClick={() => setupTelegram.mutate(telegramChatId)}
-                                                    disabled={!telegramChatId || setupTelegram.isPending}
-                                                    className="px-6 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-500/20"
-                                                >
-                                                    {setupTelegram.isPending ? 'Saving...' : 'Link Chat'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="p-4 bg-zinc-950/50 border border-zinc-800 rounded-2xl flex items-start gap-3">
-                                            <AlertCircle className="w-5 h-5 text-blue-500/50 mt-0.5" />
-                                            <p className="text-xs text-zinc-500 leading-relaxed">
-                                                To find your Chat ID, send any message to <a href="https://t.me/userinfobot" target="_blank" className="text-blue-500 font-bold hover:underline">@userinfobot</a> on Telegram. Enter the number it provides here.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="p-5 bg-zinc-900/20 border border-zinc-800/50 rounded-2xl flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <Send className="w-4 h-4 text-zinc-600" />
-                                        <span className="text-sm font-medium">New Device Login</span>
-                                    </div>
-                                    <div className={`w-8 h-4 rounded-full relative transition-colors ${telegramStatus?.connected ? 'bg-blue-500' : 'bg-zinc-700'}`}>
-                                        <div className={`absolute top-1 w-2 h-2 bg-white rounded-full transition-all ${telegramStatus?.connected ? 'right-1' : 'left-1'}`}></div>
-                                    </div>
-                                </div>
-                                <div className="p-5 bg-zinc-900/20 border border-zinc-800/50 rounded-2xl flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <Send className="w-4 h-4 text-zinc-600" />
-                                        <span className="text-sm font-medium">Failed Login Alert</span>
-                                    </div>
-                                    <div className={`w-8 h-4 rounded-full relative transition-colors ${telegramStatus?.connected ? 'bg-blue-500' : 'bg-zinc-700'}`}>
-                                        <div className={`absolute top-1 w-2 h-2 bg-white rounded-full transition-all ${telegramStatus?.connected ? 'right-1' : 'left-1'}`}></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'logs' && (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
-                            <div className="flex items-center justify-between mb-2">
-                                <h2 className="text-xl font-bold">Security Timeline</h2>
-                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest bg-zinc-800 px-3 py-1 rounded-full">Last 50 events</span>
-                            </div>
-                            {logsLoading ? (
-                                <div className="flex items-center justify-center py-20">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                                </div>
-                            ) : logs.length === 0 ? (
-                                <div className="text-center py-20 bg-zinc-900/20 border border-dashed border-zinc-800 rounded-[2rem]">
-                                    <History className="w-12 h-12 text-zinc-700 mx-auto mb-4 opacity-50" />
-                                    <p className="text-zinc-500 font-medium">Security records are clear.</p>
-                                </div>
-                            ) : (
-                                <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-[2rem] overflow-hidden">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="border-b border-zinc-800/50 bg-zinc-900/50">
-                                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Event</th>
-                                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Source IP</th>
-                                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Time</th>
-                                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-zinc-800/30">
-                                            {logs.map((log: any) => (
-                                                <tr key={log.id} className="hover:bg-zinc-800/10 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-2 h-2 rounded-full ${log.event_type.includes('FAILED') ? 'bg-red-500' : 'bg-blue-500'
-                                                                }`} />
-                                                            <span className="text-xs font-semibold text-zinc-300">
-                                                                {log.event_type.replace(/_/g, ' ')}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-xs font-mono text-zinc-500">{log.ip_address || 'Internal'}</td>
-                                                    <td className="px-6 py-4 text-xs text-zinc-500">{formatDistanceToNow(new Date(log.created_at))} ago</td>
-                                                    <td className="px-6 py-4">
-                                                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${log.event_type.includes('FAILED')
-                                                            ? 'bg-red-500/10 text-red-500'
-                                                            : 'bg-emerald-500/10 text-emerald-500'
-                                                            }`}>
-                                                            {log.event_type.includes('FAILED') ? 'Blocked' : 'Verified'}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    {/* Refresh Button */}
+                    <button
+                        onClick={() => refetchSessions()}
+                        className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
+
+            {/* KPI Grid - Same style as Analytics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KPICard
+                    title="Active Sessions"
+                    value={activeSessions}
+                    icon={<Monitor className="w-5 h-5" />}
+                    loading={sessionsLoading}
+                    onClick={() => setActiveSection('sessions')}
+                    active={activeSection === 'sessions'}
+                    badge="Live"
+                    badgeColor="bg-blue-500/10 text-blue-400"
+                />
+                <KPICard
+                    title="2FA Status"
+                    value="Not Setup"
+                    icon={<Fingerprint className="w-5 h-5" />}
+                    onClick={() => setActiveSection('2fa')}
+                    active={activeSection === '2fa'}
+                    badge="Recommended"
+                    badgeColor="bg-amber-500/10 text-amber-400"
+                />
+                <KPICard
+                    title="Telegram Alerts"
+                    value={telegramStatus?.connected ? 'Connected' : 'Not Linked'}
+                    icon={<Send className="w-5 h-5" />}
+                    loading={telegramStatusLoading}
+                    onClick={() => setActiveSection('alerts')}
+                    active={activeSection === 'alerts'}
+                    color={telegramStatus?.connected ? 'text-emerald-500' : 'text-zinc-400'}
+                    badge={telegramStatus?.connected ? 'Active' : 'Setup'}
+                    badgeColor={telegramStatus?.connected ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}
+                />
+                <KPICard
+                    title="Failed Logins"
+                    value={failedLogins}
+                    icon={<AlertTriangle className="w-5 h-5" />}
+                    loading={logsLoading}
+                    onClick={() => setActiveSection('logs')}
+                    active={activeSection === 'logs'}
+                    color={failedLogins > 0 ? 'text-red-500' : 'text-emerald-500'}
+                />
+            </div>
+
+            {/* Content Sections */}
+            {activeSection === 'sessions' && (
+                <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
+                    <div className="px-6 py-4 border-b border-zinc-800/50 flex justify-between items-center">
+                        <div>
+                            <h3 className="text-lg font-medium text-zinc-200">Active Sessions</h3>
+                            <p className="text-xs text-zinc-500 mt-0.5">Devices currently logged into your account</p>
+                        </div>
+                        {sessions.length > 1 && (
+                            <button
+                                onClick={() => {
+                                    if (confirm('Logout from all other devices?')) {
+                                        revokeAllSessions.mutate()
+                                    }
+                                }}
+                                className="text-xs font-medium text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded-lg transition-all"
+                            >
+                                Logout All Others
+                            </button>
+                        )}
+                    </div>
+
+                    {sessionsLoading ? (
+                        <div className="flex items-center justify-center py-16">
+                            <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+                        </div>
+                    ) : sessions.length === 0 ? (
+                        <div className="text-center py-16">
+                            <div className="p-4 rounded-full bg-zinc-900/50 w-fit mx-auto mb-4">
+                                <Monitor size={32} className="text-zinc-600" />
+                            </div>
+                            <h3 className="text-lg font-medium text-zinc-300 mb-1">No active sessions</h3>
+                            <p className="text-zinc-500 text-sm">Session data will appear here</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-zinc-800/50">
+                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Device</th>
+                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">IP Address</th>
+                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Browser / User Agent</th>
+                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Last Active</th>
+                                        <th className="text-right py-3 px-4 text-sm font-medium text-zinc-400">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sessions.map((session: any, index: number) => {
+                                        // Format IP address
+                                        const formatIP = (ip: string) => {
+                                            if (!ip) return 'Unknown'
+                                            if (ip === '::1' || ip === '127.0.0.1') return 'Localhost'
+                                            if (ip.startsWith('::ffff:')) return ip.replace('::ffff:', '')
+                                            return ip
+                                        }
+                                        
+                                        // Parse user agent for better display
+                                        const parseUserAgent = (ua: string) => {
+                                            if (!ua) return 'Unknown Device'
+                                            if (ua.includes('Chrome')) return 'Chrome Browser'
+                                            if (ua.includes('Firefox')) return 'Firefox Browser'
+                                            if (ua.includes('Safari') && !ua.includes('Chrome')) return 'Safari Browser'
+                                            if (ua.includes('Edge')) return 'Edge Browser'
+                                            return ua.length > 50 ? ua.substring(0, 50) + '...' : ua
+                                        }
+                                        
+                                        return (
+                                            <tr key={session.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
+                                                <td className="py-4 px-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-9 h-9 bg-zinc-900 rounded-lg flex items-center justify-center border border-zinc-800">
+                                                            {session.user_agent?.includes('Mobile') ? (
+                                                                <Smartphone className="w-4 h-4 text-zinc-500" />
+                                                            ) : (
+                                                                <Laptop className="w-4 h-4 text-zinc-500" />
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-medium text-white">
+                                                                {session.user_agent?.includes('Mobile') ? 'Mobile' : 'Desktop'}
+                                                            </span>
+                                                            {index === 0 && (
+                                                                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-medium uppercase tracking-wider">
+                                                                    Current
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4">
+                                                    <span className="font-mono text-zinc-300">{formatIP(session.ip_address)}</span>
+                                                </td>
+                                                <td className="py-4 px-4">
+                                                    <span className="text-zinc-400">{parseUserAgent(session.user_agent)}</span>
+                                                </td>
+                                                <td className="py-4 px-4">
+                                                    <span className="text-zinc-400">{formatDistanceToNow(new Date(session.last_active))} ago</span>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">
+                                                    {index !== 0 ? (
+                                                        <button
+                                                            onClick={() => revokeSession.mutate(session.id)}
+                                                            disabled={revokeSession.isPending}
+                                                            className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400 ml-auto"
+                                                            title="Revoke Session"
+                                                        >
+                                                            <LogOut className="w-4 h-4" />
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs text-zinc-600">—</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {activeSection === '2fa' && (
+                <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
+                    <div className="px-6 py-4 border-b border-zinc-800/50">
+                        <h3 className="text-lg font-medium text-zinc-200">Two-Factor Authentication</h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">Add an extra layer of security to your account</p>
+                    </div>
+
+                    <div className="p-8 text-center max-w-lg mx-auto">
+                        <div className="p-4 rounded-full bg-zinc-900/50 w-fit mx-auto mb-6">
+                            <Key size={40} className="text-zinc-600" />
+                        </div>
+                        <h3 className="text-xl font-semibold text-white mb-2">Protect Your Account</h3>
+                        <p className="text-zinc-500 text-sm mb-8 leading-relaxed">
+                            Two-factor authentication adds an extra layer of security by requiring a code from your mobile device when you sign in.
+                        </p>
+
+                        <button className="inline-flex items-center gap-2 px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-zinc-200 transition-all">
+                            <Smartphone className="w-4 h-4" />
+                            Setup 2FA Now
+                        </button>
+
+                        <div className="mt-8 flex items-center justify-center gap-6 text-zinc-600">
+                            <span className="text-xs">Google Authenticator</span>
+                            <span className="text-xs">Authy</span>
+                            <span className="text-xs">Microsoft Authenticator</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeSection === 'alerts' && (
+                <div className="space-y-6">
+                    <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
+                        <div className="px-6 py-4 border-b border-zinc-800/50">
+                            <h3 className="text-lg font-medium text-zinc-200">Telegram Alerts</h3>
+                            <p className="text-xs text-zinc-500 mt-0.5">Get instant notifications for security events</p>
+                        </div>
+
+                        <div className="p-6">
+                            {telegramStatus?.systemConfigured === false && (
+                                <div className="mb-6 p-4 bg-amber-500/5 border border-amber-500/20 rounded-lg flex items-start gap-3">
+                                    <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <h4 className="font-medium text-amber-400 text-sm">System Not Configured</h4>
+                                        <p className="text-xs text-amber-500/70 leading-relaxed mt-1">
+                                            Telegram Bot Token is not configured on the server. Contact your administrator.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {telegramStatusLoading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+                                </div>
+                            ) : telegramStatus?.connected ? (
+                                <div className="space-y-6">
+                                    <div className="bg-emerald-500/5 border border-emerald-500/20 p-5 rounded-lg flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                                                <CheckCircle2 className="w-6 h-6" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-semibold text-emerald-400">Connected & Active</h4>
+                                                <p className="text-xs text-emerald-500/60 font-mono mt-0.5">Chat ID: {telegramStatus.chatId}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                                            <span className="text-xs font-medium text-emerald-400">Online</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-3">
+                                        <button
+                                            onClick={() => testTelegram.mutate()}
+                                            disabled={testTelegram.isPending}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 font-medium rounded-lg transition-all disabled:opacity-50 border border-zinc-800"
+                                        >
+                                            <Send className="w-4 h-4" />
+                                            {testTelegram.isPending ? 'Sending...' : 'Send Test Alert'}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (confirm('Unlink Telegram alerts?')) {
+                                                    unlinkTelegram.mutate()
+                                                }
+                                            }}
+                                            disabled={unlinkTelegram.isPending}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium rounded-lg transition-all disabled:opacity-50"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            {unlinkTelegram.isPending ? 'Unlinking...' : 'Unlink'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2 block">Your Telegram Chat ID</label>
+                                        <div className="flex gap-3">
+                                            <input
+                                                type="text"
+                                                placeholder="Enter your Chat ID"
+                                                value={telegramChatId}
+                                                onChange={(e) => setTelegramChatId(e.target.value)}
+                                                className="flex-1 bg-zinc-900/50 border border-zinc-800/50 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-zinc-700 transition-all"
+                                            />
+                                            <button
+                                                onClick={() => setupTelegram.mutate(telegramChatId)}
+                                                disabled={!telegramChatId || setupTelegram.isPending}
+                                                className="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-medium rounded-lg transition-all"
+                                            >
+                                                {setupTelegram.isPending ? 'Linking...' : 'Link'}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 bg-zinc-900/30 border border-zinc-800/50 rounded-lg flex items-start gap-3">
+                                        <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                                        <p className="text-xs text-zinc-500 leading-relaxed">
+                                            To find your Chat ID, send any message to{' '}
+                                            <a href="https://t.me/userinfobot" target="_blank" className="text-blue-400 hover:underline font-medium">
+                                                @userinfobot
+                                            </a>{' '}
+                                            on Telegram.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Alert Types */}
+                    <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
+                        <div className="px-6 py-4 border-b border-zinc-800/50">
+                            <h3 className="text-lg font-medium text-zinc-200">Alert Types</h3>
+                        </div>
+                        <div className="divide-y divide-zinc-800/50">
+                            {[
+                                { name: 'New Device Login', description: 'Get notified when a new device logs in' },
+                                { name: 'Failed Login Attempt', description: 'Alert on failed login attempts' },
+                                { name: 'Password Changed', description: 'Notify when password is changed' },
+                                { name: 'Session Revoked', description: 'Alert when a session is revoked' }
+                            ].map((alert, i) => (
+                                <div key={i} className="px-6 py-4 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-medium text-zinc-200">{alert.name}</p>
+                                        <p className="text-xs text-zinc-500 mt-0.5">{alert.description}</p>
+                                    </div>
+                                    <div className={`w-10 h-5 rounded-full relative transition-colors cursor-pointer ${telegramStatus?.connected ? 'bg-blue-500' : 'bg-zinc-800'}`}>
+                                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${telegramStatus?.connected ? 'right-1' : 'left-1'}`}></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeSection === 'logs' && (
+                <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
+                    <div className="px-6 py-4 border-b border-zinc-800/50 flex justify-between items-center">
+                        <div>
+                            <h3 className="text-lg font-medium text-zinc-200">Security Logs</h3>
+                            <p className="text-xs text-zinc-500 mt-0.5">Recent security events on your account</p>
+                        </div>
+                        <span className="text-xs text-zinc-500 bg-zinc-900 px-2 py-1 rounded">Last 50 events</span>
+                    </div>
+
+                    {logsLoading ? (
+                        <div className="flex items-center justify-center py-16">
+                            <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+                        </div>
+                    ) : logs.length === 0 ? (
+                        <div className="text-center py-16">
+                            <div className="p-4 rounded-full bg-zinc-900/50 w-fit mx-auto mb-4">
+                                <History size={32} className="text-zinc-600" />
+                            </div>
+                            <h3 className="text-lg font-medium text-zinc-300 mb-1">No security events</h3>
+                            <p className="text-zinc-500 text-sm">Security logs will appear here</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-zinc-800/50">
+                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Event</th>
+                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">IP Address</th>
+                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Time</th>
+                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {logs.map((log: any) => (
+                                        <tr key={log.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
+                                            <td className="py-4 px-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-2 h-2 rounded-full ${log.event_type?.includes('FAILED') ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                                                    <span className="font-medium text-white">
+                                                        {log.event_type?.replace(/_/g, ' ') || 'Unknown'}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-4 font-mono text-zinc-500">{log.ip_address || 'Internal'}</td>
+                                            <td className="py-4 px-4 text-zinc-500">{formatDistanceToNow(new Date(log.created_at))} ago</td>
+                                            <td className="py-4 px-4">
+                                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${log.event_type?.includes('FAILED')
+                                                        ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                    }`}>
+                                                    {log.event_type?.includes('FAILED') ? (
+                                                        <><X className="w-3 h-3" /> Blocked</>
+                                                    ) : (
+                                                        <><Check className="w-3 h-3" /> Verified</>
+                                                    )}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     )
 }

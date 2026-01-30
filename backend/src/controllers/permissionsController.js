@@ -42,7 +42,9 @@ const updatePermission = async (req, res) => {
             can_create_rules,
             can_view_analytics,
             can_use_reminders,
-            can_use_ai
+            can_use_ai,
+            can_manage_contacts,
+            can_manage_datasources
         } = req.body;
 
         console.log(`[Permissions] Updating bot ${botId} for user ${userId}`, req.body);
@@ -51,8 +53,8 @@ const updatePermission = async (req, res) => {
         // We Use COALESCE or defaults if values are missing from body
         await query(
             `INSERT OR REPLACE INTO bot_permissions 
-            (user_id, bot_id, can_view, can_edit, can_delete, can_create_campaigns, can_create_rules, can_view_analytics, can_use_reminders, can_use_ai)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (user_id, bot_id, can_view, can_edit, can_delete, can_create_campaigns, can_create_rules, can_view_analytics, can_use_reminders, can_use_ai, can_manage_contacts, can_manage_datasources)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 userId,
                 botId,
@@ -63,7 +65,9 @@ const updatePermission = async (req, res) => {
                 can_create_rules === true || can_create_rules === 1 ? 1 : 0,
                 can_view_analytics === true || can_view_analytics === 1 ? 1 : 0,
                 can_use_reminders === true || can_use_reminders === 1 ? 1 : 0,
-                can_use_ai === true || can_use_ai === 1 ? 1 : 0
+                can_use_ai === true || can_use_ai === 1 ? 1 : 0,
+                can_manage_contacts === true || can_manage_contacts === 1 ? 1 : 0,
+                can_manage_datasources === true || can_manage_datasources === 1 ? 1 : 0
             ]
         );
 
@@ -92,7 +96,8 @@ const checkAccess = async (req, res) => {
                     permissions: {
                         can_view: true, can_edit: true, can_delete: true,
                         can_create_campaigns: true, can_create_rules: true,
-                        can_view_analytics: true, can_use_reminders: true, can_use_ai: true
+                        can_view_analytics: true, can_use_reminders: true, can_use_ai: true,
+                        can_manage_contacts: true, can_manage_datasources: true
                     }
                 }
             });
@@ -120,7 +125,9 @@ const checkAccess = async (req, res) => {
                     can_create_rules: p.can_create_rules === 1,
                     can_view_analytics: p.can_view_analytics === 1,
                     can_use_reminders: p.can_use_reminders === 1,
-                    can_use_ai: p.can_use_ai === 1
+                    can_use_ai: p.can_use_ai === 1,
+                    can_manage_contacts: p.can_manage_contacts === 1,
+                    can_manage_datasources: p.can_manage_datasources === 1
                 }
             }
         });

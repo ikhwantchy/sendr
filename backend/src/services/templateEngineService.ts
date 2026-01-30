@@ -26,23 +26,41 @@ interface DataPipelineConfig {
 class TemplateEngineService {
     /**
      * Replace variables in template with actual values
+     * Supports: {VAR}, {{VAR}} - case-insensitive matching
      */
     processTemplate(template: string, variables: Record<string, any>): string {
         let processed = template;
 
-        // Replace all {VARIABLE_NAME} or {{VARIABLE_NAME}} with actual values
+        // Create a lowercase key map for case-insensitive matching
+        const lowerCaseVars: Record<string, any> = {};
         Object.entries(variables).forEach(([key, value]) => {
-            // Handle both {VAR} and {{VAR}} formats
-            const regex = new RegExp(`{+${key}}+`, 'g');
-            processed = processed.replace(regex, String(value));
+            lowerCaseVars[key.toLowerCase()] = value;
+        });
+
+        // Replace all {{VARIABLE_NAME}} first (double braces)
+        processed = processed.replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
+            const normalizedKey = varName.trim().toLowerCase();
+            if (lowerCaseVars[normalizedKey] !== undefined) {
+                return String(lowerCaseVars[normalizedKey]);
+            }
+            return match; // Keep original if not found
+        });
+
+        // Replace all {VARIABLE_NAME} (single braces)
+        processed = processed.replace(/\{([^{}]+)\}/g, (match, varName) => {
+            const normalizedKey = varName.trim().toLowerCase();
+            if (lowerCaseVars[normalizedKey] !== undefined) {
+                return String(lowerCaseVars[normalizedKey]);
+            }
+            return match; // Keep original if not found
         });
 
         // Basic global variables
         const now = new Date();
         const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-        processed = processed.replace(/{TODAY}/g, format(now, 'dd/MM/yyyy'));
-        processed = processed.replace(/{TODAY_DATE}/g, format(now, 'dd/MM/yyyy'));
-        processed = processed.replace(/{TODAY_NAME}/g, dayNames[now.getDay()]);
+        processed = processed.replace(/{TODAY}/gi, format(now, 'dd/MM/yyyy'));
+        processed = processed.replace(/{TODAY_DATE}/gi, format(now, 'dd/MM/yyyy'));
+        processed = processed.replace(/{TODAY_NAME}/gi, dayNames[now.getDay()]);
 
         return processed;
     }

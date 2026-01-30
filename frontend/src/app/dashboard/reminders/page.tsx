@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Clock, Users, Play, Pause, Edit, Trash2, TestTube } from 'lucide-react'
+import { Plus, Clock, Users, Play, Pause, Edit, Trash2, TestTube, RefreshCw, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Reminder {
@@ -23,12 +23,15 @@ export default function RemindersPage() {
     const router = useRouter()
     const [reminders, setReminders] = useState<Reminder[]>([])
     const [loading, setLoading] = useState(true)
+    const [isRefreshing, setIsRefreshing] = useState(false)
 
     useEffect(() => {
         fetchReminders()
     }, [])
 
-    const fetchReminders = async () => {
+    const fetchReminders = async (isBackground = false) => {
+        if (!isBackground) setLoading(true)
+        if (isBackground) setIsRefreshing(true)
         try {
             const token = localStorage.getItem('token');
             const urlParams = new URLSearchParams(window.location.search);
@@ -66,7 +69,12 @@ export default function RemindersPage() {
             toast.error('Failed to load reminders');
         } finally {
             setLoading(false);
+            setIsRefreshing(false);
         }
+    };
+
+    const handleRefresh = () => {
+        fetchReminders(true);
     };
 
     const formatSchedule = (cron: string): string => {
@@ -148,16 +156,34 @@ export default function RemindersPage() {
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h1 className="text-2xl font-semibold text-white tracking-tight">Reminders</h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-semibold text-white tracking-tight">Reminders</h1>
+                        {isRefreshing && (
+                            <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                        )}
+                    </div>
                     <p className="text-zinc-500 text-sm mt-1">Schedule automated messages for your contacts</p>
                 </div>
-                <button
-                    onClick={() => router.push('/dashboard/reminders/create')}
-                    className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
-                >
-                    <Plus className="w-4 h-4" />
-                    Create Reminder
-                </button>
+                <div className="flex items-center gap-3">
+                    {/* Refresh Button */}
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        className={`p-2 bg-zinc-900 border rounded-lg transition-all ${isRefreshing
+                            ? 'border-blue-500/50 text-blue-400'
+                            : 'border-zinc-800/50 text-zinc-400 hover:text-white hover:border-zinc-700'
+                            }`}
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                        onClick={() => router.push('/dashboard/reminders/create')}
+                        className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Create Reminder
+                    </button>
+                </div>
             </div>
 
             {/* Reminders Grid */}

@@ -12,6 +12,7 @@ export interface Bot {
     phone_number: string | null;
     lid: string | null;
     status: 'connected' | 'disconnected' | 'connecting' | 'error';
+    is_paused: number; // 0 = not paused, 1 = paused
     qr_code: string | null;
     qr_expires_at: string | null;
     session_data: any;

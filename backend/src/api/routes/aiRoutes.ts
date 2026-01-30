@@ -8,6 +8,7 @@ import { authenticate, requireRole } from '../middleware/auth';
 import { llmService } from '../../services/llm/llmService';
 import { query } from '../../database/connection';
 import { logger } from '../../utils/logger';
+const { checkBotAccess } = require('../../middleware/checkPermission');
 
 const router = Router();
 
@@ -68,7 +69,7 @@ router.post('/test-connection', async (req, res) => {
  * GET /api/ai/conversations/:botId
  * Get AI conversations for a bot
  */
-router.get('/conversations/:botId', async (req, res) => {
+router.get('/conversations/:botId', checkBotAccess('use_ai'), async (req, res) => {
     try {
         const { botId } = req.params;
         const { limit = 50, offset = 0 } = req.query;
@@ -156,7 +157,7 @@ router.post('/conversations/:conversationId/end', requireRole(['OWNER', 'OPERATO
  * GET /api/ai/usage/:botId
  * Get AI usage statistics for a bot
  */
-router.get('/usage/:botId', async (req, res) => {
+router.get('/usage/:botId', checkBotAccess('use_ai'), async (req, res) => {
     try {
         const { botId } = req.params;
         const { days = 30 } = req.query;

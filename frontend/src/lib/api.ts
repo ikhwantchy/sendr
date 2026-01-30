@@ -169,7 +169,7 @@ export const api = {
     },
 
     // Generic helpers
-    get: (url: string) => apiClient.get(url),
+    get: (url: string, config?: any) => apiClient.get(url, config),
     post: (url: string, data?: any) => apiClient.post(url, data),
     put: (url: string, data?: any) => apiClient.put(url, data),
     delete: (url: string) => apiClient.delete(url),

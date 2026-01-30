@@ -628,6 +628,21 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
     }
 
     /**
+     * Resume bot (reconnect a paused bot)
+     */
+    public async resumeBot(botId: string): Promise<void> {
+        logger.info('Resuming bot', { bot_id: botId });
+
+        // Remove from paused bots set
+        this.pausedBots.delete(botId);
+
+        // Re-initialize the bot connection
+        await this.initializeBot(botId);
+
+        logger.info('Bot resumed successfully', { bot_id: botId });
+    }
+
+    /**
      * Send message
      */
     public async sendMessage(
@@ -673,8 +688,6 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                     const newSock = this.sockets.get(botId);
                     if (newSock) {
                         logger.info('✅ Bot re-initialized successfully', { bot_id: botId });
-                        // Continue with sending message using newSock
-                        // (will be handled by retry or next message)
                     } else {
                         logger.error('❌ Re-initialization failed - socket still not found', { bot_id: botId });
                         throw new Error(`Bot re-initialization failed: ${botId}`);
@@ -694,17 +707,19 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             }
         }
 
-        logger.info('✅ Socket found, sending message', {
-            bot_id: botId,
-            recipient,
-            type: message.type,
-        });
+        // Validate recipient - should be a digits-only string if not already a JID
+        const phoneOnly = recipient.split('@')[0].replace(/\D/g, '');
+        if (!phoneOnly || phoneOnly.length < 5) {
+            logger.error('❌ Invalid recipient format', { recipient });
+            throw new Error(`Invalid phone number: ${recipient}`);
+        }
 
         const jid = recipient.includes('@') ? recipient : `${recipient}@s.whatsapp.net`;
 
         try {
+            let result;
             if (message.type === 'text') {
-                const result = await sock.sendMessage(jid, { text: message.content || '' });
+                result = await sock.sendMessage(jid, { text: message.content || '' });
                 logger.info('✅ Message sent successfully', {
                     bot_id: botId,
                     recipient: jid,
@@ -712,49 +727,39 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 });
             } else if (message.type === 'image') {
                 let media: any;
+                let mimetype: string = 'image/jpeg';
 
-                // Handle Base64 Data URI
-                if (message.media_url?.startsWith('data:image')) {
-                    // Extract base64 content
-                    const base64Data = message.media_url.split(';base64,').pop();
-                    if (base64Data) {
-                        media = Buffer.from(base64Data, 'base64');
+                if (message.media_url?.startsWith('data:')) {
+                    const matches = message.media_url.match(/^data:([^;]+);base64,(.+)$/);
+                    if (matches && matches[2]) {
+                        media = Buffer.from(matches[2], 'base64');
+                        mimetype = matches[1];
                     }
                 } else if (message.media_url) {
-                    // Handle normal URL
                     media = { url: message.media_url };
                 }
 
-                if (!media) {
-                    throw new Error(`Invalid media configuration for image message`);
-                }
+                if (!media) throw new Error('Invalid media configuration');
 
-                const payload: any = {
-                    image: media,
-                    caption: message.caption
-                };
+                const payload: any = { image: media, caption: message.caption };
+                if (Buffer.isBuffer(media)) payload.mimetype = mimetype;
 
-                const result = await sock.sendMessage(jid, payload);
+                result = await sock.sendMessage(jid, payload);
                 logger.info('✅ Image message sent successfully', {
                     bot_id: botId,
                     recipient: jid,
-                    message_id: result?.key?.id,
-                    has_caption: !!message.caption
+                    message_id: result?.key?.id
                 });
             } else {
                 throw new Error(`Unsupported message type: ${message.type}`);
             }
 
             return {
-                message_id: `msg_${Date.now()}`,
+                message_id: result?.key?.id || `msg_${Date.now()}`,
                 sent_at: new Date().toISOString(),
             };
         } catch (error) {
-            logger.error('❌ Failed to send message', {
-                error,
-                bot_id: botId,
-                recipient: jid
-            });
+            logger.error('❌ Failed to send message', { error, bot_id: botId, recipient: jid });
             throw error;
         }
     }

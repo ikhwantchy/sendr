@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { Bot, Plus, Trash2, Edit2, MoreVertical, X, ChevronDown, Users } from 'lucide-react'
+import { Bot, Plus, Trash2, Edit2, MoreVertical, X, ChevronDown, Users, ChevronLeft, Save } from 'lucide-react'
 
 interface AIConfigTableProps {
     botId: string
@@ -474,45 +474,62 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
                 )}
             </div>
 
-            {/* Create/Edit Modal */}
+            {/* Create/Edit Modal - Full Page */}
             {
                 showModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-semibold text-white">
-                                    {editingConfig ? 'Edit' : 'Create'} AI Configuration
-                                </h3>
-                                <button
-                                    onClick={() => setShowModal(false)}
-                                    className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
+                    <div className="fixed inset-0 z-[100] bg-zinc-950 flex">
+                        <div className="flex-1 flex flex-col h-full overflow-hidden">
+                            {/* Header */}
+                            <div className="shrink-0 bg-zinc-950 z-20 border-b border-zinc-800">
+                                <div className="h-16 flex items-center justify-between px-6 lg:px-8">
+                                    <div className="flex items-center gap-4">
+                                        <button type="button" onClick={() => setShowModal(false)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors">
+                                            <ChevronLeft size={20} />
+                                        </button>
+                                        <h1 className="text-xl font-bold text-white tracking-tight">
+                                            {editingConfig ? 'Edit' : 'Create'} AI Configuration
+                                        </h1>
+                                    </div>
+                                    <button 
+                                        type="submit"
+                                        form="ai-config-form"
+                                        className="hidden lg:flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg transition-all"
+                                    >
+                                        Save <Save size={16} />
+                                    </button>
+                                </div>
                             </div>
 
-                            <form onSubmit={handleCreate} className="space-y-4" autoComplete="off" data-lpignore="true" data-form-type="other">
+                            {/* Scrollable Content */}
+                            <div className="flex-1 overflow-y-auto px-6 lg:px-12 py-8 pb-24 lg:pb-8">
+                                <div className="max-w-3xl mx-auto">
+                            <form id="ai-config-form" onSubmit={handleCreate} className="space-y-6" autoComplete="off" data-lpignore="true" data-form-type="other">
+                                
                                 {/* Configuration Name */}
-                                <div>
-                                    <label className="block text-sm text-zinc-400 mb-2">
-                                        Configuration Name *
-                                    </label>
-                                    <input
-                                        name="wa_bot_config_name_unique"
-                                        type="text"
-                                        required
-                                        value={formData.config_name}
-                                        onChange={(e) => setFormData({ ...formData, config_name: e.target.value })}
-                                        placeholder="e.g., Customer Support, VIP Group"
-                                        autoComplete="off"
-                                        className="w-full px-3 py-2.5 bg-[#0f0f0f] border border-zinc-800/50 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
-                                    />
-                                </div>
+                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-4">Basic Details</h3>
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                            Configuration Name <span className="text-red-400">*</span>
+                                        </label>
+                                        <input
+                                            name="wa_bot_config_name_unique"
+                                            type="text"
+                                            required
+                                            value={formData.config_name}
+                                            onChange={(e) => setFormData({ ...formData, config_name: e.target.value })}
+                                            placeholder="e.g., Customer Support, VIP Group"
+                                            autoComplete="off"
+                                            className="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                                        />
+                                    </div>
+                                </section>
 
                                 {/* Target Selection */}
-                                <div>
+                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-4">Target</h3>
                                     {editingConfig ? (
-                                        <div className="p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg">
+                                        <div className="p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
                                             <label className="block text-xs text-zinc-500 uppercase font-semibold mb-1">
                                                 Current Target
                                             </label>
@@ -522,7 +539,7 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
                                         </div>
                                     ) : (
                                         <>
-                                            <label className="block text-sm text-zinc-400 mb-2">
+                                            <label className="block text-sm font-medium text-zinc-300 mb-2">
                                                 Target Group/Contact *
                                             </label>
 
@@ -748,9 +765,11 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
                                             </div>
                                         </>
                                     )}
-                                </div>
+                                </section>
 
-                                {/* API Key */}
+                                {/* API Key & Model Selection */}
+                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-4">AI Provider</h3>
                                 <div>
                                     <div className="flex items-center justify-between mb-2">
                                         <label className="block text-sm text-zinc-400">
@@ -832,8 +851,11 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
                                         </select>
                                     </div>
                                 )}
+                                </section>
 
                                 {/* System Prompt */}
+                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-4">System Prompt</h3>
                                 <div>
                                     <label className="block text-sm text-zinc-400 mb-2">
                                         System Prompt (Optional)
@@ -846,12 +868,11 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
                                         className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-md text-white text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none"
                                     />
                                 </div>
+                                </section>
 
                                 {/* Bot Behavior */}
-                                <div className="border-t border-zinc-800 pt-4">
-                                    <label className="block text-sm font-medium text-zinc-300 mb-3">
-                                        Bot Behavior
-                                    </label>
+                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-4">Bot Behavior</h3>
                                     <div className="space-y-2">
                                         {/* Conversation Model */}
                                         <div className={`p-3 rounded-lg border transition-all ${formData.conversation_model ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-[#0f0f0f] border-zinc-800/50'}`}>
@@ -932,10 +953,10 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                </section>
 
-                                {/* Actions */}
-                                <div className="flex justify-end gap-2 pt-4">
+                                {/* Actions - Hidden on desktop (use header button) */}
+                                <div className="lg:hidden flex justify-end gap-2 pt-4">
                                     <button
                                         type="button"
                                         onClick={() => setShowModal(false)}
@@ -945,14 +966,27 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
                                     </button>
                                     <button
                                         type="submit"
-                                        className="px-6 py-2.5 bg-white text-black text-sm font-bold rounded-lg hover:bg-zinc-200 transition-all shadow-lg active:scale-95"
+                                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg transition-all shadow-lg"
                                     >
-                                        {editingConfig ? 'Update Configuration' : 'Create Configuration'}
+                                        {editingConfig ? 'Update' : 'Create'}
                                     </button>
                                 </div>
                             </form>
+                                </div>
+                            </div>
+
+                            {/* Mobile Save Button */}
+                            <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 z-30">
+                                <button 
+                                    type="submit" 
+                                    form="ai-config-form"
+                                    className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg"
+                                >
+                                    {editingConfig ? 'Update Configuration' : 'Save Configuration'} <Save size={18} />
+                                </button>
+                            </div>
                         </div>
-                    </div >
+                    </div>
                 )
             }
         </div>

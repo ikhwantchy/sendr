@@ -7,6 +7,11 @@ import {
     Cat, Coffee, Dumbbell, Car, Lightbulb, Heart, Hand
 } from 'lucide-react'
 
+interface VariableButton {
+    label: string
+    value: string
+}
+
 interface RichTextEditorProps {
     value: string
     onChange: (value: string) => void
@@ -14,6 +19,7 @@ interface RichTextEditorProps {
     maxLength?: number
     showEmojiPicker?: boolean
     minHeight?: string
+    variables?: VariableButton[]
 }
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
@@ -103,7 +109,8 @@ export default function RichTextEditor({
     placeholder = 'Type your message...',
     maxLength = 1000,
     showEmojiPicker = true,
-    minHeight = '120px'
+    minHeight = '120px',
+    variables = []
 }: RichTextEditorProps) {
     const [showEmoji, setShowEmoji] = useState(false)
     const [activeCategory, setActiveCategory] = useState<keyof typeof EMOJI_CATEGORIES>('Smileys')
@@ -331,6 +338,28 @@ export default function RichTextEditor({
                             </button>
                         ))}
                     </div>
+
+                    {/* Variable Buttons */}
+                    {variables.length > 0 && (
+                        <>
+                            <div className="h-5 w-px bg-zinc-800" />
+                            <div className="flex items-center gap-1">
+                                {variables.map((variable) => (
+                                    <button
+                                        key={variable.value}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            insertEmoji(variable.value);
+                                        }}
+                                        className="px-2 py-1 text-xs bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-md hover:bg-blue-500/20 transition-all font-medium"
+                                    >
+                                        {variable.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 <div className={`text-[10px] font-medium tracking-wide ${value.length >= maxLength ? 'text-red-500' : 'text-zinc-600'}`}>
