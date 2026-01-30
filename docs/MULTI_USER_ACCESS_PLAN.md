@@ -212,7 +212,7 @@ const inviteUser = async (email: string, role: string, botIds: string[]) => {
   // Send email with invitation link
   await sendEmail({
     to: email,
-    subject: 'Invitation to BroBot',
+    subject: 'Invitation to Sendr',
     body: `Click here to accept: ${APP_URL}/accept-invitation?token=${token}`
   })
 }

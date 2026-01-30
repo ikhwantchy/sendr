@@ -52,7 +52,7 @@ export default function LoginPage() {
                         {/* Brand */}
                         <div className="flex flex-col items-center mb-8">
                             <div className="w-16 h-16 bg-black rounded-2xl border border-zinc-800 flex items-center justify-center mb-6 shadow-2xl overflow-hidden ring-1 ring-zinc-700/50">
-                                <img src="/brobot-logo.png" alt="BroBot" className="w-10 h-10 object-contain" />
+                                <img src="/Sendr-logo.png" alt="Sendr" className="w-10 h-10 object-contain" />
                             </div>
                             <h1 className="text-2xl font-bold tracking-tight text-white">Welcome back</h1>
                             <p className="text-zinc-500 text-sm mt-2 text-center opacity-80 font-medium">Enter your credentials to access your workspace</p>

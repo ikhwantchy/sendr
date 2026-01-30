@@ -1,6 +1,6 @@
 # Implementation Plan - Enhanced Security & Dashboard Cleanup
 
-This plan outlines the steps to implement a robust security system for BroBot, including Session Management, 2FA, Telegram Alerts, and Cloudflare Turnstile integration, while cleaning up the authentication flow.
+This plan outlines the steps to implement a robust security system for Sendr, including Session Management, 2FA, Telegram Alerts, and Cloudflare Turnstile integration, while cleaning up the authentication flow.
 
 ## 1. Authentication Flow Cleanup
 - [ ] **Frontend**: Remove "Sign Up" page and links.

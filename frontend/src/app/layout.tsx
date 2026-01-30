@@ -6,7 +6,7 @@ import { Providers } from '@/components/providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-    title: 'BroBot',
+    title: 'Sendr',
     description: 'Multi-tenant WhatsApp automation and bot management platform',
     icons: {
         icon: [

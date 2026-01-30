@@ -266,7 +266,7 @@ export default function DashboardPage() {
                             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 dark:bg-white/5 blur-3xl rounded-full -mr-16 -mt-16 transition-opacity opacity-50 group-hover:opacity-80" />
                             <h4 className="text-sm font-medium text-zinc-900 dark:text-white mb-2 relative z-10">Need help automating?</h4>
                             <p className="text-xs text-zinc-500 mb-4 relative z-10 leading-relaxed">
-                                Check out our documentation to learn how to build complex flows with BroBot.
+                                Check out our documentation to learn how to build complex flows with Sendr.
                             </p>
                             <a href="#" className="inline-flex items-center gap-2 text-xs font-medium text-zinc-900 dark:text-white hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors relative z-10">
                                 Read Docs <ArrowUpRight className="w-3 h-3" />

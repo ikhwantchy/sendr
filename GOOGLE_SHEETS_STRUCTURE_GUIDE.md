@@ -1,4 +1,4 @@
-# 📊 Google Sheets Structure Guide - BroBot Reminders
+# 📊 Google Sheets Structure Guide - Sendr Reminders
 
 ## ✅ **Struktur Sheet yang BENAR**
 

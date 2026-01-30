@@ -3,7 +3,7 @@
 ## 📋 Cara Cek Error di GitHub Actions
 
 ### Step 1: Buka GitHub Actions
-1. Buka repository: https://github.com/ikhwantchy/BroBot
+1. Buka repository: https://github.com/ikhwantchy/Sendr
 2. Klik tab **Actions** (di atas)
 3. Kamu akan lihat list workflow runs
 
@@ -54,11 +54,11 @@ Error: ssh: connect to host XX.XX.XX.XX port 22: Connection refused
 
 ### Error 2: Directory Not Found
 ```
-Error: cd: /home/ubuntu/brobot: No such file or directory
+Error: cd: /home/ubuntu/Sendr: No such file or directory
 ```
 
 **Penyebab:**
-- Folder `brobot` belum ada di server
+- Folder `Sendr` belum ada di server
 - Nama folder salah
 
 **Solusi:**
@@ -70,8 +70,8 @@ Error: cd: /home/ubuntu/brobot: No such file or directory
 2. **Clone repository:**
    ```bash
    cd ~
-   git clone https://github.com/ikhwantchy/BroBot.git brobot
-   cd brobot
+   git clone https://github.com/ikhwantchy/Sendr.git Sendr
+   cd Sendr
    ```
 
 3. **Install dependencies:**
@@ -93,12 +93,12 @@ Error: cd: /home/ubuntu/brobot: No such file or directory
    sudo npm install -g pm2
    
    # Start backend
-   cd ~/brobot/backend
-   pm2 start npm --name "brobot-backend" -- run dev
+   cd ~/Sendr/backend
+   pm2 start npm --name "Sendr-backend" -- run dev
    
    # Start frontend
-   cd ~/brobot/frontend
-   pm2 start npm --name "brobot-frontend" -- run dev
+   cd ~/Sendr/frontend
+   pm2 start npm --name "Sendr-frontend" -- run dev
    
    # Save PM2 config
    pm2 save
@@ -139,13 +139,13 @@ Error: npm run build failed
    cd backend
    npm install
    npm run build  # ← HAPUS INI
-   pm2 restart brobot-backend
+   pm2 restart Sendr-backend
    
    # Update Frontend
    cd ../frontend
    npm install
    npm run build  # ← HAPUS INI
-   pm2 restart brobot-frontend
+   pm2 restart Sendr-frontend
    ```
    
    Jadi:
@@ -153,12 +153,12 @@ Error: npm run build failed
    # Update Backend
    cd backend
    npm install
-   pm2 restart brobot-backend
+   pm2 restart Sendr-backend
    
    # Update Frontend
    cd ../frontend
    npm install
-   pm2 restart brobot-frontend
+   pm2 restart Sendr-frontend
    ```
 
 3. Commit & push
@@ -170,7 +170,7 @@ Error: npm run build failed
 
 ### Error 4: PM2 Process Not Found
 ```
-Error: [PM2][ERROR] Process brobot-backend not found
+Error: [PM2][ERROR] Process Sendr-backend not found
 ```
 
 **Penyebab:**
@@ -190,19 +190,19 @@ Error: [PM2][ERROR] Process brobot-backend not found
 
 3. **Start process jika belum ada:**
    ```bash
-   cd ~/brobot/backend
-   pm2 start npm --name "brobot-backend" -- run dev
+   cd ~/Sendr/backend
+   pm2 start npm --name "Sendr-backend" -- run dev
    
-   cd ~/brobot/frontend
-   pm2 start npm --name "brobot-frontend" -- run dev
+   cd ~/Sendr/frontend
+   pm2 start npm --name "Sendr-frontend" -- run dev
    
    pm2 save
    ```
 
 4. **Atau restart jika sudah ada:**
    ```bash
-   pm2 restart brobot-backend
-   pm2 restart brobot-frontend
+   pm2 restart Sendr-backend
+   pm2 restart Sendr-frontend
    ```
 
 ---
@@ -218,7 +218,7 @@ ssh -i your-key.pem ubuntu@your-server-ip
 
 ### Step 2: Pull Latest Code
 ```bash
-cd ~/brobot
+cd ~/Sendr
 git pull origin main
 ```
 
@@ -227,7 +227,7 @@ git pull origin main
 cd backend
 npm install
 # npm run build  # Skip jika RAM kecil
-pm2 restart brobot-backend
+pm2 restart Sendr-backend
 ```
 
 ### Step 4: Update Frontend
@@ -235,7 +235,7 @@ pm2 restart brobot-backend
 cd ../frontend
 npm install
 # npm run build  # Skip jika RAM kecil
-pm2 restart brobot-frontend
+pm2 restart Sendr-frontend
 ```
 
 ### Step 5: Check Status
@@ -262,10 +262,10 @@ pm2 status
 pm2 logs
 
 # Backend only
-pm2 logs brobot-backend
+pm2 logs Sendr-backend
 
 # Frontend only
-pm2 logs brobot-frontend
+pm2 logs Sendr-frontend
 
 # Last 100 lines
 pm2 logs --lines 100
@@ -277,8 +277,8 @@ pm2 logs --lines 100
 pm2 restart all
 
 # Restart specific
-pm2 restart brobot-backend
-pm2 restart brobot-frontend
+pm2 restart Sendr-backend
+pm2 restart Sendr-frontend
 ```
 
 ### Stop Services
@@ -296,7 +296,7 @@ Jika deployment gagal, coba ini secara berurutan:
 1. ✅ **Cek GitHub Secrets** - Pastikan AWS_HOST, AWS_USERNAME, AWS_SSH_KEY benar
 2. ✅ **Cek Server AWS** - Instance running? Security Group allow port 22?
 3. ✅ **Test SSH Manual** - Bisa SSH ke server?
-4. ✅ **Cek Folder** - Folder `~/brobot` ada?
+4. ✅ **Cek Folder** - Folder `~/Sendr` ada?
 5. ✅ **Cek PM2** - Process running? `pm2 status`
 6. ✅ **Cek Logs** - Ada error? `pm2 logs`
 7. ✅ **Manual Deploy** - Pull code & restart PM2
@@ -345,7 +345,7 @@ Jika deployment gagal, coba ini secara berurutan:
 4. **Backup Database**
    ```bash
    # Di server
-   cd ~/brobot/backend/data
+   cd ~/Sendr/backend/data
    cp database.sqlite database.sqlite.backup
    ```
 

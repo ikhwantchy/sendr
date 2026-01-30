@@ -174,9 +174,9 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
 
     // Derived Preview Logic
     const getPreviewBotName = () => {
-        if (!selectedBotId || !bots) return 'BroBot Assistant'
+        if (!selectedBotId || !bots) return 'Sendr Assistant'
         const bot = bots.find(b => b.id === selectedBotId)
-        return bot ? bot.name : 'BroBot Assistant'
+        return bot ? bot.name : 'Sendr Assistant'
     }
 
     return (
@@ -481,7 +481,7 @@ export default function CreateRuleModal({ botId, bots, onClose }: CreateRuleModa
                     {/* Preview Header */}
                     <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10 shrink-0">
                         <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center overflow-hidden">
-                            <img src="/brobot-logo.png" alt="BroBot" className="w-full h-full object-cover" />
+                            <img src="/Sendr-logo.png" alt="Sendr" className="w-full h-full object-cover" />
                         </div>
                         <div className="flex-1 min-w-0">
                             <div className="text-[#e9edef] text-sm font-medium truncate">{getPreviewBotName()}</div>

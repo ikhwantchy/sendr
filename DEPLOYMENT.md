@@ -1,6 +1,6 @@
-# Deployment Guide: BroBot WhatsApp Automation Platform
+# Deployment Guide: Sendr WhatsApp Automation Platform
 
-This guide details how to deploy the BroBot platform to your existing AWS server (running Ubuntu/Debian) alongside your existing applications (`Cucii.my.id`).
+This guide details how to deploy the Sendr platform to your existing AWS server (running Ubuntu/Debian) alongside your existing applications (`Cucii.my.id`).
 
 ## 📋 Prerequisites
 - Access to your AWS Server via SSH.
@@ -50,15 +50,15 @@ ssh user@your-server-ip
     ```
 
 3.  **Prepare Directory**:
-    Create a folder for your app (e.g., in `/var/www/brobot` or `~/brobot`).
+    Create a folder for your app (e.g., in `/var/www/Sendr` or `~/Sendr`).
     ```bash
-    mkdir -p ~/brobot
-    cd ~/brobot
+    mkdir -p ~/Sendr
+    cd ~/Sendr
     ```
 
 4.  **Clone Repository**:
     ```bash
-    git clone https://github.com/ikhwantchy/BroBot.git .
+    git clone https://github.com/ikhwantchy/Sendr.git .
     # Or your specific repo URL
     ```
 
@@ -66,7 +66,7 @@ ssh user@your-server-ip
 
 1.  **Navigate to Backend**:
     ```bash
-    cd ~/brobot/backend
+    cd ~/Sendr/backend
     ```
 
 2.  **Install Dependencies**:
@@ -99,14 +99,14 @@ ssh user@your-server-ip
 
 5.  **Start with PM2**:
     ```bash
-    pm2 start dist/index.js --name "brobot-backend"
+    pm2 start dist/index.js --name "Sendr-backend"
     ```
 
 ## 🎨 Step 4: Frontend Deployment
 
 1.  **Navigate to Frontend**:
     ```bash
-    cd ~/brobot/frontend
+    cd ~/Sendr/frontend
     ```
 
 2.  **Install Dependencies**:
@@ -132,7 +132,7 @@ ssh user@your-server-ip
 
 5.  **Start with PM2**:
     ```bash
-    pm2 start npm --name "brobot-frontend" -- start -- -p 3000
+    pm2 start npm --name "Sendr-frontend" -- start -- -p 3000
     ```
 
 6.  **Save PM2 List** (so it restarts on reboot):
@@ -146,7 +146,7 @@ ssh user@your-server-ip
 
 1.  **Create Nginx Config**:
     ```bash
-    sudo nano /etc/nginx/sites-available/brobot
+    sudo nano /etc/nginx/sites-available/Sendr
     ```
 
 2.  **Paste Configuration**:
@@ -189,7 +189,7 @@ ssh user@your-server-ip
 
 3.  **Enable Configuration**:
     ```bash
-    sudo ln -s /etc/nginx/sites-available/brobot /etc/nginx/sites-enabled/
+    sudo ln -s /etc/nginx/sites-available/Sendr /etc/nginx/sites-enabled/
     ```
 
 4.  **Test & Reload Nginx**:
@@ -278,14 +278,14 @@ chmod 600 ~/.ssh/authorized_keys
 1. **Upload script ke server:**
    ```bash
    # From local machine
-   scp deploy.sh user@your-server-ip:~/brobot/
+   scp deploy.sh user@your-server-ip:~/Sendr/
    ```
 
 2. **Make it executable:**
    ```bash
    # On server
    ssh user@your-server-ip
-   cd ~/brobot
+   cd ~/Sendr
    chmod +x deploy.sh
    ```
 
@@ -318,7 +318,7 @@ git push origin main
 ssh user@your-server-ip
 
 # Run deploy script
-cd ~/brobot
+cd ~/Sendr
 ./deploy.sh
 ```
 
@@ -339,8 +339,8 @@ ssh user@your-server-ip
 pm2 status
 
 # Check logs
-pm2 logs brobot-backend --lines 50
-pm2 logs brobot-frontend --lines 50
+pm2 logs Sendr-backend --lines 50
+pm2 logs Sendr-frontend --lines 50
 
 # Restart if needed
 pm2 restart all
@@ -356,7 +356,7 @@ pm2 restart all
 
 # Or manually check on server:
 ssh user@your-server-ip
-cd ~/brobot
+cd ~/Sendr
 git status
 git pull origin main
 pm2 status
@@ -369,12 +369,12 @@ pm2 status
 **Build errors?**
 ```bash
 # Clear cache and rebuild
-cd ~/brobot/backend
+cd ~/Sendr/backend
 rm -rf node_modules dist
 npm install
 npm run build
 
-cd ~/brobot/frontend
+cd ~/Sendr/frontend
 rm -rf node_modules .next
 npm install
 npm run build

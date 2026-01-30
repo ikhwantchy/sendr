@@ -266,7 +266,7 @@ export default function ApiKeysPage() {
                         </div>
                         <h3 className="text-2xl font-bold text-white text-center mb-2">Secret Key Generated</h3>
                         <p className="text-zinc-500 text-center mb-8 px-8 text-sm leading-relaxed">
-                            For security purposes, BroBot only hashes this key. It cannot be recovered if lost. Please store it in a secure location.
+                            For security purposes, Sendr only hashes this key. It cannot be recovered if lost. Please store it in a secure location.
                         </p>
 
                         <div className="bg-[#050505] border border-emerald-500/20 rounded-2xl p-6 mb-8 relative group">
@@ -323,7 +323,7 @@ function CreateApiKeyModal({ isOpen, onClose, onCreate }: { isOpen: boolean; onC
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             className="w-full px-4 py-3 bg-black border border-zinc-800 rounded-xl text-sm text-white focus:outline-none focus:border-zinc-500 transition-all"
-                            placeholder="e.g. BroBot Webhook"
+                            placeholder="e.g. Sendr Webhook"
                         />
                     </div>
 

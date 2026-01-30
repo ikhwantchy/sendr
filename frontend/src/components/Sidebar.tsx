@@ -130,11 +130,11 @@ export default function Sidebar() {
             <div className="flex items-center justify-between px-4 py-6 border-b border-zinc-200 dark:border-zinc-800/50">
                 <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
-                        <img src="/brobot-logo.png" alt="BroBot" className="w-10 h-10 object-contain dark:invert-0 invert" />
+                        <img src="/Sendr-logo.png" alt="Sendr" className="w-10 h-10 object-contain dark:invert-0 invert" />
                     </div>
                     {isExpanded && (
                         <div className="min-w-0">
-                            <h1 className="text-zinc-900 dark:text-zinc-100 font-semibold text-sm tracking-tight truncate">BroBot</h1>
+                            <h1 className="text-zinc-900 dark:text-zinc-100 font-semibold text-sm tracking-tight truncate">Sendr</h1>
                             <p className="text-zinc-500 dark:text-zinc-600 text-xs truncate">Automation Platform</p>
                         </div>
                     )}

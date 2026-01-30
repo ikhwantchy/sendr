@@ -96,7 +96,7 @@ Location:
 ✅ Gradient backgrounds
 ✅ Animated components
 ✅ Responsive design
-✅ BroBot branding
+✅ Sendr branding
 
 Location:
 - frontend/src/app/globals.css

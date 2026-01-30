@@ -15,7 +15,7 @@ interface AdminModeContextType {
 
 const AdminModeContext = createContext<AdminModeContextType | null>(null);
 
-const STORAGE_KEY = 'brobot_admin_mode';
+const STORAGE_KEY = 'Sendr_admin_mode';
 
 export function AdminModeProvider({ children }: { children: React.ReactNode }) {
     const [mode, setMode] = useState<AdminMode>('admin');

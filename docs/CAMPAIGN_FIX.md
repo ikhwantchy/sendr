@@ -139,7 +139,7 @@ async deleteCampaign(campaignId: string): Promise<void> {
 ```
 Input:
 - Phone numbers: 628123456789, 628987654321
-- Message: "Hello from BroBot!"
+- Message: "Hello from Sendr!"
 
 Expected:
 ✅ Campaign created

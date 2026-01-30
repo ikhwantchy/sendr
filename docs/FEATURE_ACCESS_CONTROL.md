@@ -480,7 +480,7 @@ export default function Sidebar() {
   return (
     <div className="sidebar">
       {/* Logo */}
-      <div className="logo">BroBot</div>
+      <div className="logo">Sendr</div>
 
       {/* Navigation */}
       <nav>

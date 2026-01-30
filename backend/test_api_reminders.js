@@ -5,7 +5,7 @@ async function testApi() {
     try {
         // Need a token
         const loginRes = await axios.post('http://localhost:3001/api/auth/login', {
-            email: 'admin@brobot.com',
+            email: 'admin@Sendr.com',
             password: 'admin' // Presumed default
         });
         const token = loginRes.data.data.token;

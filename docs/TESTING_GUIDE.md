@@ -22,7 +22,7 @@ Navigate to: `http://localhost:3000`
 
 ### ✅ Sidebar (Desktop)
 - [ ] Sidebar appears on left side with Zinc-950 background
-- [ ] Logo shows blue Bot icon with "BroBot" text
+- [ ] Logo shows blue Bot icon with "Sendr" text
 - [ ] Navigation items have Lucide icons (LayoutDashboard, Bot, Database, BarChart3)
 - [ ] Active page has zinc-800/50 background and blue icon
 - [ ] Hover states work (zinc-900/50 background)

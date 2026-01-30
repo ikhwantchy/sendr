@@ -135,7 +135,7 @@ Kelompok 6
 1. **Download Postman** (jika belum punya)
 
 2. **Import Collection:**
-   - Buat collection baru "BroBot API"
+   - Buat collection baru "Sendr API"
    - Tambahkan 3 requests di atas
 
 3. **Set Environment Variables:**

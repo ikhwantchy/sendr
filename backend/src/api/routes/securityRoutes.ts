@@ -164,7 +164,7 @@ router.delete('/telegram/setup', authenticate, async (req, res) => {
 router.post('/telegram/test', authenticate, async (req, res) => {
     try {
         const userId = req.user!.id;
-        const msg = '<b>🔔 Test Alert</b>\n\nThis is a test notification from BroBot Security Center.\nIf you see this, your integration is working perfectly! 🚀';
+        const msg = '<b>🔔 Test Alert</b>\n\nThis is a test notification from Sendr Security Center.\nIf you see this, your integration is working perfectly! 🚀';
 
         await securityService.sendTelegramAlert(userId, msg);
 

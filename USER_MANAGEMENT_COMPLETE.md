@@ -53,7 +53,7 @@ Admin dapat langsung membuat akun user tanpa perlu invite email. User langsung d
 1. **Receive credentials** dari admin
 2. **Go to login page** (`/login`)
 3. **Enter email & password**
-4. **Start using BroBot!**
+4. **Start using Sendr!**
 
 ## 📁 Files Created/Modified
 

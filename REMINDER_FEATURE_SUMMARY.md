@@ -606,4 +606,4 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/db
 
 **Last Updated:** 18 Januari 2026  
 **Version:** 1.0  
-**Maintainer:** BroBot Team
+**Maintainer:** Sendr Team

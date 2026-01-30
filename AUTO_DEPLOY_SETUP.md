@@ -8,7 +8,7 @@ Setelah setup ini, **kamu bisa deploy ke server AWS kapan aja dengan 1 klik di G
 
 ## 📋 Step 1: Setup GitHub Secrets
 
-1. **Buka repository GitHub kamu**: https://github.com/ikhwantchy/BroBot
+1. **Buka repository GitHub kamu**: https://github.com/ikhwantchy/Sendr
 
 2. **Masuk ke Settings**:
    - Klik tab **Settings** (di kanan atas)
@@ -106,7 +106,7 @@ git push origin main
 ```
 
 ### 3. Deploy Manual (Kapan Kamu Mau)
-1. **Buka GitHub repository**: https://github.com/ikhwantchy/BroBot
+1. **Buka GitHub repository**: https://github.com/ikhwantchy/Sendr
 2. **Klik tab Actions**
 3. **Klik workflow "Deploy to AWS"** (di sidebar kiri)
 4. **Klik tombol "Run workflow"** (kanan atas)
@@ -140,7 +140,7 @@ git push origin main
 3. **Manual fix di server**:
    ```bash
    ssh user@your-server-ip
-   cd ~/brobot
+   cd ~/Sendr
    ./deploy.sh  # Run manual deploy script
    ```
 

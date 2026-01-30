@@ -22,7 +22,7 @@
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  Welcome back, Admin! 👋                                         │
-│  Your BroBot Platform - System Overview                          │
+│  Your Sendr Platform - System Overview                          │
 │                                                                   │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────────┐ │
 │  │ 📊 Total    │ │ 👥 Total    │ │ 🤖 Active   │ │ 📈 Today  │ │
@@ -61,7 +61,7 @@
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  Welcome back, John Doe! 👋                                      │
-│  Your BroBot automation platform is ready to use.               │
+│  Your Sendr automation platform is ready to use.               │
 │                                                                   │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────────┐ │
 │  │ 🤖 My Bots  │ │ ⚡ Active   │ │ 📢 Campaigns│ │ 📊 Messages││
@@ -92,7 +92,7 @@
 #### **ADMIN VIEW (Admin Mode):**
 ```
 ┌─────────────────────────┐
-│ 🤖 BroBot               │
+│ 🤖 Sendr               │
 │ Automation Made Easy    │
 ├─────────────────────────┤
 │                         │
@@ -118,7 +118,7 @@
 #### **ADMIN VIEW (Content Creator Mode):**
 ```
 ┌─────────────────────────┐
-│ 🤖 BroBot               │
+│ 🤖 Sendr               │
 │ Automation Made Easy    │
 ├─────────────────────────┤
 │                         │
@@ -143,7 +143,7 @@
 #### **USER VIEW:**
 ```
 ┌─────────────────────────┐
-│ 🤖 BroBot               │
+│ 🤖 Sendr               │
 │ Automation Made Easy    │
 ├─────────────────────────┤
 │                         │
