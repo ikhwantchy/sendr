@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useRouter } from 'next/router';
 import { UserPlus, Mail, Lock, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
 import { api } from '../lib/api';
 
 export default function SignupPage() {
-    const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const token = searchParams.get('token');
+    const router = useRouter();
+    const [token, setToken] = useState<string | null>(null);
 
     const [inviteData, setInviteData] = useState<any>(null);
     const [validating, setValidating] = useState(true);
@@ -30,22 +29,28 @@ export default function SignupPage() {
     });
 
     useEffect(() => {
-        if (!token) {
+        if (!router.isReady) return;
+
+        const { token: qToken } = router.query;
+        const currentToken = Array.isArray(qToken) ? qToken[0] : qToken;
+
+        if (currentToken) {
+            setToken(currentToken);
+            validateToken(currentToken);
+        } else {
+            setToken(null);
             setValidating(false);
             setTokenValid(false);
-            return;
         }
-
-        validateToken();
-    }, [token]);
+    }, [router.isReady, router.query.token]); // Only run when token specifically changes
 
     useEffect(() => {
         checkPasswordRequirements();
     }, [formData.password, formData.confirmPassword]);
 
-    const validateToken = async () => {
+    const validateToken = async (t: string) => {
         try {
-            const response = await api.post('/invites/validate', { token });
+            const response = await api.post('/invites/validate', { token: t });
             setInviteData(response.data.invite);
             setTokenValid(true);
         } catch (error: any) {
@@ -93,7 +98,7 @@ export default function SignupPage() {
             });
 
             alert('Account created successfully! Please login.');
-            navigate('/login');
+            router.push('/login');
         } catch (error: any) {
             alert(error.response?.data?.message || 'Failed to create account');
         } finally {
@@ -127,7 +132,7 @@ export default function SignupPage() {
                         }
                     </p>
                     <button
-                        onClick={() => navigate('/login')}
+                        onClick={() => router.push('/login')}
                         className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600"
                     >
                         Go to Login
@@ -156,8 +161,8 @@ export default function SignupPage() {
                         <Mail size={18} className="text-blue-400" />
                         <span className="text-sm font-medium text-blue-400">Invited Email</span>
                     </div>
-                    <p className="text-white font-semibold">{inviteData.email}</p>
-                    <p className="text-xs text-gray-400 mt-1">Role: {inviteData.role}</p>
+                    <p className="text-white font-semibold">{inviteData?.email}</p>
+                    <p className="text-xs text-gray-400 mt-1">Role: {inviteData?.role}</p>
                 </div>
 
                 {/* Signup Form */}
@@ -249,7 +254,7 @@ export default function SignupPage() {
                 <p className="text-center text-sm text-gray-400 mt-6">
                     Already have an account?{' '}
                     <button
-                        onClick={() => navigate('/login')}
+                        onClick={() => router.push('/login')}
                         className="text-purple-400 hover:text-purple-300 font-medium"
                     >
                         Login here
