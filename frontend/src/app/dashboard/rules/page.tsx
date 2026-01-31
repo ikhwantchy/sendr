@@ -11,7 +11,7 @@ import {
     Zap, Trash2, Pencil, MessageSquare, Search
 } from 'lucide-react'
 
-export default function RulesPage() {
+function RulesContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const queryClient = useQueryClient()
@@ -285,5 +285,19 @@ export default function RulesPage() {
                 />
             )}
         </div>
+    )
+}
+
+import { Suspense } from 'react'
+
+export default function RulesPage() {
+    return (
+        <Suspense fallback={
+            <div className="p-8 flex items-center justify-center min-h-[60vh]">
+                <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+            </div>
+        }>
+            <RulesContent />
+        </Suspense>
     )
 }

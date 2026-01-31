@@ -7,8 +7,8 @@ import CreateReminderWizard from '@/components/CreateReminderWizard'
 function CreateReminderContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const botId = searchParams.get('botId')
-    const editId = searchParams.get('edit') // Edit mode if this exists
+    const botId = searchParams?.get('botId')
+    const editId = searchParams?.get('edit') // Edit mode if this exists
 
     const handleClose = () => {
         // Navigate back to bot detail page (Reminders tab)

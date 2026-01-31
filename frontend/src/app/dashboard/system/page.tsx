@@ -82,7 +82,7 @@ function KPICard({ title, value, icon, loading, status, subtitle }: KPICardProps
     )
 }
 
-export default function SystemPage() {
+function SystemContent() {
     const searchParams = useSearchParams();
     const [mounted, setMounted] = useState(false);
     const [activeTab, setActiveTab] = useState<'health' | 'backup' | 'maintenance'>('health');
@@ -520,5 +520,19 @@ export default function SystemPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+import { Suspense } from 'react';
+
+export default function SystemPage() {
+    return (
+        <Suspense fallback={
+            <div className="p-8 flex items-center justify-center min-h-[60vh]">
+                <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+            </div>
+        }>
+            <SystemContent />
+        </Suspense>
     );
 }

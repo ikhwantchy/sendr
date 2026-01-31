@@ -32,7 +32,7 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
-export default function SecurityPage() {
+function SecurityContent() {
     const searchParams = useSearchParams()
     const [mounted, setMounted] = useState(false)
     const [activeSection, setActiveSection] = useState<'sessions' | '2fa' | 'alerts' | 'logs'>('sessions')
@@ -524,5 +524,19 @@ export default function SecurityPage() {
                 </div>
             )}
         </div>
+    )
+}
+
+import { Suspense } from 'react'
+
+export default function SecurityPage() {
+    return (
+        <Suspense fallback={
+            <div className="p-8 flex items-center justify-center min-h-[60vh]">
+                <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+            </div>
+        }>
+            <SecurityContent />
+        </Suspense>
     )
 }
