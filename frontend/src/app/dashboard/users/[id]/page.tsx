@@ -25,7 +25,8 @@ const PERMISSION_DEFINITIONS = [
 ]
 
 export default function UserDetailPage() {
-    const { id } = useParams()
+    const params = useParams()
+    const id = params?.id as string
     const router = useRouter()
     const queryClient = useQueryClient()
     const [mounted, setMounted] = useState(false)
@@ -137,11 +138,10 @@ export default function UserDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <span className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                        user.role === 'OWNER' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' :
-                        user.role === 'ADMIN' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
-                        'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                    }`}>
+                    <span className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${user.role === 'OWNER' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' :
+                            user.role === 'ADMIN' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
+                                'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                        }`}>
                         <Shield className="w-3 h-3 inline mr-1.5" />
                         {user.role}
                     </span>
@@ -298,7 +298,7 @@ function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, i
     const initialPerms = useMemo(() => {
         return permissions.find((p: any) => p.bot_id === bot.id) || {
             can_view: 0, can_edit: 0, can_delete: 0, can_view_analytics: 0,
-            can_create_rules: 0, can_use_reminders: 0, can_create_campaigns: 0, 
+            can_create_rules: 0, can_use_reminders: 0, can_create_campaigns: 0,
             can_use_ai: 0, can_manage_contacts: 0, can_manage_datasources: 0
         }
     }, [permissions, bot.id])
@@ -347,7 +347,7 @@ function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, i
     return (
         <div className={`transition-all duration-300 ${isUpdating || isDeleting ? 'opacity-70' : ''}`}>
             {/* Bot Header */}
-            <div 
+            <div
                 className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-zinc-900/30 transition-colors"
                 onClick={() => setExpanded(!expanded)}
             >
@@ -358,11 +358,10 @@ function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, i
                     <div>
                         <div className="flex items-center gap-2">
                             <h4 className="text-white font-semibold">{bot.name}</h4>
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${
-                                bot.status === 'connected' 
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${bot.status === 'connected'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                                     : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
-                            }`}>
+                                }`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${bot.status === 'connected' ? 'bg-emerald-500' : 'bg-zinc-500'}`} />
                                 {bot.status}
                             </span>
@@ -405,16 +404,14 @@ function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, i
                                         key={perm.key}
                                         onClick={(e) => { e.stopPropagation(); toggle(perm.key as keyof typeof perms) }}
                                         disabled={isUpdating}
-                                        className={`group relative flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-200 ${
-                                            isActive
+                                        className={`group relative flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-200 ${isActive
                                                 ? perm.activeClass
                                                 : 'bg-zinc-900/50 border-zinc-800 text-zinc-600 hover:border-zinc-700'
-                                        }`}
+                                            }`}
                                         title={perm.description}
                                     >
-                                        <div className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${
-                                            isActive ? perm.activeBg : 'bg-zinc-800'
-                                        }`}>
+                                        <div className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${isActive ? perm.activeBg : 'bg-zinc-800'
+                                            }`}>
                                             <Icon className="w-5 h-5" />
                                         </div>
                                         <span className="text-[10px] font-bold uppercase tracking-wider">{perm.label}</span>

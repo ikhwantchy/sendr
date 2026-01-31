@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 export default function EditReminderPage() {
     const params = useParams()
     const router = useRouter()
-    const reminderId = params.id as string
+    const reminderId = params?.id as string
 
     useEffect(() => {
         // Redirect to create page with edit mode

@@ -48,7 +48,7 @@ export default function BotDetailPage() {
     const params = useParams()
     const router = useRouter()
     if (!params) return null;
-    const botId = params.id as string
+    const botId = params?.id as string
     const { hasModuleAccess, isAdmin } = usePermissions()
     const [activeTab, setActiveTab] = useState<string>('overview')
 

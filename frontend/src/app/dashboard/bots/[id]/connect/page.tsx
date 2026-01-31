@@ -11,7 +11,7 @@ import { ArrowLeft, QrCode, RefreshCw } from 'lucide-react'
 export default function ConnectBotPage() {
     const params = useParams()
     const router = useRouter()
-    const botId = params.id as string
+    const botId = params?.id as string
     const [qrCode, setQrCode] = useState<string | null>(null)
     const [isConnecting, setIsConnecting] = useState(false)
     const [countdown, setCountdown] = useState(30)
