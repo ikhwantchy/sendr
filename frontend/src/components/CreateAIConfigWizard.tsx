@@ -601,7 +601,7 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                             </div>
                                                             <div className="flex-1 overflow-y-auto p-1">
                                                                 {(() => {
-                                                                    const filtered = groups.filter(g =>
+                                                                    const filtered = groups.filter((g: any) =>
                                                                         g.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                                                         g.name?.toLowerCase().includes(searchTerm.toLowerCase())
                                                                     )
@@ -610,7 +610,7 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                                         return <div className="p-3 text-center text-zinc-500 text-xs">No groups found</div>
                                                                     }
 
-                                                                    return filtered.map(g => {
+                                                                    return filtered.map((g: any) => {
                                                                         const isSelected = selectedTargets.some(t => t.jid === g.jid)
                                                                         return (
                                                                             <button
