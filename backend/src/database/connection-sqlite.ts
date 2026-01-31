@@ -487,13 +487,13 @@ async function initSchema(): Promise<void> {
     _db!.run(`
         CREATE TABLE IF NOT EXISTS audit_logs (
             id TEXT PRIMARY KEY,
+            tenant_id TEXT DEFAULT 'default-tenant-id',
             user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-            action_type TEXT NOT NULL,
-            action_category TEXT NOT NULL,
+            action TEXT NOT NULL,
+            category TEXT NOT NULL,
             resource_type TEXT,
             resource_id TEXT,
-            description TEXT NOT NULL,
-            metadata TEXT DEFAULT '{}',
+            details TEXT,
             ip_address TEXT,
             user_agent TEXT,
             status TEXT DEFAULT 'success',
