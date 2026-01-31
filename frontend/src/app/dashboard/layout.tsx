@@ -1,7 +1,7 @@
 'use client'
 
 import Sidebar from '@/components/Sidebar'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { usePathname } from 'next/navigation'
 import { MessageCircle, HelpCircle } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -87,7 +87,9 @@ export default function DashboardLayout({
 
     return (
         <div className="flex min-h-screen bg-zinc-50 dark:bg-black overflow-hidden">
-            <Sidebar />
+            <Suspense fallback={<div className="w-20 md:w-64 bg-white dark:bg-black border-r border-zinc-200 dark:border-zinc-800" />}>
+                <Sidebar />
+            </Suspense>
             <main
                 className={`flex-1 flex flex-col pt-20 md:pt-0 transition-all duration-300 overflow-hidden ${isBotDetailPage ? 'md:ml-20' : (sidebarExpanded ? 'md:ml-64' : 'md:ml-20')
                     }`}
