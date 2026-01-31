@@ -57,6 +57,14 @@ async function seed() {
         }
 
         console.log('✅ Seed completed successfully');
+
+        // Forced save for SQLite
+        try {
+            const { saveDatabase } = await import('./connection-sqlite');
+            saveDatabase();
+            console.log('💾 Database saved to disk');
+        } catch (e) { }
+
     } catch (error) {
         console.error('❌ Seed failed:', error);
         process.exit(1);

@@ -110,28 +110,37 @@ function isWriteQuery(sql: string): boolean {
   return s.startsWith('INSERT') || s.startsWith('UPDATE') || s.startsWith('DELETE') || s.startsWith('CREATE') || s.startsWith('DROP') || s.startsWith('ALTER');
 }
 
+let _initPromise: Promise<void> | null = null;
+
 export async function initDatabase(): Promise<void> {
   if (_db) return;
-  try {
-    const SQL = await initSqlJs();
+  if (_initPromise) return _initPromise;
 
-    // Load existing database or create new one
-    if (existsSync(DB_PATH)) {
-      const buffer = readFileSync(DB_PATH);
-      _db = new SQL.Database(buffer);
-      logger.info('✅ SQLite database loaded from file');
-    } else {
-      _db = new SQL.Database();
-      logger.info('✅ SQLite database created (new)');
+  _initPromise = (async () => {
+    try {
+      const SQL = await initSqlJs();
+
+      // Load existing database or create new one
+      if (existsSync(DB_PATH)) {
+        const buffer = readFileSync(DB_PATH);
+        _db = new SQL.Database(buffer);
+        logger.info('✅ SQLite database loaded from file');
+      } else {
+        _db = new SQL.Database();
+        logger.info('✅ SQLite database created (new)');
+      }
+
+      // Always initialize schema
+      await initSchema();
+
+    } catch (error) {
+      logger.error('Failed to initialize SQLite database', { error });
+      _initPromise = null;
+      throw error;
     }
+  })();
 
-    // Always initialize schema
-    await initSchema();
-
-  } catch (error) {
-    logger.error('Failed to initialize SQLite database', { error });
-    throw error;
-  }
+  return _initPromise;
 }
 
 // ... initSchema and others (copy paste from previous, no changes needed inside strings)
