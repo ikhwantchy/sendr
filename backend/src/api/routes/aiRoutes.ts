@@ -8,7 +8,7 @@ import { authenticate, requireRole } from '../middleware/auth';
 import { llmService } from '../../services/llm/llmService';
 import { query } from '../../database/connection';
 import { logger } from '../../utils/logger';
-const { checkBotAccess } = require('../../middleware/checkPermission');
+import { checkBotAccess } from '../middleware/checkPermission';
 
 const router = Router();
 

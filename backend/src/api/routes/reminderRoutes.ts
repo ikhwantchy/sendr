@@ -4,7 +4,7 @@ import { query } from '../../database/connection';
 import { authenticate } from '../middleware/auth';
 import googleSheetsService from '../../services/googleSheetsService';
 import reminderSchedulerService from '../../services/reminderSchedulerService';
-const { checkBotAccess } = require('../../middleware/checkPermission');
+import { checkBotAccess } from '../middleware/checkPermission';
 
 const router = Router();
 

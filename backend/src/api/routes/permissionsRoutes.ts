@@ -13,7 +13,7 @@ import {
     revokePermission,
     checkAccess
 } from '../../controllers/permissionsController';
-import { requireOwner } from '../../middleware/checkPermission';
+import { requireOwner } from '../middleware/checkPermission';
 import { authenticate } from '../middleware/auth';
 
 const router = express.Router();

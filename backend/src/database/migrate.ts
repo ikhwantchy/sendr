@@ -12,12 +12,23 @@ async function runMigration() {
     try {
         logger.info('Starting database migration...');
 
-        // Read schema file
-        const schemaPath = join(__dirname, 'schema.sql');
-        const schema = readFileSync(schemaPath, 'utf-8');
+        // Check if we are using SQLite
+        const dbType = (process.env.DATABASE_TYPE || 'sqlite').toLowerCase();
+        const isSqlite = dbType === 'sqlite' || dbType !== 'postgres';
 
-        // Execute schema
-        await query(schema);
+        if (!isSqlite) {
+            // Read schema file (PostgreSQL only)
+            const schemaPath = join(__dirname, 'schema.sql');
+            const schema = readFileSync(schemaPath, 'utf-8');
+
+            // Execute schema
+            await query(schema);
+            logger.info('✅ PostgreSQL database schema initialized');
+        } else {
+            // SQLite auto-initializes in connection-sqlite.ts, so we just run a dummy query to trigger it
+            await query('SELECT 1');
+            logger.info('✅ SQLite database auto-initialized');
+        }
 
         logger.info('✅ Database migration completed successfully');
         logger.info('📊 Tables created:');

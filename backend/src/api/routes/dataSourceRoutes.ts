@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { query } from '../../database/connection';
-const { checkBotAccess } = require('../../middleware/checkPermission');
+import { checkBotAccess } from '../middleware/checkPermission';
 
 const router = Router();
 router.use(authenticate);
