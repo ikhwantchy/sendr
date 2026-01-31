@@ -1,51 +1,41 @@
-name: Deploy to AWS
+name: Deploy to Staging
 
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch:
-    inputs:
-      reason:
-        description: 'Reason for deployment'
-        required: false
-        default: 'Manual deployment'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Log Deployment Info
-        run: |
-          echo "🚀 Deploying to AWS Server"
-          echo "📝 Reason: ${{ github.event.inputs.reason }}"
-          echo "👤 Triggered by: ${{ github.actor }}"
-          
-      - name: Deploy to AWS Server
-        uses: appleboy/ssh-action@v1.0.0
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ${{ secrets.AWS_USERNAME }}
-          key: ${{ secrets.AWS_SSH_KEY }}
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_KEY }}
           script: |
-            cd ~/brobot
+            # Navigate to project dir (Support both folder names)
+            cd ~/Sendr || cd ~/brobot || echo "Project folder not found!" && exit 1
             
-            # Pull latest changes
+            echo "Deployment started..."
+            
+            # Pull latest code
             git pull origin main
             
-            # Update Backend
+            # Backend Setup
             cd backend
             npm install
             npm run build
-            pm2 restart brobot-backend
+            # Run migrations just in case
+            npm run migrate
             
-            # Update Frontend
+            # Frontend Setup
             cd ../frontend
             npm install
             npm run build
-            pm2 restart brobot-frontend
             
-            # Show status
-            pm2 status
+            # Restart Services
+            pm2 restart all
             
-            echo "✅ Deployment completed successfully!"
+            echo "Deployment finished successfully!"

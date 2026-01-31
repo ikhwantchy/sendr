@@ -1,36 +1,35 @@
 #!/bin/bash
+# Sendr Deployment Script
 
-# BroBot Auto-Deploy Script
-# This script pulls latest changes and restarts the application
+set -e
 
-set -e  # Exit on error
+# Get current directory of the script
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$DIR"
 
-echo "🚀 Starting BroBot deployment..."
-
-# Navigate to project directory
-cd ~/brobot
+echo "🚀 Starting deployment in $DIR..."
 
 # Pull latest changes
-echo "📥 Pulling latest changes from GitHub..."
+echo "📥 Pulling from git..."
 git pull origin main
 
-# Update Backend
-echo "🔧 Updating Backend..."
+# Backend
+echo "🔧 Building Backend..."
 cd backend
 npm install
 npm run build
-pm2 restart brobot-backend
+# Optional: npm run migrate
+cd ..
 
-# Update Frontend
-echo "🎨 Updating Frontend..."
-cd ../frontend
+# Frontend
+echo "🎨 Building Frontend..."
+cd frontend
 npm install
 npm run build
-pm2 restart brobot-frontend
+cd ..
 
-# Show status
-echo "📊 Application Status:"
-pm2 status
+# Restart PM2
+echo "🔄 Restarting Service..."
+pm2 restart all || echo "PM2 process not found, skipping restart."
 
-echo "✅ Deployment completed successfully!"
-echo "🌐 Access your app at: http://YOUR_SERVER_IP:3000"
+echo "✅ Done! Application updated."
