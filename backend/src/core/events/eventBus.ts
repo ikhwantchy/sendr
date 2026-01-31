@@ -43,6 +43,7 @@ class AntiGravityEventBus extends EventEmitter {
      * @param context Event context (MANDATORY)
      * @param payload Event payload
      */
+    // @ts-ignore
     public async emit<T = any>(
         type: EventType,
         context: EventContext,

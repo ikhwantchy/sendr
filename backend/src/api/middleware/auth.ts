@@ -14,7 +14,7 @@ export interface AuthUser {
     tenant_id: string;
     email: string;
     name?: string;
-    role: 'OWNER' | 'OPERATOR' | 'VIEWER' | 'ADMIN' | 'USER';
+    role: 'OWNER' | 'OPERATOR' | 'VIEWER' | 'ADMIN' | 'USER' | 'API';
     permissions?: any;
 }
 

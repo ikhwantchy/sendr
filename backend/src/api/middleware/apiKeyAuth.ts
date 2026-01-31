@@ -72,8 +72,9 @@ export const apiKeyAuth = async (req: Request, res: Response, next: NextFunction
         // Also set user for audit logging
         req.user = {
             id: validation.user_id!,
+            tenant_id: 'api-tenant', // Placeholder
             email: 'api_key_user',
-            role: 'api'
+            role: 'API'
         };
 
         next();

@@ -249,9 +249,6 @@ router.get('/:id/status', async (req, res) => {
     }
 });
 
-// ... rest of the file (disconnect, pause, resume, delete, groups, sync-groups)
-// Needs proper restoration for the rest as well to ensure table name is fixed everywhere
-
 // POST /api/bots/:id/disconnect
 // Disconnect bot
 router.post('/:id/disconnect', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
@@ -374,6 +371,9 @@ router.delete('/:id', requireRole(['OWNER', 'ADMIN', 'USER']), async (req, res) 
             tenant_id: tenantId,
             bot_id: id,
             channel: 'wa',
+            group_id: null,
+            contact_id: null,
+            message: null,
             timestamp: new Date().toISOString(),
         }, { bot_id: id });
 

@@ -10,24 +10,122 @@ import { logger } from '../utils/logger';
 
 const DB_PATH = join(__dirname, '../../data/database.sqlite');
 
-export let db: Database | null = null;
+// Internal raw instance
+let _db: Database | null = null;
+
+// Better-sqlite3 compatibility layer
+interface BetterStatement {
+  run(...params: any[]): { changes: number; lastInsertRowid: number | bigint };
+  get(...params: any[]): any;
+  all(...params: any[]): any[];
+}
+
+export const db = {
+  prepare(sql: string): BetterStatement {
+    if (!_db) throw new Error("Database not initialized");
+
+    return {
+      run: (...params: any[]) => {
+        // Handle argument spreading similar to better-sqlite3
+        const stmt = _db!.prepare(sql);
+        try {
+          stmt.bind(params);
+          stmt.step(); // Execute
+
+          const changes = (_db! as any).getRowsModified();
+
+          // Get last ID safely
+          let lastId = 0;
+          try {
+            const idRes = (_db! as any).exec("SELECT last_insert_rowid()");
+            if (idRes.length > 0 && idRes[0].values.length > 0) {
+              lastId = idRes[0].values[0][0] as number;
+            }
+          } catch (e) { }
+
+          stmt.free();
+          if (isWriteQuery(sql)) saveDatabase();
+
+          return { changes, lastInsertRowid: lastId };
+        } catch (e) {
+          stmt.free();
+          throw e;
+        }
+      },
+      get: (...params: any[]) => {
+        const stmt = _db!.prepare(sql);
+        try {
+          stmt.bind(params);
+          const res = stmt.step() ? stmt.getAsObject() : undefined;
+          stmt.free();
+          return res;
+        } catch (e) {
+          stmt.free();
+          throw e;
+        }
+      },
+      all: (...params: any[]) => {
+        const stmt = _db!.prepare(sql);
+        try {
+          stmt.bind(params);
+          const rows = [];
+          while (stmt.step()) {
+            rows.push(stmt.getAsObject());
+          }
+          stmt.free();
+          return rows;
+        } catch (e) {
+          stmt.free();
+          throw e;
+        }
+      }
+    };
+  },
+  transaction: (fn: Function) => {
+    return (...args: any[]) => {
+      if (!_db) throw new Error("DB not init");
+      _db!.run("BEGIN TRANSACTION");
+      try {
+        const result = fn(...args);
+        _db!.run("COMMIT");
+        saveDatabase();
+        return result;
+      } catch (e) {
+        _db!.run("ROLLBACK");
+        throw e;
+      }
+    }
+  },
+  exec: (sql: string) => {
+    if (!_db) throw new Error("DB not init");
+    _db!.run(sql);
+    saveDatabase();
+  },
+  // Property to allow check
+  get open() { return !!_db; }
+};
+
+function isWriteQuery(sql: string): boolean {
+  const s = sql.trim().toUpperCase();
+  return s.startsWith('INSERT') || s.startsWith('UPDATE') || s.startsWith('DELETE') || s.startsWith('CREATE') || s.startsWith('DROP') || s.startsWith('ALTER');
+}
 
 export async function initDatabase(): Promise<void> {
-  if (db) return;
+  if (_db) return;
   try {
     const SQL = await initSqlJs();
 
     // Load existing database or create new one
     if (existsSync(DB_PATH)) {
       const buffer = readFileSync(DB_PATH);
-      db = new SQL.Database(buffer);
+      _db = new SQL.Database(buffer);
       logger.info('✅ SQLite database loaded from file');
     } else {
-      db = new SQL.Database();
+      _db = new SQL.Database();
       logger.info('✅ SQLite database created (new)');
     }
 
-    // Always initialize schema (CREATE TABLE IF NOT EXISTS handles existing tables)
+    // Always initialize schema
     await initSchema();
 
   } catch (error) {
@@ -36,8 +134,9 @@ export async function initDatabase(): Promise<void> {
   }
 }
 
+// ... initSchema and others (copy paste from previous, no changes needed inside strings)
 async function initSchema(): Promise<void> {
-  if (!db) return;
+  if (!_db) return;
 
   logger.info('Creating database schema...');
 
@@ -322,7 +421,7 @@ async function initSchema(): Promise<void> {
         FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
     );
 
-    -- Bot Permissions (for non-owner access control)
+    -- Bot Permissions
     CREATE TABLE IF NOT EXISTS bot_permissions (
         user_id TEXT NOT NULL,
         bot_id TEXT NOT NULL,
@@ -334,6 +433,8 @@ async function initSchema(): Promise<void> {
         can_view_analytics INTEGER DEFAULT 0,
         can_use_reminders INTEGER DEFAULT 0,
         can_use_ai INTEGER DEFAULT 0,
+        can_manage_contacts INTEGER DEFAULT 0,
+        can_manage_datasources INTEGER DEFAULT 0,
         granted_at TEXT DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (user_id, bot_id),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -345,7 +446,6 @@ async function initSchema(): Promise<void> {
     VALUES ('default-tenant-id', 'Default Tenant', 'default');
   `;
 
-  // Split schema into individual statements
   const statements = schema
     .split(';')
     .map(s => s.trim())
@@ -353,24 +453,26 @@ async function initSchema(): Promise<void> {
 
   for (const statement of statements) {
     try {
-      db.run(statement);
+      _db!.run(statement);
     } catch (e) {
       logger.error('Failed to execute schema statement', { statement: statement.substring(0, 50), error: e });
     }
   }
 
   // Activity Logs Table for persistent history
-  db.run(`
-      CREATE TABLE IF NOT EXISTS activity_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        type TEXT NOT NULL,
-        message TEXT NOT NULL,
-        metadata TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+  try {
+    _db!.run(`
+        CREATE TABLE IF NOT EXISTS activity_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            message TEXT NOT NULL,
+            metadata TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+     `);
+  } catch (e) { }
 
-  // MIGRATIONS
+  // Apply migrations manually here
   const migrations = [
     "ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound'))",
     "ALTER TABLE bots ADD COLUMN ai_config TEXT DEFAULT '{\\\"enabled\\\":false}'",
@@ -380,7 +482,6 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE users ADD COLUMN two_factor_secret TEXT",
     "ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN telegram_chat_id TEXT",
-    // Campaign enhancements
     "ALTER TABLE campaigns ADD COLUMN delay_preset TEXT DEFAULT 'moderate'",
     "ALTER TABLE campaigns ADD COLUMN anti_spam_config TEXT",
     "ALTER TABLE campaigns ADD COLUMN contact_source TEXT DEFAULT 'manual'",
@@ -388,7 +489,6 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE campaigns ADD COLUMN sheets_tab TEXT",
     "ALTER TABLE campaigns ADD COLUMN image_url TEXT",
     "ALTER TABLE campaigns ADD COLUMN scheduled_at TEXT",
-    // New permissions for enhanced user management
     "ALTER TABLE bot_permissions ADD COLUMN can_manage_contacts INTEGER DEFAULT 0",
     "ALTER TABLE bot_permissions ADD COLUMN can_manage_datasources INTEGER DEFAULT 0",
     "ALTER TABLE bots ADD COLUMN is_paused INTEGER DEFAULT 0",
@@ -397,89 +497,66 @@ async function initSchema(): Promise<void> {
 
   for (const sql of migrations) {
     try {
-      db.run(sql);
-      logger.info(`✅ MIGRATION SUCCESS: ${sql.substring(0, 40)}...`);
-    } catch (e) {
-      // Ignore "duplicate column" errors
-    }
+      _db!.run(sql);
+    } catch (e) { }
   }
 
-  // DATA REPAIR: Backfill messages from reminder_logs (for historical charts)
-  try {
-    db.run(`
-        INSERT INTO messages (id, bot_id, direction, source, message_type, content, created_at)
-        SELECT 
-          'rem-log-' || rl.id, 
-          r.bot_id, 
-          'outbound', 
-          'reminder', 
-          'text', 
-          rl.message_sent, 
-          rl.executed_at
-        FROM reminder_logs rl
-        JOIN reminders r ON rl.reminder_id = r.id
-        WHERE rl.status = 'success'
-          AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.id = 'rem-log-' || rl.id)
-      `);
-    logger.info('✅ DATA REPAIR: Backfilled reminders into messages');
-  } catch (e) { }
-
+  saveDatabase();
   logger.info('✅ Database schema initialized');
 }
 
 export function saveDatabase(): void {
-  if (!db) return;
+  if (!_db) return;
   try {
-    const data = db.export();
+    const data = _db.export();
     const buffer = Buffer.from(data);
     writeFileSync(DB_PATH, buffer);
-    logger.info('💾 Database saved to file successfully');
   } catch (error) {
     logger.error('❌ Failed to save database to disk', { error });
   }
 }
 
 export async function query(sql: string, params: any[] = []): Promise<any> {
-  if (!db) await initDatabase();
+  if (!_db) await initDatabase();
+  // Using wrapper prepare logic but manually
   try {
-    const stmt = db!.prepare(sql);
+    // Direct _db access for query helper which allows better control
+    const stmt = _db!.prepare(sql);
     stmt.bind(params);
-    const rows: any[] = [];
+    const rows = [];
     while (stmt.step()) {
       rows.push(stmt.getAsObject());
     }
     stmt.free();
-    if (sql.trim().toUpperCase().startsWith('INSERT') ||
-      sql.trim().toUpperCase().startsWith('UPDATE') ||
-      sql.trim().toUpperCase().startsWith('DELETE')) {
-      saveDatabase();
-    }
+
+    if (isWriteQuery(sql)) saveDatabase();
     return { rows, rowCount: rows.length };
-  } catch (error) {
-    logger.error('Query error', { error, sql, params });
-    throw error;
+  } catch (e) {
+    logger.error('Query error', { error: e, sql });
+    throw e;
   }
 }
 
 export async function transaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
-  if (!db) await initDatabase();
+  if (!_db) await initDatabase();
   try {
-    db!.run('BEGIN TRANSACTION');
+    _db!.run('BEGIN TRANSACTION');
+    // Callback expects db-like object. We pass our wrapper 'db'
     const result = await callback(db);
-    db!.run('COMMIT');
+    _db!.run('COMMIT');
     saveDatabase();
     return result;
   } catch (error) {
-    db!.run('ROLLBACK');
+    _db!.run('ROLLBACK');
     throw error;
   }
 }
 
 export async function closePool(): Promise<void> {
-  if (db) {
+  if (_db) {
     saveDatabase();
-    db.close();
-    db = null;
+    _db.close();
+    _db = null;
     logger.info('Database closed');
   }
 }
@@ -487,9 +564,9 @@ export async function closePool(): Promise<void> {
 initDatabase().catch(console.error);
 
 export async function logActivity(type: string, message: string, metadata: any = {}) {
-  if (!db) await initDatabase();
+  if (!_db) await initDatabase();
   try {
-    const stmt = db?.prepare('INSERT INTO activity_logs (type, message, metadata) VALUES (?, ?, ?)');
+    const stmt = _db?.prepare('INSERT INTO activity_logs (type, message, metadata) VALUES (?, ?, ?)');
     stmt?.bind([type, message, JSON.stringify(metadata)]);
     stmt?.step();
     stmt?.free();

@@ -14,7 +14,7 @@ export interface KeywordRule {
     scope: 'global' | 'group' | 'contact';
     scope_target: string | null;
     priority: number;
-    is_active: number;
+    is_active: boolean;
     actions: any[];
     metadata: any;
     created_by: string | null;
@@ -48,6 +48,9 @@ class KeywordRuleRepository {
                 rule.metadata = {};
             }
         }
+
+        // Ensure is_active is boolean
+        rule.is_active = !!rule.is_active;
 
         return rule;
     }

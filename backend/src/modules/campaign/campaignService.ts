@@ -528,6 +528,25 @@ class CampaignService {
             throw error;
         }
     }
+    async updateRecipientStatus(recipientId: string, status: 'sent' | 'failed', error?: string): Promise<void> {
+        const sentAt = status === 'sent' ? new Date().toISOString() : null;
+
+        await query(`
+             UPDATE campaign_recipients
+             SET status = ?, error = ?, sent_at = COALESCE(?, sent_at)
+             WHERE id = ?
+        `, [status, error || null, sentAt, recipientId]);
+
+        // Increment global counters on Campaign
+        if (status === 'sent' || status === 'failed') {
+            const recipient = await query('SELECT campaign_id FROM campaign_recipients WHERE id = ?', [recipientId]);
+            if (recipient.rows.length > 0) {
+                const campaignId = recipient.rows[0].campaign_id;
+                const col = status === 'sent' ? 'sent_count' : 'failed_count';
+                await query(`UPDATE campaigns SET ${col} = ${col} + 1 WHERE id = ?`, [campaignId]);
+            }
+        }
+    }
 }
 
 export const campaignService = new CampaignService();
