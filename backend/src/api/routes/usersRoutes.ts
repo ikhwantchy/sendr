@@ -11,7 +11,7 @@ import {
     updateUser,
     deleteUser,
     getUserStats
-} from '../../controllers/usersController';
+} from '../controllers/usersController';
 import { requireAdmin } from '../middleware/adminAuth';
 import { authenticate } from '../middleware/auth';
 

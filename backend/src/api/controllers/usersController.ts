@@ -1,15 +1,11 @@
-/**
- * Users Controller
- * Handles user management operations (owner only)
- */
 
-const { query } = require('../database/connection');
-const crypto = require('crypto');
+import { Request, Response } from 'express';
+import { query } from '../../database/connection';
 
 /**
  * List all users
  */
-const listUsers = async (req, res) => {
+export const listUsers = async (req: Request, res: Response) => {
     try {
         const result = await query(`
       SELECT 
@@ -23,7 +19,7 @@ const listUsers = async (req, res) => {
       FROM users u
       WHERE u.id != ?
       ORDER BY u.created_at DESC
-    `, [req.user.id]);
+    `, [(req as any).user.id]);
 
         res.json({
             success: true,
@@ -38,7 +34,7 @@ const listUsers = async (req, res) => {
 /**
  * Get user detail with bots and aggregated analytics
  */
-const getUserDetail = async (req, res) => {
+export const getUserDetail = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
 
@@ -99,7 +95,7 @@ const getUserDetail = async (req, res) => {
 /**
  * Invite user logic
  */
-const inviteUser = async (req, res) => {
+export const inviteUser = async (req: Request, res: Response) => {
     try {
         const { email, role, bot_ids, permissions } = req.body;
         // Simplified for now - usually involves email sending
@@ -112,12 +108,12 @@ const inviteUser = async (req, res) => {
 /**
  * Update user
  */
-const updateUser = async (req, res) => {
+export const updateUser = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { name, role } = req.body;
         const result = await query(
-            'UPDATE users SET name = COALESCE(?, name), role = COALESCE(?, role), updated_at = CURRENT_TIMESTAMP WHERE id = ? RETURNING *',
+            'UPDATE users SET name = COALESCE(?, name), role = COALESCE(?, role), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
             [name, role, id]
         );
         res.json({ success: true, data: result.rows[0] });
@@ -129,7 +125,7 @@ const updateUser = async (req, res) => {
 /**
  * Delete user
  */
-const deleteUser = async (req, res) => {
+export const deleteUser = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         await query('DELETE FROM users WHERE id = ?', [id]);
@@ -142,7 +138,7 @@ const deleteUser = async (req, res) => {
 /**
  * Get user stats
  */
-const getUserStats = async (req, res) => {
+export const getUserStats = async (req: Request, res: Response) => {
     try {
         const result = await query(`
       SELECT 
@@ -151,18 +147,9 @@ const getUserStats = async (req, res) => {
         COUNT(CASE WHEN role = 'USER' THEN 1 END) as user_count
       FROM users
       WHERE id != ?
-    `, [req.user.id]);
+    `, [(req as any).user.id]);
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Failed' });
     }
-};
-
-module.exports = {
-    listUsers,
-    getUserDetail,
-    inviteUser,
-    updateUser,
-    deleteUser,
-    getUserStats
 };

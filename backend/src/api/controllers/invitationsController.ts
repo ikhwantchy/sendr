@@ -1,17 +1,14 @@
-/**
- * Invitations Controller
- * Handles user invitation and acceptance
- */
 
-const { query } = require('../database/connection');
-const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
+import { Request, Response } from 'express';
+import { query } from '../../database/connection';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 
 /**
  * Validate invitation token
  * GET /api/invitations/validate/:token
  */
-const validateToken = async (req, res) => {
+export const validateToken = async (req: Request, res: Response) => {
     try {
         const { token } = req.params;
 
@@ -51,7 +48,7 @@ const validateToken = async (req, res) => {
  * Accept invitation and create user
  * POST /api/invitations/accept
  */
-const acceptInvitation = async (req, res) => {
+export const acceptInvitation = async (req: Request, res: Response) => {
     try {
         const { token, name, password } = req.body;
 
@@ -110,9 +107,6 @@ const acceptInvitation = async (req, res) => {
             [invitation.id]
         );
 
-        // TODO: Assign bot permissions based on invitation metadata
-        // This would be stored in invitation when created
-
         res.json({
             success: true,
             message: 'Account created successfully! You can now login.',
@@ -129,9 +123,4 @@ const acceptInvitation = async (req, res) => {
             error: 'Failed to accept invitation'
         });
     }
-};
-
-module.exports = {
-    validateToken,
-    acceptInvitation
 };

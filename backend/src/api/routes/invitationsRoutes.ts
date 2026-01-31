@@ -4,10 +4,10 @@
 
 import { Router } from 'express';
 
-const {
+import {
     validateToken,
     acceptInvitation
-} = require('../../controllers/invitationsController');
+} from '../controllers/invitationsController';
 
 const router = Router();
 

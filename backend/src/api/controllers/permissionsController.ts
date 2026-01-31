@@ -1,14 +1,11 @@
-/**
- * Permissions Controller
- * Handles granular bot-level feature access management
- */
 
-const { query } = require('../database/connection');
+import { Request, Response } from 'express';
+import { query } from '../../database/connection';
 
 /**
  * Get all bot permissions for a specific user
  */
-const getUserPermissions = async (req, res) => {
+export const getUserPermissions = async (req: Request, res: Response) => {
     try {
         const { userId } = req.params;
 
@@ -29,9 +26,8 @@ const getUserPermissions = async (req, res) => {
 
 /**
  * Update or Create permission for a specific user and bot
- * Handles toggling individual features
  */
-const updatePermission = async (req, res) => {
+export const updatePermission = async (req: Request, res: Response) => {
     try {
         const { userId, botId } = req.params;
         const {
@@ -49,8 +45,6 @@ const updatePermission = async (req, res) => {
 
         console.log(`[Permissions] Updating bot ${botId} for user ${userId}`, req.body);
 
-        // Ensure we save as 1 or 0 for SQLite
-        // We Use COALESCE or defaults if values are missing from body
         await query(
             `INSERT OR REPLACE INTO bot_permissions 
             (user_id, bot_id, can_view, can_edit, can_delete, can_create_campaigns, can_create_rules, can_view_analytics, can_use_reminders, can_use_ai, can_manage_contacts, can_manage_datasources)
@@ -72,22 +66,21 @@ const updatePermission = async (req, res) => {
         );
 
         res.json({ success: true, message: 'Permissions updated successfully' });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Failed to update permission:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 };
 
 /**
- * Check access for current user to a specific bot
+ * Check access
  */
-const checkAccess = async (req, res) => {
+export const checkAccess = async (req: Request, res: Response) => {
     try {
         const { botId } = req.params;
-        const userId = req.user.id;
-        const role = req.user.role;
+        const userId = (req as any).user.id;
+        const role = (req as any).user.role;
 
-        // Owners/Admins always have full access
         if (role === 'OWNER' || role === 'ADMIN') {
             return res.json({
                 success: true,
@@ -108,7 +101,7 @@ const checkAccess = async (req, res) => {
             [userId, botId]
         );
 
-        if (res_perm.rowCount === 0) {
+        if (res_perm.rows.length === 0) {
             return res.json({ success: true, data: { has_access: false } });
         }
 
@@ -137,11 +130,6 @@ const checkAccess = async (req, res) => {
     }
 };
 
-module.exports = {
-    getUserPermissions,
-    updatePermission,
-    checkAccess,
-    getBotPermissions: async (req, res) => res.json({ success: true, data: [] }),
-    grantPermission: updatePermission,
-    revokePermission: async (req, res) => res.json({ success: true })
-};
+export const getBotPermissions = async (req: Request, res: Response) => res.json({ success: true, data: [] });
+export const grantPermission = updatePermission;
+export const revokePermission = async (req: Request, res: Response) => res.json({ success: true });

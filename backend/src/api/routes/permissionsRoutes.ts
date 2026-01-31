@@ -4,7 +4,6 @@
  */
 
 import express from 'express';
-// @ts-ignore - JS controller
 import {
     getUserPermissions,
     getBotPermissions,
@@ -12,7 +11,7 @@ import {
     updatePermission,
     revokePermission,
     checkAccess
-} from '../../controllers/permissionsController';
+} from '../controllers/permissionsController';
 import { requireOwner } from '../middleware/checkPermission';
 import { authenticate } from '../middleware/auth';
 
