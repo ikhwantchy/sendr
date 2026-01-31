@@ -22,7 +22,7 @@ interface ActivityLog {
 export default function BotActivityPage() {
     const router = useRouter()
     const params = useParams()
-    const botId = params.id as string
+    const botId = params?.id as string
 
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
     const [loading, setLoading] = useState(true)
