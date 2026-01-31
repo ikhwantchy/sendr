@@ -8,7 +8,8 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../utils/logger';
 
-const DB_PATH = join(__dirname, '../../data/database.sqlite');
+// Use process.cwd() to ensure consistent path whether running from tsx or compiled JS
+const DB_PATH = join(process.cwd(), 'data/database.sqlite');
 
 // Internal raw instance
 let _db: Database | null = null;
