@@ -482,6 +482,78 @@ async function initSchema(): Promise<void> {
      `);
   } catch (e) { }
 
+  // Audit Logs Table (Admin Panel)
+  try {
+    _db!.run(`
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id TEXT PRIMARY KEY,
+            user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+            action_type TEXT NOT NULL,
+            action_category TEXT NOT NULL,
+            resource_type TEXT,
+            resource_id TEXT,
+            description TEXT NOT NULL,
+            metadata TEXT DEFAULT '{}',
+            ip_address TEXT,
+            user_agent TEXT,
+            status TEXT DEFAULT 'success',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+     `);
+  } catch (e) { }
+
+  // API Keys Table (Admin Panel)
+  try {
+    _db!.run(`
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            key_hash TEXT NOT NULL UNIQUE,
+            key_prefix TEXT NOT NULL,
+            permissions TEXT DEFAULT '{"read": true, "write": false, "admin": false}',
+            rate_limit INTEGER DEFAULT 1000,
+            ip_whitelist TEXT,
+            expires_at TEXT,
+            last_used_at TEXT,
+            request_count INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+     `);
+  } catch (e) { }
+
+  // User Invites Table (Admin Panel)
+  try {
+    _db!.run(`
+        CREATE TABLE IF NOT EXISTS user_invites (
+            id TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            role TEXT NOT NULL DEFAULT 'USER',
+            invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            expires_at TEXT NOT NULL,
+            accepted_at TEXT,
+            is_used INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+     `);
+  } catch (e) { }
+
+  // System Settings Table (Admin Panel)
+  try {
+    _db!.run(`
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            description TEXT,
+            updated_by TEXT REFERENCES users(id),
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+     `);
+  } catch (e) { }
+
   // Apply migrations manually here
   const migrations = [
     "ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound'))",
