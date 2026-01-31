@@ -16,7 +16,7 @@ async function seed() {
         const now = isSqlite ? 'CURRENT_TIMESTAMP' : 'NOW()';
 
         // 1. Ensure Default Tenant Exists
-        let tenantId = '11111111-1111-1111-1111-111111111111';
+        let tenantId = 'default-tenant-id'; // Match the ID from schema
 
         // Check by slug first (to avoid unique constraint error)
         const slugCheck = await query(`SELECT * FROM tenants WHERE slug = ${p(1)}`, ['default']);
@@ -44,14 +44,19 @@ async function seed() {
             console.log('Creating admin user...');
             const hashedPassword = await bcrypt.hash('admin123', 10);
 
-            await query(`
-                INSERT INTO users (id, tenant_id, email, password_hash, name, role, created_at, updated_at)
-                VALUES (${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${now}, ${now})
-            `, ['default-user-id', tenantId, 'admin@example.com', hashedPassword, 'Admin User', 'OWNER']);
+            try {
+                await query(`
+                    INSERT INTO users (id, tenant_id, email, password_hash, name, role, status, created_at, updated_at)
+                    VALUES (${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${p(7)}, ${now}, ${now})
+                `, ['default-user-id', tenantId, 'admin@example.com', hashedPassword, 'Admin User', 'OWNER', 'active']);
 
-            console.log('✅ Admin user created');
-            console.log('   Email: admin@example.com');
-            console.log('   Password: admin123');
+                console.log('✅ Admin user created');
+                console.log('   Email: admin@example.com');
+                console.log('   Password: admin123');
+            } catch (insertError) {
+                console.error('❌ Failed to insert admin user:', insertError);
+                throw insertError;
+            }
         } else {
             console.log('ℹ️  Admin user already exists');
         }
