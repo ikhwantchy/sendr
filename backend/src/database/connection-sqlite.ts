@@ -590,6 +590,15 @@ async function initSchema(): Promise<void> {
 export function saveDatabase(): void {
   if (!_db) return;
   try {
+    const { mkdirSync } = require('fs');
+    const { dirname } = require('path');
+
+    // Ensure directory exists
+    const dir = dirname(DB_PATH);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+
     const data = _db.export();
     const buffer = Buffer.from(data);
     writeFileSync(DB_PATH, buffer);
@@ -600,9 +609,7 @@ export function saveDatabase(): void {
 
 export async function query(sql: string, params: any[] = []): Promise<any> {
   if (!_db) await initDatabase();
-  // Using wrapper prepare logic but manually
   try {
-    // Direct _db access for query helper which allows better control
     const stmt = _db!.prepare(sql);
     stmt.bind(params);
     const rows = [];
