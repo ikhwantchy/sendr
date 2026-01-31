@@ -7,17 +7,7 @@ import auditLogService from '../../services/auditLogService';
  */
 
 // Extend Express Request to include user info
-declare global {
-    namespace Express {
-        interface Request {
-            user?: {
-                id: string;
-                email: string;
-                role: string;
-            };
-        }
-    }
-}
+// Express Request type extension removed - already in auth.ts
 
 /**
  * Audit log middleware - logs all requests
@@ -70,7 +60,7 @@ async function logRequest(req: Request, statusCode: number, responseTime: number
         await auditLogService.log({
             user_id: userId,
             action_type: actionType,
-            action_category: actionCategory,
+            action_category: actionCategory as any,
             resource_type: resourceType,
             resource_id: resourceId,
             description,

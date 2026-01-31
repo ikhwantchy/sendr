@@ -77,7 +77,7 @@ router.patch('/:id/toggle', requireRole(['OWNER', 'OPERATOR', 'USER']), async (r
 
         // Toggle is_active
         const updatedRule = await keywordRuleRepository.update(req.params.id, req.user!.tenant_id, {
-            is_active: currentRule.is_active === 1 ? 0 : 1
+            is_active: !currentRule.is_active
         });
 
         res.json({ success: true, data: updatedRule });
