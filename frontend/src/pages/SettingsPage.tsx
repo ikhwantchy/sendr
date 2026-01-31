@@ -125,8 +125,8 @@ export default function SettingsPage() {
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${activeTab === tab.id
-                                    ? 'border-purple-500 text-white'
-                                    : 'border-transparent text-gray-400 hover:text-white'
+                                ? 'border-purple-500 text-white'
+                                : 'border-transparent text-gray-400 hover:text-white'
                                 }`}
                         >
                             <Icon size={18} />
@@ -141,8 +141,8 @@ export default function SettingsPage() {
                 {activeTab === 'general' && (
                     <GeneralSettings
                         settings={settings.general || {}}
-                        getValue={(key) => getValue('general', key)}
-                        onChange={(key, value) => handleChange('general', key, value)}
+                        getValue={(key: string) => getValue('general', key)}
+                        onChange={(key: string, value: any) => handleChange('general', key, value)}
                         onSave={() => handleSave('general')}
                         saving={saving}
                     />
@@ -151,8 +151,8 @@ export default function SettingsPage() {
                 {activeTab === 'email' && (
                     <EmailSettings
                         settings={settings.email || {}}
-                        getValue={(key) => getValue('email', key)}
-                        onChange={(key, value) => handleChange('email', key, value)}
+                        getValue={(key: string) => getValue('email', key)}
+                        onChange={(key: string, value: any) => handleChange('email', key, value)}
                         onSave={() => handleSave('email')}
                         onTest={handleTestEmail}
                         saving={saving}
@@ -162,8 +162,8 @@ export default function SettingsPage() {
                 {activeTab === 'whatsapp' && (
                     <WhatsAppSettings
                         settings={settings.whatsapp || {}}
-                        getValue={(key) => getValue('whatsapp', key)}
-                        onChange={(key, value) => handleChange('whatsapp', key, value)}
+                        getValue={(key: string) => getValue('whatsapp', key)}
+                        onChange={(key: string, value: any) => handleChange('whatsapp', key, value)}
                         onSave={() => handleSave('whatsapp')}
                         saving={saving}
                     />
@@ -172,8 +172,8 @@ export default function SettingsPage() {
                 {activeTab === 'security' && (
                     <SecuritySettings
                         settings={settings.security || {}}
-                        getValue={(key) => getValue('security', key)}
-                        onChange={(key, value) => handleChange('security', key, value)}
+                        getValue={(key: string) => getValue('security', key)}
+                        onChange={(key: string, value: any) => handleChange('security', key, value)}
                         onSave={() => handleSave('security')}
                         saving={saving}
                     />
@@ -182,8 +182,8 @@ export default function SettingsPage() {
                 {activeTab === 'advanced' && (
                     <AdvancedSettings
                         settings={settings.advanced || {}}
-                        getValue={(key) => getValue('advanced', key)}
-                        onChange={(key, value) => handleChange('advanced', key, value)}
+                        getValue={(key: string) => getValue('advanced', key)}
+                        onChange={(key: string, value: any) => handleChange('advanced', key, value)}
                         onSave={() => handleSave('advanced')}
                         saving={saving}
                     />
