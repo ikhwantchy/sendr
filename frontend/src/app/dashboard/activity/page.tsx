@@ -260,7 +260,7 @@ export default function ActivityHistoryPage() {
                 {/* Title Section */}
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight text-white">Activity History</h1>
-                    <p className="text-zinc-500 text-sm mt-1">Real-time audit log of system events and automations.</p>
+                    <p className="text-zinc-500 dark:text-zinc-100 text-sm mt-1">Real-time audit log of system events and automations.</p>
                 </div>
 
                 {/* Filters */}

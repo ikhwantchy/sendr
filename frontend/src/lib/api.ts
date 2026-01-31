@@ -87,6 +87,7 @@ export const api = {
     rules: {
         list: () => apiClient.get('/rules'),
         getByBot: (botId: string) => apiClient.get(`/rules/bot/${botId}`),
+        get: (id: string) => apiClient.get(`/rules/${id}`),
         create: (data: any) => apiClient.post('/rules', data),
         update: (id: string, data: any) => apiClient.put(`/rules/${id}`, data),
         toggle: (id: string) => apiClient.patch(`/rules/${id}/toggle`),

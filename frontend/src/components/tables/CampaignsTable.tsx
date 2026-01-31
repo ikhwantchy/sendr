@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { Megaphone, Trash2, ChevronDown, Circle, Check, X, Calendar, Users, Send, Play, Pause, RefreshCw, Eye } from 'lucide-react'
+import { Megaphone, Trash2, ChevronDown, Circle, Check, X, Calendar, Users, Send, Play, Pause, RefreshCw, Eye, Plus } from 'lucide-react'
 import CampaignDetailModal from '@/components/modals/CampaignDetailModal'
 
 interface Campaign {
@@ -26,9 +27,12 @@ interface CampaignsTableProps {
 
 export default function CampaignsTable({ botId }: CampaignsTableProps) {
     const queryClient = useQueryClient()
+    const router = useRouter()
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
     const [expandedId, setExpandedId] = useState<string | null>(null)
     const [actionLoading, setActionLoading] = useState<string | null>(null)
+    const [currentPage, setCurrentPage] = useState(1)
+    const itemsPerPage = 10
     const [detailModal, setDetailModal] = useState<{ isOpen: boolean; campaign: Campaign | null }>({
         isOpen: false,
         campaign: null
@@ -42,6 +46,9 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
         },
         refetchInterval: 3000,
     })
+
+    const paginatedCampaigns = (campaigns || []).slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    const totalPages = Math.ceil((campaigns || []).length / itemsPerPage)
 
     // Auto open detail modal if param exists
     useEffect(() => {
@@ -173,7 +180,7 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-24 bg-zinc-900/30 border border-zinc-800/50 rounded-2xl">
                 <div className="relative w-12 h-12">
                     <div className="absolute inset-0 rounded-full border-2 border-zinc-800"></div>
                     <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
@@ -184,33 +191,33 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
 
     if (!campaigns || campaigns.length === 0) {
         return (
-            <div className="text-center py-16 bg-zinc-900/50 border border-dashed border-zinc-800/50 rounded-2xl">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-800/50 rounded-2xl mb-4">
-                    <Megaphone className="w-8 h-8 text-zinc-600" />
+            <div className="text-center py-48 bg-zinc-900/30 border border-dashed border-zinc-800/50 rounded-2xl min-h-[600px] flex flex-col items-center justify-center">
+                <div className="inline-flex items-center justify-center w-20 h-20 bg-zinc-800/50 rounded-3xl mb-6 shadow-xl border border-zinc-700/50">
+                    <Megaphone className="w-10 h-10 text-zinc-500" />
                 </div>
-                <h3 className="text-lg font-semibold text-zinc-100 mb-2">No Campaigns Yet</h3>
-                <p className="text-zinc-400 text-sm">Create your first broadcast campaign to reach your contacts</p>
+                <h3 className="text-xl font-bold text-zinc-100 mb-3">No Campaigns Yet</h3>
+                <p className="text-zinc-400 text-sm max-w-xs mx-auto leading-relaxed">Create your first broadcast campaign to reach your contacts and grow your business.</p>
             </div>
         )
     }
 
     return (
-        <>
+        <div className="flex flex-col">
             {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
-                <table className="w-full">
+            <div className="hidden md:block">
+                <table className="w-full table-fixed">
                     <thead>
-                        <tr className="border-b border-zinc-800/50">
-                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Campaign</th>
-                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Status</th>
-                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Progress</th>
-                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Recipients</th>
-                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Created</th>
-                            <th className="text-right py-3 px-4 text-sm font-medium text-zinc-400">Actions</th>
+                        <tr className="bg-zinc-800/50 rounded-t-xl">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-[20%] rounded-tl-xl">Campaign</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[18%]">Progress</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[14%]">Status</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[14%]">Recipients</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[14%]">Created</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-zinc-400 w-[20%] rounded-tr-xl">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {campaigns.map((campaign: Campaign) => {
+                        {paginatedCampaigns.map((campaign: Campaign) => {
                             const statusConfig = getStatusConfig(campaign.status)
                             const progress = getProgress(campaign)
                             const StatusIcon = statusConfig.icon
@@ -220,30 +227,22 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
                                 <>
                                     <tr
                                         key={campaign.id}
-                                        className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors"
+                                        className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors h-[52px]"
                                     >
                                         {/* Campaign Name */}
-                                        <td className="py-4 px-4">
+                                        <td className="py-4 px-4 overflow-hidden">
                                             <div className="flex items-center gap-2">
-                                                <Megaphone className="w-4 h-4 text-purple-400 flex-shrink-0" />
-                                                <span className="text-zinc-100 font-medium truncate max-w-[200px]">
+                                                <Megaphone className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                                                <span className="text-zinc-100 font-medium truncate" title={campaign.name}>
                                                     {campaign.name}
                                                 </span>
                                             </div>
                                         </td>
 
-                                        {/* Status */}
-                                        <td className="py-4 px-4">
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${statusConfig.color}`}>
-                                                <StatusIcon className="w-3 h-3" />
-                                                <span>{statusConfig.label}</span>
-                                            </span>
-                                        </td>
-
                                         {/* Progress */}
-                                        <td className="py-4 px-4">
+                                        <td className="py-4 px-4 text-center">
                                             {(campaign.status === 'running' || campaign.status === 'paused' || campaign.status === 'completed') ? (
-                                                <div className="w-32">
+                                                <div className="w-28 mx-auto">
                                                     <div className="flex items-center justify-between text-xs mb-1">
                                                         <span className="text-zinc-500">{progress}%</span>
                                                         <span className="text-zinc-400 font-mono">{(campaign.sent_count || 0) + (campaign.failed_count || 0)}/{campaign.total_contacts || 0}</span>
@@ -262,16 +261,24 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
                                             )}
                                         </td>
 
+                                        {/* Status */}
+                                        <td className="py-4 px-4 text-center">
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${statusConfig.color}`}>
+                                                <StatusIcon className="w-3 h-3" />
+                                                <span>{statusConfig.label}</span>
+                                            </span>
+                                        </td>
+
                                         {/* Recipients */}
-                                        <td className="py-4 px-4">
-                                            <div className="flex items-center gap-2 text-sm">
+                                        <td className="py-4 px-4 text-center">
+                                            <div className="flex items-center justify-center gap-2 text-sm">
                                                 <Users className="w-4 h-4 text-zinc-600" />
                                                 <span className="text-zinc-400 font-mono">{campaign.total_contacts || 0}</span>
                                             </div>
                                         </td>
 
                                         {/* Created Date */}
-                                        <td className="py-4 px-4">
+                                        <td className="py-4 px-4 text-center">
                                             <div className="text-zinc-500 text-sm font-mono">
                                                 {new Date(campaign.created_at).toLocaleDateString('en-US', {
                                                     month: 'short',
@@ -395,13 +402,67 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
                                 </>
                             )
                         })}
+
+                        {/* Empty rows to fill up to 10 */}
+                        {Array.from({ length: Math.max(0, itemsPerPage - paginatedCampaigns.length) }).map((_, index) => (
+                            <tr key={`empty-${index}`} className="border-b border-zinc-800/50 h-[52px]">
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
             </div>
 
+            {/* Pagination - Fixed at bottom */}
+            <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/50 rounded-b-xl flex-shrink-0">
+                {totalPages > 1 ? (
+                    <>
+                        <div className="text-sm text-zinc-500">
+                            Showing <span className="text-zinc-300 font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-zinc-300 font-medium">{Math.min(currentPage * itemsPerPage, (campaigns || []).length)}</span> of <span className="text-zinc-300 font-medium">{(campaigns || []).length}</span> campaigns
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-all"
+                            >
+                                Previous
+                            </button>
+                            <div className="flex items-center gap-1">
+                                {[...Array(totalPages)].map((_, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => setCurrentPage(i + 1)}
+                                        className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${currentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+                                    >
+                                        {i + 1}
+                                    </button>
+                                ))}
+                            </div>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-all"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <div className="text-sm text-zinc-500">
+                        Showing <span className="text-zinc-300 font-medium">{(campaigns || []).length}</span> campaigns
+                    </div>
+                )}
+            </div>
+
             {/* Mobile Card View */}
             <div className="md:hidden space-y-3">
-                {campaigns.map((campaign: Campaign) => {
+                {paginatedCampaigns.map((campaign: Campaign) => {
                     const statusConfig = getStatusConfig(campaign.status)
                     const progress = getProgress(campaign)
                     const StatusIcon = statusConfig.icon
@@ -416,7 +477,7 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
                                 {/* Top: Name + Status */}
                                 <div className="flex items-start justify-between gap-3 mb-3">
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                                        <Megaphone className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                                        <Megaphone className="w-4 h-4 text-blue-400 flex-shrink-0" />
                                         <h3 className="text-zinc-100 font-semibold truncate">{campaign.name}</h3>
                                     </div>
                                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border flex-shrink-0 ${statusConfig.color}`}>
@@ -588,6 +649,6 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
                 onClose={() => setDetailModal({ isOpen: false, campaign: null })}
                 campaign={detailModal.campaign}
             />
-        </>
+        </div>
     )
 }

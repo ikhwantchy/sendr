@@ -122,7 +122,7 @@ export default function ActivityChart({
     const canZoomOut = ZOOM_LEVELS.indexOf(timeRange) < ZOOM_LEVELS.length - 1
 
     return (
-        <div className={`bg-zinc-950 border border-zinc-900 rounded-xl p-6 ${className || ''}`}>
+        <div className={`bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6 ${className || ''}`}>
             <div className="flex items-center justify-between mb-6">
                 {title && (
                     <h3 className="text-lg font-medium text-zinc-200">{title}</h3>

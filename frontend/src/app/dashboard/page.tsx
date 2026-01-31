@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import {
     Bot, MessageSquare, Zap, Clock, Plus, Activity,
     ArrowUpRight, Server, Cpu, HardDrive, HelpCircle, MessageCircle,
-    Layout, Smartphone, FileText
+    Layout, Smartphone, FileText, UserPlus
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -117,7 +117,7 @@ export default function DashboardPage() {
 
     if (!user || loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-[#09090b]">
+            <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
                 <div className="flex flex-col items-center gap-4">
                     <div className="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-800 border-t-zinc-600 dark:border-t-white rounded-full animate-spin" />
                     <p className="text-zinc-500 text-xs font-mono uppercase tracking-widest">Loading Workspace</p>
@@ -127,22 +127,12 @@ export default function DashboardPage() {
     }
 
     return (
-        <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans">
+        <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
             {/* Header */}
             <div className="flex justify-between items-end border-b border-zinc-200 dark:border-zinc-800/10 pb-6">
                 <div>
                     <h1 className="text-2xl font-medium text-zinc-900 dark:text-white tracking-tight">Overview</h1>
-                    <p className="text-zinc-500 text-sm mt-1">Welcome back, {user.name.split(' ')[0]}</p>
-                </div>
 
-                <div className="flex items-center gap-6 text-sm text-zinc-500">
-                    <button className="hover:text-zinc-900 dark:hover:text-white transition-colors">Feedback</button>
-                    <button className="hover:text-zinc-900 dark:hover:text-white transition-colors">Help</button>
-                    <div className="h-4 w-[1px] bg-zinc-300 dark:bg-zinc-800" />
-                    <div className="flex items-center gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${systemStatus.status === 'operational' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                        <span className="font-medium text-zinc-500 dark:text-zinc-400">System {systemStatus.status === 'operational' ? 'Normal' : systemStatus.status}</span>
-                    </div>
                 </div>
             </div>
 
@@ -180,18 +170,37 @@ export default function DashboardPage() {
                     <div className="space-y-4">
                         <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Start Building</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <FeatureCard
-                                icon={<Plus className="w-5 h-5 text-white" />}
-                                title="Connect a Bot"
-                                description="Link a new WhatsApp number to start automating."
-                                onClick={() => router.push('/dashboard/bots')}
-                            />
-                            <FeatureCard
-                                icon={<Layout className="w-5 h-5 text-white" />}
-                                title="Create Campaign"
-                                description="Send a broadcast message to multiple contacts."
-                                onClick={() => router.push('/dashboard/bots')}
-                            />
+                            {user?.role === 'ADMIN' || user?.role === 'OWNER' ? (
+                                <>
+                                    <FeatureCard
+                                        icon={<Bot className="w-5 h-5 text-white" />}
+                                        title="Create Bot"
+                                        description="Create a new automation bot instance."
+                                        onClick={() => router.push('/dashboard/bots')}
+                                    />
+                                    <FeatureCard
+                                        icon={<UserPlus className="w-5 h-5 text-white" />}
+                                        title="Create User"
+                                        description="Add a new user to the platform."
+                                        onClick={() => router.push('/dashboard/users')}
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <FeatureCard
+                                        icon={<Plus className="w-5 h-5 text-white" />}
+                                        title="Connect a Bot"
+                                        description="Link a new WhatsApp number to start automating."
+                                        onClick={() => router.push('/dashboard/bots')}
+                                    />
+                                    <FeatureCard
+                                        icon={<Layout className="w-5 h-5 text-white" />}
+                                        title="Create Campaign"
+                                        description="Send a broadcast message to multiple contacts."
+                                        onClick={() => router.push('/dashboard/bots')}
+                                    />
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -228,7 +237,7 @@ export default function DashboardPage() {
                                         ))}
                                     </div>
                                 )}
-                                    </div>
+                            </div>
                         </div>
                     )}
                 </div>

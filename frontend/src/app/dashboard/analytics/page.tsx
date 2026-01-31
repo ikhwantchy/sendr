@@ -176,9 +176,7 @@ export default function AnalyticsDashboard() {
                             <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
                         )}
                     </div>
-                    <p className="text-zinc-500 text-sm">
-                        Performance metrics and traffic analysis
-                    </p>
+
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -277,7 +275,7 @@ export default function AnalyticsDashboard() {
                                         setTimeRange(option.value as TimeRange)
                                         document.getElementById('analytics-time-range-dropdown')?.classList.add('hidden')
                                     }}
-className={`w-full px-4 py-2 text-xs text-left transition-colors ${timeRange === option.value
+                                    className={`w-full px-4 py-2 text-xs text-left transition-colors ${timeRange === option.value
                                         ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
                                         : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-200'
                                         }`}

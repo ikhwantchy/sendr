@@ -144,9 +144,7 @@ export default function UsersPage() {
                             <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
                         )}
                     </div>
-                    <p className="text-zinc-500 text-sm">
-                        Manage user access and permissions
-                    </p>
+
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -320,13 +318,12 @@ export default function UsersPage() {
                                         </td>
                                         <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400">{user.email}</td>
                                         <td className="py-4 px-4">
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${
-                                                user.role === 'OWNER'
-                                                    ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
-                                                    : user.role === 'ADMIN'
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${user.role === 'OWNER'
+                                                ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                                                : user.role === 'ADMIN'
                                                     ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
                                                     : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                            }`}>
+                                                }`}>
                                                 <Shield className="w-3 h-3" />
                                                 {user.role}
                                             </span>

@@ -7,15 +7,16 @@ import {
     FileText, Check, AlertCircle, ChevronRight, CheckCircle2,
     Database, Wand2, ChevronDown, ChevronUp, RefreshCw, Type,
     Bold, Italic, Image as ImageIcon, Smile, Globe,
-    Strikethrough, Code, Search, ArrowRight, Lock, Eye, MessageSquare, Paperclip,
+    Strikethrough, Code, Search, ArrowRight, ArrowLeft, Lock, Eye, MessageSquare, Paperclip,
     Cat, Coffee, Dumbbell, Car, Lightbulb, Heart, Hand, Send, Trash2, ExternalLink,
-    ChevronLeft, ShieldCheck, Zap, Activity, Edit
+    ChevronLeft, ShieldCheck, Zap, Activity, Edit, Maximize2, Minimize2
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 import ContactTable, { ContactRow, ContactColumn, contactTableToParsedContacts, getContactTableVariables } from '@/components/ContactTable'
 import Link from 'next/link'
+import SharedMessageEditor, { formatWhatsAppText } from '@/components/SharedMessageEditor'
 
 // --- Types ---
 type ContactMethod = 'manual' | 'csv' | 'sheet'
@@ -96,11 +97,13 @@ const DELAY_PRESETS = {
     }
 }
 
+
+
 export default function CreateCampaignWizard({ initialBotId, onClose, campaignId }: CreateCampaignWizardProps) {
     const queryClient = useQueryClient()
+    const [isEditorExpanded, setIsEditorExpanded] = useState(false)
     const textareaRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const isTypingRef = useRef(false)
 
     // Fetch bots for selection
     const { data: botsData } = useQuery({
@@ -125,14 +128,10 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
 
     // UI State
     const [isContactPreviewOpen, setIsContactPreviewOpen] = useState(false)
-    const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
     const [isPreviewOpen, setIsPreviewOpen] = useState(false) // Default: Hidden
     const [isFullImageOpen, setIsFullImageOpen] = useState(false)
-    const [activeEmojiCategory, setActiveEmojiCategory] = useState<keyof typeof EMOJI_CATEGORIES>('Smileys')
     const [availableTabs, setAvailableTabs] = useState<Array<{ gid: string; name: string }>>([])
     const [isLoadingTabs, setIsLoadingTabs] = useState(false)
-    const emojiPickerRef = useRef<HTMLDivElement>(null)
-    const emojiTriggerRef = useRef<HTMLButtonElement>(null)
 
     // Form State
     const [formData, setFormData] = useState<FormData>({
@@ -378,40 +377,9 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
         }
     }
 
-    // Close emoji picker when clicking outside
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (
-                emojiPickerRef.current &&
-                !emojiPickerRef.current.contains(event.target as Node) &&
-                emojiTriggerRef.current &&
-                !emojiTriggerRef.current.contains(event.target as Node)
-            ) {
-                setIsEmojiPickerOpen(false)
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [])
 
-    // Sync markdown to contentEditable
-    useEffect(() => {
-        if (textareaRef.current && !isTypingRef.current) {
-            const currentMD = htmlToMarkdown(textareaRef.current);
-            if (currentMD !== formData.message) {
-                textareaRef.current.innerHTML = markdownToHtml(formData.message);
-            }
-        }
-    }, [formData.message])
 
-    // Set initial content
-    useEffect(() => {
-        if (textareaRef.current && !textareaRef.current.innerHTML) {
-            textareaRef.current.innerHTML = markdownToHtml(formData.message) || '<br>';
-        }
-    }, [])
+
 
     // --- Mutation ---
     const createMutation = useMutation({
@@ -524,81 +492,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
         return replacements
     }
 
-    const formatWhatsAppText = (text: string) => {
-        if (!text) return ''
-        let formatted = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        formatted = formatted.replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
-        formatted = formatted.replace(/_([^_]+)_/g, '<em>$1</em>')
-        formatted = formatted.replace(/~([^~]+)~/g, '<s>$1</s>')
-        formatted = formatted.replace(/```([^`]+)```/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px; font-family: monospace;">$1</code>')
-        formatted = formatted.replace(/\n/g, '<br>')
-        return formatted
-    }
 
-    const markdownToHtml = (text: string) => {
-        if (!text) return '';
-        let html = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        html = html.replace(/\*([^\*]+)\*/g, '<b>$1</b>');
-        html = html.replace(/_([^_]+)_/g, '<i>$1</i>');
-        html = html.replace(/~([^~]+)~/g, '<s>$1</s>');
-        html = html.replace(/```([^`]+)```/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px; font-family: monospace;">$1</code>');
-        html = html.replace(/\n/g, '<br>');
-        return html;
-    }
-
-    const htmlToMarkdown = (element: HTMLElement, activeStyles: any = {}): string => {
-        let markdown = '';
-        if (!element) return '';
-        for (const node of Array.from(element.childNodes)) {
-            if (node.nodeType === Node.TEXT_NODE) {
-                markdown += node.textContent;
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                const el = node as HTMLElement;
-                const tagName = el.tagName.toLowerCase();
-                const styles = window.getComputedStyle(el);
-                const isBold = tagName === 'b' || tagName === 'strong' || parseInt(styles.fontWeight) >= 600;
-                const isItalic = tagName === 'i' || tagName === 'em' || styles.fontStyle === 'italic';
-                const isStrike = tagName === 's' || tagName === 'strike' || styles.textDecoration.includes('line-through');
-                const isCode = tagName === 'code';
-                let content = htmlToMarkdown(el, {
-                    bold: activeStyles.bold || isBold,
-                    italic: activeStyles.italic || isItalic,
-                    strike: activeStyles.strike || isStrike,
-                    code: activeStyles.code || isCode
-                });
-                if (isBold && !activeStyles.bold) content = `*${content}*`;
-                if (isItalic && !activeStyles.italic) content = `_${content}_`;
-                if (isStrike && !activeStyles.strike) content = `~${content}~`;
-                if (isCode && !activeStyles.code) content = `\`\`\`${content}\`\`\``;
-                if (tagName === 'div') markdown += (markdown ? '\n' : '') + content;
-                else if (tagName === 'br') markdown += '\n';
-                else markdown += content;
-            }
-        }
-        return markdown.replace(/\n{3,}/g, '\n\n').trim();
-    }
-
-    const insertText = (str: string) => {
-        if (!textareaRef.current) return
-        textareaRef.current.focus()
-        document.execCommand('insertText', false, str)
-        handleEditorInput()
-    }
-
-    const handleEditorInput = () => {
-        if (!textareaRef.current) return;
-        isTypingRef.current = true;
-        const markdown = htmlToMarkdown(textareaRef.current);
-        setFormData(prev => ({ ...prev, message: markdown }));
-        setTimeout(() => { isTypingRef.current = false; }, 100);
-    }
-
-    const execCommand = (command: string) => {
-        if (!textareaRef.current) return;
-        textareaRef.current.focus();
-        document.execCommand(command, false);
-        handleEditorInput();
-    }
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -626,16 +520,16 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
     )
 
     return (
-        <div className="fixed inset-0 z-[100] bg-zinc-950 flex transition-all duration-500">
+        <div className="fixed inset-0 z-[100] bg-black flex transition-all duration-500">
             {/* Left Panel: Scrollable Form */}
-            <div className="flex-1 flex flex-col h-full border-r border-zinc-800 relative bg-zinc-950 overflow-hidden">
+            <div className="flex-1 flex flex-col h-full border-r border-zinc-800 relative bg-black overflow-hidden">
                 {/* Header */}
-                <div className="shrink-0 bg-zinc-950/95 backdrop-blur-sm z-20 border-b border-zinc-800">
+                <div className="shrink-0 bg-black/95 backdrop-blur-sm z-20 border-b border-zinc-800">
                     <div className="max-w-6xl mx-auto px-6 py-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
-                                <button onClick={() => onClose()} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
-                                    <ChevronLeft size={20} />
+                                <button onClick={() => onClose()} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors group">
+                                    <ChevronLeft size={20} className="transition-transform duration-300 group-hover:-translate-x-1" />
                                 </button>
                                 <div>
                                     <h1 className="text-xl font-semibold text-white">Create Campaign</h1>
@@ -645,20 +539,20 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => setIsPreviewOpen(!isPreviewOpen)}
-                                    className={`hidden lg:flex items-center gap-2 px-4 py-2 text-sm border rounded-lg font-medium transition-all ${isPreviewOpen
+                                    className={`hidden lg:flex items-center gap-2 px-4 py-2 text-sm border rounded-lg font-medium transition-all group ${isPreviewOpen
                                         ? 'bg-zinc-800 border-zinc-700 text-white'
                                         : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600'
                                         }`}
                                 >
-                                    <Eye size={16} />
+                                    <Eye size={16} className="transition-transform duration-300 group-hover:scale-110" />
                                     Preview
                                 </button>
                                 <button
                                     onClick={() => createMutation.mutate()}
                                     disabled={createMutation.isPending || !formData.name || !formData.message || !formData.botId}
-                                    className="flex items-center gap-2 px-5 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg disabled:opacity-50 transition-all shadow-lg shadow-blue-500/20"
+                                    className="flex items-center gap-2 px-5 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg disabled:opacity-50 transition-all shadow-lg shadow-blue-500/20 group"
                                 >
-                                    <Send size={16} />
+                                    <Send size={16} className={`transition-transform duration-300 ${createMutation.isPending ? 'animate-pulse' : 'group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:rotate-[-10deg]'}`} />
                                     {createMutation.isPending ? 'Launching...' : 'Launch Campaign'}
                                 </button>
                             </div>
@@ -673,12 +567,12 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                             <SectionHeader step={1} title="Campaign Identity" desc="Provide a name for your blast campaign." />
                             <div className="space-y-4">
                                 <div>
-                                    <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block tracking-wider">Campaign Name *</label>
+                                    <label className="block text-xs font-medium text-zinc-400 mb-1">Campaign Name *</label>
                                     <input
                                         type="text"
                                         value={formData.name}
                                         onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                        className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white placeholder-zinc-700 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
+                                        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                                         placeholder="e.g. Ramadhan Promo Batch 1"
                                         required
                                     />
@@ -697,9 +591,9 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                     <button
                                         key={m.id}
                                         onClick={() => setFormData({ ...formData, contactMethod: m.id as any })}
-                                        className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${formData.contactMethod === m.id ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                        className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all group ${formData.contactMethod === m.id ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                                     >
-                                        <m.icon size={14} /> {m.label}
+                                        <m.icon size={14} className="transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6" /> {m.label}
                                     </button>
                                 ))}
                             </div>
@@ -724,9 +618,9 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                                 botId: formData.botId
                                             }))
                                         }}
-                                        className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                                        className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors group"
                                     >
-                                        Open full page editor <ExternalLink size={12} />
+                                        Open full page editor <ExternalLink size={12} className="transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                                     </Link>
                                 </div>
                             )}
@@ -734,23 +628,23 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                             {formData.contactMethod === 'sheet' && (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                                     <div>
-                                        <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block tracking-wider">Google Sheets URL</label>
+                                        <label className="block text-xs font-medium text-zinc-400 mb-1">Google Sheets URL</label>
                                         <input
                                             type="url"
                                             value={formData.contactSheetUrl}
                                             onChange={e => setFormData({ ...formData, contactSheetUrl: e.target.value })}
                                             placeholder="https://docs.google.com/spreadsheets/d/..."
-                                            className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-sm focus:ring-1 focus:ring-blue-600 outline-none"
+                                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                                         />
                                     </div>
                                     <div className="flex gap-4">
                                         <div className="flex-1">
-                                            <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block tracking-wider">Select Tab</label>
+                                            <label className="block text-xs font-medium text-zinc-400 mb-1">Select Tab</label>
                                             <div className="relative">
                                                 <select
                                                     value={formData.sheetName}
                                                     onChange={e => setFormData({ ...formData, sheetName: e.target.value })}
-                                                    className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-sm outline-none appearance-none cursor-pointer"
+                                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none appearance-none cursor-pointer focus:ring-1 focus:ring-blue-500"
                                                 >
                                                     {availableTabs.map(t => <option key={t.gid} value={t.name}>{t.name}</option>)}
                                                     {availableTabs.length === 0 && <option value="">{isLoadingTabs ? 'Auto-detecting tabs...' : 'Paste URL to detect tabs'}</option>}
@@ -777,9 +671,9 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                             <button
                                                 type="button"
                                                 onClick={importSheetToManual}
-                                                className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors w-fit transition-colors"
+                                                className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors w-fit transition-colors group"
                                             >
-                                                Edit in Manual Table <ExternalLink size={12} />
+                                                Edit in Manual Table <ExternalLink size={12} className="transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                                             </button>
                                         )}
                                     </div>
@@ -795,7 +689,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
                                         <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Delivery Strategy</label>
-                                        <div className="flex bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                                        <div className="flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700">
                                             <button
                                                 onClick={() => setFormData({ ...formData, delayMode: 'preset' })}
                                                 className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${formData.delayMode === 'preset' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
@@ -817,10 +711,10 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                                 <button
                                                     key={key}
                                                     onClick={() => setFormData({ ...formData, delayPreset: key as any })}
-                                                    className={`p-4 rounded-xl border text-left transition-all ${formData.delayPreset === key ? 'bg-blue-600/5 border-blue-500 ring-1 ring-blue-500' : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'}`}
+                                                    className={`p-4 rounded-xl border text-left transition-all group ${formData.delayPreset === key ? 'bg-blue-600/5 border-blue-500 ring-1 ring-blue-500' : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'}`}
                                                 >
                                                     <div className="flex items-center gap-2 mb-2">
-                                                        <config.icon size={16} className={formData.delayPreset === key ? 'text-blue-400' : config.color} />
+                                                        <config.icon size={16} className={`transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110 ${formData.delayPreset === key ? 'text-blue-400' : config.color}`} />
                                                         <span className="text-sm font-bold text-white">{config.label}</span>
                                                     </div>
                                                     <div className="text-[11px] text-zinc-500 font-medium mb-1">{config.min}-{config.max}s Message Delay</div>
@@ -829,7 +723,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5 animate-in fade-in slide-in-from-top-2 space-y-6">
+                                        <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-5 animate-in fade-in slide-in-from-top-2 space-y-6">
                                             {/* Primary Delay Range */}
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
@@ -874,7 +768,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                                             min="1"
                                                             value={formData.batchSize}
                                                             onChange={e => setFormData({ ...formData, batchSize: Math.max(1, parseInt(e.target.value) || 0) })}
-                                                            className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white text-sm outline-none focus:border-blue-500 transition-colors"
+                                                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
                                                             placeholder="e.g. 20"
                                                         />
                                                     </div>
@@ -886,7 +780,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                                                 min="1"
                                                                 value={formData.batchPauseMin}
                                                                 onChange={e => setFormData({ ...formData, batchPauseMin: Math.max(1, parseInt(e.target.value) || 0) })}
-                                                                className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white text-sm outline-none focus:border-blue-500 transition-colors"
+                                                                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
                                                             />
                                                         </div>
                                                         <div>
@@ -896,7 +790,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                                                 min="1"
                                                                 value={formData.batchPauseMax}
                                                                 onChange={e => setFormData({ ...formData, batchPauseMax: Math.max(1, parseInt(e.target.value) || 0) })}
-                                                                className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white text-sm outline-none focus:border-blue-500 transition-colors"
+                                                                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
                                                             />
                                                         </div>
                                                     </div>
@@ -920,32 +814,30 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                         <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-zinc-700/50 transition-colors">
                             <SectionHeader step={4} title="Execution Schedule" desc="When should this broadcast start?" />
                             <div className="space-y-4">
-                                <div className="flex items-center gap-3">
+                                <div className="flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 w-fit">
                                     <button
                                         type="button"
                                         onClick={() => setFormData({ ...formData, isScheduled: false })}
-                                        className={`flex-1 px-4 py-3 rounded-xl border font-bold transition-all flex items-center justify-center gap-2 ${!formData.isScheduled ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all group ${!formData.isScheduled ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                                     >
-                                        <Send size={18} />
-                                        Launch Now
+                                        <Send size={14} /> Launch Now
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setFormData({ ...formData, isScheduled: true })}
-                                        className={`flex-1 px-4 py-3 rounded-xl border font-bold transition-all flex items-center justify-center gap-2 ${formData.isScheduled ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all group ${formData.isScheduled ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                                     >
-                                        <Calendar size={18} />
-                                        Schedule
+                                        <Calendar size={14} /> Schedule
                                     </button>
                                 </div>
                                 {formData.isScheduled && (
                                     <div className="animate-in fade-in slide-in-from-top-2">
-                                        <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1 block tracking-wider">Start Date & Time</label>
+                                        <label className="block text-xs font-medium text-zinc-400 mb-1">Start Date & Time</label>
                                         <input
                                             type="datetime-local"
                                             value={formData.scheduledAt}
                                             onChange={e => setFormData({ ...formData, scheduledAt: e.target.value })}
-                                            className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-sm outline-none focus:border-purple-500 transition-colors"
+                                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
                                         />
                                     </div>
                                 )}
@@ -960,77 +852,36 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
 
 
                             {/* Rich Text Editor */}
-                            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl min-h-[350px] flex flex-col focus-within:ring-1 focus-within:ring-blue-500/50 transition-all">
-                                <div className="bg-zinc-900/50 p-3 flex items-center gap-2 border-b border-zinc-800 overflow-x-auto no-scrollbar">
-                                    <button onClick={() => execCommand('bold')} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors" title="Bold"><Bold size={16} /></button>
-                                    <button onClick={() => execCommand('italic')} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors" title="Italic"><Italic size={16} /></button>
-                                    <button onClick={() => insertText('~')} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors" title="Strikethrough">~</button>
-                                    <div className="w-[1px] h-4 bg-zinc-800 mx-2 shrink-0" />
-                                    <button
-                                        ref={emojiTriggerRef}
-                                        onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
-                                        className={`p-2 rounded-lg transition-all shrink-0 ${isEmojiPickerOpen ? 'text-yellow-400 bg-yellow-400/10' : 'text-zinc-500 hover:text-yellow-400 hover:bg-zinc-800'}`}
-                                    ><Smile size={18} /></button>
-
-                                    {isEmojiPickerOpen && (
-                                        <div ref={emojiPickerRef} className="absolute left-8 bottom-32 z-50 w-80 bg-[#1f2c34] border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-                                            <div className="flex gap-1 overflow-x-auto p-2 bg-[#111b21] border-b border-zinc-700 no-scrollbar">
-                                                {Object.keys(EMOJI_CATEGORIES).map(cat => (
-                                                    <button key={cat} onClick={() => setActiveEmojiCategory(cat as any)} className={`p-2 rounded-lg flex-shrink-0 transition-colors ${activeEmojiCategory === cat ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:bg-zinc-800'}`}>
-                                                        {CATEGORY_ICONS[cat]}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <div className="h-56 overflow-y-auto grid grid-cols-7 p-2 bg-[#111b21] custom-scrollbar">
-                                                {EMOJI_CATEGORIES[activeEmojiCategory].map(emoji => (
-                                                    <button key={emoji} onClick={() => { insertText(emoji); setIsEmojiPickerOpen(false); }} className="w-9 h-9 flex items-center justify-center text-xl hover:bg-zinc-800 rounded-lg transition-transform active:scale-90">{emoji}</button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="w-[1px] h-4 bg-zinc-800 mx-2 shrink-0" />
-
-                                    {/* Variables Panel - Simplified to show only relevant ones */}
-                                    <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-                                        <span className="text-[10px] text-zinc-500 font-bold uppercase shrink-0">Variables:</span>
-                                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-                                            {formData.contactMethod === 'manual' ? (
-                                                getContactTableVariables(formData.tableColumns).map((variable) => (
-                                                    <button
-                                                        key={variable}
-                                                        type="button"
-                                                        onClick={() => insertText(`[${variable}]`)}
-                                                        className="px-2 py-1 text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-md hover:bg-blue-500/20 transition-all font-bold whitespace-nowrap"
-                                                    >
-                                                        {variable}
-                                                    </button>
-                                                ))
-                                            ) : (
-                                                formData.sheetVariables.map((variable) => (
-                                                    <button
-                                                        key={variable}
-                                                        type="button"
-                                                        onClick={() => insertText(`[${variable}]`)}
-                                                        className="px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-md hover:bg-emerald-500/20 transition-all font-bold whitespace-nowrap"
-                                                    >
-                                                        {variable}
-                                                    </button>
-                                                ))
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div
-                                    ref={textareaRef}
-                                    contentEditable
-                                    onInput={handleEditorInput}
-                                    className="flex-1 p-6 text-white focus:outline-none min-h-[250px] font-sans prose prose-invert max-w-none text-base leading-relaxed"
-                                    spellCheck={false}
+                            {/* Backdrop when expanded */}
+                            {/* Rich Text Editor - DUAL MODE (Inline + Modal) */}
+                            <div className="relative">
+                                {/* 1. Inline Editor (Always there, keeping layout stable) */}
+                                <SharedMessageEditor
+                                    value={formData.message}
+                                    onChange={(val) => setFormData({ ...formData, message: val })}
+                                    variables={formData.contactMethod === 'manual' ? getContactTableVariables(formData.tableColumns) : formData.sheetVariables}
+                                    isExpanded={false}
+                                    onToggleExpand={() => setIsEditorExpanded(true)}
                                 />
-                                <div className="p-3 bg-zinc-900/20 border-t border-zinc-800 flex items-center justify-between text-[10px] text-zinc-500">
-                                    <span>Tip: Use *bold* and _italic_ for WhatsApp formatting.</span>
-                                    <span>{formData.message.length} characters</span>
-                                </div>
+
+                                {/* 2. Modal Editor (Only when Expanded) */}
+                                {isEditorExpanded && (
+                                    <>
+                                        <div
+                                            className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm animate-in fade-in duration-300"
+                                            onClick={() => setIsEditorExpanded(false)}
+                                        />
+                                        <div className="fixed top-[5vh] bottom-[5vh] left-1/2 -translate-x-1/2 w-[95vw] max-w-5xl z-[200] flex flex-col animate-in zoom-in-95 duration-300">
+                                            <SharedMessageEditor
+                                                value={formData.message}
+                                                onChange={(val) => setFormData({ ...formData, message: val })}
+                                                variables={formData.contactMethod === 'manual' ? getContactTableVariables(formData.tableColumns) : formData.sheetVariables}
+                                                isExpanded={true}
+                                                onToggleExpand={() => setIsEditorExpanded(false)}
+                                            />
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* Image Attachment - COMPACT VERSION */}
@@ -1038,7 +889,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                 {!formData.imagePreview ? (
                                     <label className="flex items-center justify-center gap-3 w-full py-4 bg-zinc-900/30 border-2 border-dashed border-zinc-800 rounded-2xl cursor-pointer hover:bg-zinc-900/50 transition-all group hover:border-blue-500/40">
                                         <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
-                                            <ImageIcon size={20} className="text-zinc-500 group-hover:text-blue-500" />
+                                            <ImageIcon size={20} className="text-zinc-500 group-hover:text-blue-500 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[-10deg]" />
                                         </div>
                                         <div className="text-left">
                                             <span className="text-sm font-bold text-zinc-300 group-hover:text-white block">Attach Media</span>
@@ -1108,7 +959,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                 </div>
                             </div>
                             <X
-                                className="text-zinc-500 hover:text-white cursor-pointer transition-colors"
+                                className="text-zinc-500 hover:text-white cursor-pointer transition-all hover:rotate-90 hover:scale-110"
                                 size={18}
                                 onClick={() => setIsPreviewOpen(false)}
                             />
@@ -1179,10 +1030,10 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                     onClick={() => setIsFullImageOpen(false)}
                 >
                     <button
-                        className="absolute top-6 right-6 p-3 bg-zinc-900/50 hover:bg-zinc-800 rounded-full text-white transition-all border border-white/10"
+                        className="absolute top-6 right-6 p-3 bg-zinc-900/50 hover:bg-zinc-800 rounded-full text-white transition-all border border-white/10 group"
                         onClick={() => setIsFullImageOpen(false)}
                     >
-                        <X size={24} />
+                        <X size={24} className="transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110" />
                     </button>
                     <img
                         src={formData.imagePreview}

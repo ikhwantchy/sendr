@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { Zap, Edit2, Trash2, Circle } from 'lucide-react'
+import { Zap, Edit2, Trash2, Circle, Plus } from 'lucide-react'
 
 interface Rule {
     id: string
@@ -21,8 +22,11 @@ interface RulesTableProps {
 }
 
 export default function RulesTable({ botId }: RulesTableProps) {
+    const router = useRouter()
     const queryClient = useQueryClient()
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+    const [currentPage, setCurrentPage] = useState(1)
+    const itemsPerPage = 10
 
     const { data: rules, isLoading } = useQuery<Rule[]>({
         queryKey: ['rules', botId],
@@ -61,6 +65,9 @@ export default function RulesTable({ botId }: RulesTableProps) {
         refetchOnMount: true,
         refetchOnWindowFocus: true,
     })
+
+    const paginatedRules = (rules || []).slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    const totalPages = Math.ceil((rules || []).length / itemsPerPage)
 
     const toggleMutation = useMutation({
         mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
@@ -101,10 +108,15 @@ export default function RulesTable({ botId }: RulesTableProps) {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center py-12">
-                <div className="relative w-12 h-12">
-                    <div className="absolute inset-0 rounded-full border-2 border-zinc-800"></div>
-                    <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
+            <div className="flex flex-col gap-6">
+                <div className="flex justify-end">
+                    <div className="w-24 h-10 bg-zinc-800 animate-pulse rounded-lg" />
+                </div>
+                <div className="flex items-center justify-center py-24 bg-zinc-900/30 border border-zinc-800/50 rounded-2xl">
+                    <div className="relative w-12 h-12">
+                        <div className="absolute inset-0 rounded-full border-2 border-zinc-800"></div>
+                        <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
+                    </div>
                 </div>
             </div>
         )
@@ -112,39 +124,57 @@ export default function RulesTable({ botId }: RulesTableProps) {
 
     if (!rules || rules.length === 0) {
         return (
-            <div className="text-center py-16 bg-zinc-900/50 border border-dashed border-zinc-800/50 rounded-2xl">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-800/50 rounded-2xl mb-4">
-                    <Zap className="w-8 h-8 text-zinc-600" />
+            <div className="text-center py-48 bg-zinc-900/30 border border-dashed border-zinc-800/50 rounded-2xl min-h-[600px] flex flex-col items-center justify-center">
+                <div className="inline-flex items-center justify-center w-20 h-20 bg-zinc-800/50 rounded-3xl mb-6 shadow-xl border border-zinc-700/50">
+                    <Zap className="w-10 h-10 text-zinc-500" />
                 </div>
-                <h3 className="text-lg font-semibold text-zinc-100 mb-2">No Rules Yet</h3>
-                <p className="text-zinc-400 text-sm">Create your first auto-reply rule to get started</p>
+                <h3 className="text-xl font-bold text-zinc-100 mb-3">No Rules Yet</h3>
+                <p className="text-zinc-400 text-sm max-w-xs mx-auto leading-relaxed">Create your first auto-reply rule to automate your customer communication.</p>
             </div>
         )
     }
 
     return (
-        <>
+        <div className="flex flex-col">
             {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
-                <table className="w-full">
+            <div className="hidden md:block">
+                <table className="w-full table-fixed">
                     <thead>
-                        <tr className="border-b border-zinc-800/50">
-                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Status</th>
-                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Trigger</th>
-                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Reply</th>
-                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Type</th>
-                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400">Created</th>
-                            <th className="text-right py-3 px-4 text-sm font-medium text-zinc-400">Actions</th>
+                        <tr className="bg-zinc-800/50 rounded-t-xl">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-[22%] rounded-tl-xl">Trigger</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[25%]">Reply</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[13%]">Status</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[12%]">Type</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[12%]">Created</th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-zinc-400 w-[16%] rounded-tr-xl">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {rules.map((rule: Rule) => (
+                        {paginatedRules.map((rule: Rule) => (
                             <tr
                                 key={rule.id}
-                                className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors"
+                                className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors h-[52px]"
                             >
+                                {/* Trigger */}
                                 <td className="py-4 px-4">
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <Zap className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                                        <span className="text-zinc-100 font-medium truncate max-w-[180px]">
+                                            "{rule.trigger}"
+                                        </span>
+                                    </div>
+                                </td>
+
+                                {/* Reply */}
+                                <td className="py-4 px-4 text-center">
+                                    <div className="text-zinc-400 text-sm truncate max-w-[240px] mx-auto">
+                                        {rule.reply}
+                                    </div>
+                                </td>
+
+                                {/* Status */}
+                                <td className="py-4 px-4 text-center">
+                                    <div className="flex items-center justify-center gap-2">
                                         <button
                                             onClick={() =>
                                                 toggleMutation.mutate({
@@ -161,37 +191,20 @@ export default function RulesTable({ botId }: RulesTableProps) {
                                             />
                                         </button>
                                         <span className={`text-xs font-medium ${rule.is_active ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                                            {rule.is_active ? 'Active' : 'Inactive'}
+                                            {rule.is_active ? 'On' : 'Off'}
                                         </span>
-                                    </div>
-                                </td>
-
-                                {/* Trigger */}
-                                <td className="py-4 px-4">
-                                    <div className="flex items-center gap-2">
-                                        <Zap className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-                                        <span className="text-zinc-100 font-medium truncate max-w-[200px]">
-                                            "{rule.trigger}"
-                                        </span>
-                                    </div>
-                                </td>
-
-                                {/* Reply */}
-                                <td className="py-4 px-4">
-                                    <div className="text-zinc-400 text-sm truncate max-w-[300px]">
-                                        {rule.reply}
                                     </div>
                                 </td>
 
                                 {/* Match Type */}
-                                <td className="py-4 px-4">
+                                <td className="py-4 px-4 text-center">
                                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-zinc-800/50 text-zinc-400 border border-zinc-700/50">
                                         {getMatchTypeLabel(rule.match_type)}
                                     </span>
                                 </td>
 
                                 {/* Created Date */}
-                                <td className="py-4 px-4">
+                                <td className="py-4 px-4 text-center">
                                     <div className="text-zinc-500 text-sm font-mono">
                                         {new Date(rule.created_at).toLocaleDateString('en-US', {
                                             month: 'short',
@@ -204,35 +217,35 @@ export default function RulesTable({ botId }: RulesTableProps) {
                                 <td className="py-4 px-4">
                                     <div className="flex items-center justify-end gap-2">
                                         {deleteConfirm === rule.id ? (
-                                            <>
+                                            <div className="flex items-center gap-2">
                                                 <button
                                                     onClick={() => deleteMutation.mutate(rule.id)}
-                                                    className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-all"
+                                                    className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
                                                 >
-                                                    Confirm
+                                                    Delete
                                                 </button>
                                                 <button
                                                     onClick={() => setDeleteConfirm(null)}
-                                                    className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium rounded-lg transition-all"
+                                                    className="px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 text-xs font-medium hover:bg-zinc-800 transition-colors"
                                                 >
                                                     Cancel
                                                 </button>
-                                            </>
+                                            </div>
                                         ) : (
                                             <>
                                                 <button
-                                                    onClick={() => toast.info('Edit functionality coming soon!')}
-                                                    className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
+                                                    onClick={() => router.push(`/dashboard/rules/create?botId=${botId}&edit=${rule.id}`)}
+                                                    className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 transition-all flex items-center justify-center text-blue-400"
                                                     title="Edit rule"
                                                 >
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => setDeleteConfirm(rule.id)}
-                                                    className="px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-400 text-xs font-medium rounded-md transition-colors border border-red-600/20"
+                                                    className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
                                                     title="Delete rule"
                                                 >
-                                                    Delete
+                                                    <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </>
                                         )}
@@ -240,13 +253,67 @@ export default function RulesTable({ botId }: RulesTableProps) {
                                 </td>
                             </tr>
                         ))}
+
+                        {/* Empty rows to fill up to 10 */}
+                        {Array.from({ length: Math.max(0, itemsPerPage - paginatedRules.length) }).map((_, index) => (
+                            <tr key={`empty-${index}`} className="border-b border-zinc-800/50 h-[52px]">
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
             </div>
 
+            {/* Pagination - Fixed at bottom */}
+            <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/50 rounded-b-xl flex-shrink-0">
+                {totalPages > 1 ? (
+                    <>
+                        <div className="text-sm text-zinc-500">
+                            Showing <span className="text-zinc-300 font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-zinc-300 font-medium">{Math.min(currentPage * itemsPerPage, (rules || []).length)}</span> of <span className="text-zinc-300 font-medium">{(rules || []).length}</span> rules
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-all"
+                            >
+                                Previous
+                            </button>
+                            <div className="flex items-center gap-1">
+                                {[...Array(totalPages)].map((_, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => setCurrentPage(i + 1)}
+                                        className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${currentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+                                    >
+                                        {i + 1}
+                                    </button>
+                                ))}
+                            </div>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-all"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <div className="text-sm text-zinc-500">
+                        Showing <span className="text-zinc-300 font-medium">{(rules || []).length}</span> rules
+                    </div>
+                )}
+            </div>
+
             {/* Mobile Card View */}
             <div className="md:hidden space-y-3">
-                {rules.map((rule: Rule) => (
+                {paginatedRules.map((rule: Rule) => (
                     <div
                         key={rule.id}
                         className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4 hover:bg-zinc-900/80 transition-all"
@@ -314,8 +381,9 @@ export default function RulesTable({ botId }: RulesTableProps) {
 
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => toast.info('Edit functionality coming soon!')}
-                                    className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-blue-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-blue-400"
+                                    onClick={() => router.push(`/dashboard/rules/create?botId=${botId}&edit=${rule.id}`)}
+                                    className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 transition-all flex items-center justify-center text-blue-400"
+                                    title="Edit rule"
                                 >
                                     <Edit2 className="w-4 h-4" />
                                 </button>
@@ -324,13 +392,13 @@ export default function RulesTable({ botId }: RulesTableProps) {
                                     <div className="flex items-center gap-2">
                                         <button
                                             onClick={() => deleteMutation.mutate(rule.id)}
-                                            className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium"
+                                            className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
                                         >
-                                            Confirm
+                                            Delete
                                         </button>
                                         <button
                                             onClick={() => setDeleteConfirm(null)}
-                                            className="px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 text-xs font-medium"
+                                            className="px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 text-xs font-medium hover:bg-zinc-800 transition-colors"
                                         >
                                             Cancel
                                         </button>
@@ -339,6 +407,7 @@ export default function RulesTable({ botId }: RulesTableProps) {
                                     <button
                                         onClick={() => setDeleteConfirm(rule.id)}
                                         className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
+                                        title="Delete rule"
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
@@ -348,6 +417,6 @@ export default function RulesTable({ botId }: RulesTableProps) {
                     </div>
                 ))}
             </div>
-        </>
+        </div >
     )
 }

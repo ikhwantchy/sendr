@@ -29,6 +29,19 @@ router.get('/bot/:botId', async (req, res) => {
     }
 });
 
+// GET /api/rules/:id - Get rule by ID
+router.get('/:id', async (req, res) => {
+    try {
+        const rule = await keywordRuleRepository.findById(req.params.id, req.user!.tenant_id);
+        if (!rule) {
+            return res.status(404).json({ success: false, error: 'Rule not found' });
+        }
+        res.json({ success: true, data: rule });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // POST /api/rules - Create rule
 router.post('/', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {

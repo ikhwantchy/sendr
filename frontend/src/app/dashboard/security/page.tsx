@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
@@ -31,60 +32,21 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
-// KPI Card Component - Same as Analytics
-interface KPICardProps {
-    title: string
-    value: number | string
-    icon: React.ReactNode
-    loading?: boolean
-    color?: string
-    onClick?: () => void
-    active?: boolean
-    badge?: string
-    badgeColor?: string
-}
-
-function KPICard({ title, value, icon, loading, color = 'text-zinc-900 dark:text-white', onClick, active, badge, badgeColor = 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400' }: KPICardProps) {
-    return (
-        <div
-            onClick={onClick}
-            className={`bg-white dark:bg-zinc-950 border rounded-xl p-6 relative overflow-hidden group transition-all cursor-pointer shadow-sm dark:shadow-none
-                ${active ? 'border-blue-500/50 ring-1 ring-blue-500/20' : 'border-zinc-200 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800'}`}
-        >
-            <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-zinc-700 dark:text-zinc-100 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800 transition-colors">
-                    {icon}
-                </div>
-                {badge && (
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${badgeColor}`}>
-                        {badge}
-                    </span>
-                )}
-            </div>
-
-            <div className="space-y-1">
-                {loading ? (
-                    <div className="h-8 w-24 bg-zinc-200 dark:bg-zinc-900 rounded animate-pulse" />
-                ) : (
-                    <h3 className={`text-2xl font-bold tracking-tight ${color}`}>
-                        {typeof value === 'number' ? value.toLocaleString() : value}
-                    </h3>
-                )}
-                <p className="text-sm text-zinc-500 font-medium">{title}</p>
-            </div>
-        </div>
-    )
-}
-
 export default function SecurityPage() {
+    const searchParams = useSearchParams()
     const [mounted, setMounted] = useState(false)
     const [activeSection, setActiveSection] = useState<'sessions' | '2fa' | 'alerts' | 'logs'>('sessions')
     const [telegramChatId, setTelegramChatId] = useState('')
     const queryClient = useQueryClient()
 
+    // Read tab from URL on mount and when searchParams change
     useEffect(() => {
         setMounted(true)
-    }, [])
+        const tabParam = searchParams?.get('tab')
+        if (tabParam && ['sessions', '2fa', 'alerts', 'logs'].includes(tabParam)) {
+            setActiveSection(tabParam as 'sessions' | '2fa' | 'alerts' | 'logs')
+        }
+    }, [searchParams])
 
     // Fetch Sessions
     const { data: sessions = [], isLoading: sessionsLoading, refetch: refetchSessions } = useQuery({
@@ -180,129 +142,32 @@ export default function SecurityPage() {
 
     return (
         <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
-            {/* Header - Same style as Analytics */}
+            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-1">
-                        Security Center
-                    </h1>
-                    <p className="text-zinc-500 text-sm">
-                        Manage sessions, authentication, and security alerts
-                    </p>
-                </div>
+                <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
+                    {activeSection === 'sessions' ? 'Active Sessions' :
+                        activeSection === '2fa' ? 'Two-Factor Authentication' :
+                            activeSection === 'alerts' ? 'Telegram Alerts' : 'Security Logs'}
+                </h1>
 
-                <div className="flex flex-wrap items-center gap-3">
-                    {/* Section Dropdown */}
-                    <div className="relative">
-                        <button
-                            onClick={() => {
-                                const dropdown = document.getElementById('security-section-dropdown')
-                                if (dropdown) dropdown.classList.toggle('hidden')
-                            }}
-                            onBlur={(e) => {
-                                setTimeout(() => {
-                                    const dropdown = document.getElementById('security-section-dropdown')
-                                    if (dropdown && !dropdown.contains(e.relatedTarget as Node)) {
-                                        dropdown.classList.add('hidden')
-                                    }
-                                }, 150)
-                            }}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-all"
-                        >
-                            <Shield className="w-3.5 h-3.5 text-blue-500" />
-                            <span>
-                                {activeSection === 'sessions' ? 'Active Sessions' :
-                                    activeSection === '2fa' ? 'Two-Factor Auth' :
-                                        activeSection === 'alerts' ? 'Telegram Alerts' : 'Security Logs'}
-                            </span>
-                            <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
-                        </button>
-
-                        <div
-                            id="security-section-dropdown"
-                            className="hidden absolute top-full right-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1"
-                        >
-                            {[
-                                { id: 'sessions', label: 'Active Sessions', icon: Monitor },
-                                { id: '2fa', label: 'Two-Factor Auth', icon: Fingerprint },
-                                { id: 'alerts', label: 'Telegram Alerts', icon: Send },
-                                { id: 'logs', label: 'Security Logs', icon: History }
-                            ].map((item) => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => {
-                                        setActiveSection(item.id as any)
-                                        document.getElementById('security-section-dropdown')?.classList.add('hidden')
-                                    }}
-                                    className={`w-full flex items-center gap-2 text-left px-4 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${activeSection === item.id ? 'text-blue-500 bg-blue-50 dark:bg-blue-400/5' : 'text-zinc-600 dark:text-zinc-400'}`}
-                                >
-                                    <item.icon className="w-3.5 h-3.5" />
-                                    {item.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Refresh Button */}
-                    <button
-                        onClick={() => refetchSessions()}
-                        className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
-                    >
-                        <RefreshCw className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-
-            {/* KPI Grid - Same style as Analytics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KPICard
-                    title="Active Sessions"
-                    value={activeSessions}
-                    icon={<Monitor className="w-5 h-5" />}
-                    loading={sessionsLoading}
-                    onClick={() => setActiveSection('sessions')}
-                    active={activeSection === 'sessions'}
-                    badge="Live"
-                    badgeColor="bg-blue-500/10 text-blue-400"
-                />
-                <KPICard
-                    title="2FA Status"
-                    value="Not Setup"
-                    icon={<Fingerprint className="w-5 h-5" />}
-                    onClick={() => setActiveSection('2fa')}
-                    active={activeSection === '2fa'}
-                    badge="Recommended"
-                    badgeColor="bg-amber-500/10 text-amber-400"
-                />
-                <KPICard
-                    title="Telegram Alerts"
-                    value={telegramStatus?.connected ? 'Connected' : 'Not Linked'}
-                    icon={<Send className="w-5 h-5" />}
-                    loading={telegramStatusLoading}
-                    onClick={() => setActiveSection('alerts')}
-                    active={activeSection === 'alerts'}
-                    color={telegramStatus?.connected ? 'text-emerald-500' : 'text-zinc-400'}
-                    badge={telegramStatus?.connected ? 'Active' : 'Setup'}
-                    badgeColor={telegramStatus?.connected ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}
-                />
-                <KPICard
-                    title="Failed Logins"
-                    value={failedLogins}
-                    icon={<AlertTriangle className="w-5 h-5" />}
-                    loading={logsLoading}
-                    onClick={() => setActiveSection('logs')}
-                    active={activeSection === 'logs'}
-                    color={failedLogins > 0 ? 'text-red-500' : 'text-emerald-500'}
-                />
+                {/* Refresh Button */}
+                <button
+                    onClick={() => refetchSessions()}
+                    className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors w-fit"
+                >
+                    <RefreshCw className="w-4 h-4" />
+                </button>
             </div>
 
             {/* Content Sections */}
             {activeSection === 'sessions' && (
                 <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
                     <div className="px-6 py-4 border-b border-zinc-800/50 flex justify-between items-center">
-                        <div>
+                        <div className="flex items-center gap-3">
                             <h3 className="text-lg font-medium text-zinc-200">Active Sessions</h3>
-                            <p className="text-xs text-zinc-500 mt-0.5">Devices currently logged into your account</p>
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">
+                                {activeSessions} {activeSessions === 1 ? 'session' : 'sessions'}
+                            </span>
                         </div>
                         {sessions.length > 1 && (
                             <button
@@ -351,7 +216,7 @@ export default function SecurityPage() {
                                             if (ip.startsWith('::ffff:')) return ip.replace('::ffff:', '')
                                             return ip
                                         }
-                                        
+
                                         // Parse user agent for better display
                                         const parseUserAgent = (ua: string) => {
                                             if (!ua) return 'Unknown Device'
@@ -361,7 +226,7 @@ export default function SecurityPage() {
                                             if (ua.includes('Edge')) return 'Edge Browser'
                                             return ua.length > 50 ? ua.substring(0, 50) + '...' : ua
                                         }
-                                        
+
                                         return (
                                             <tr key={session.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
                                                 <td className="py-4 px-4">
@@ -420,9 +285,11 @@ export default function SecurityPage() {
 
             {activeSection === '2fa' && (
                 <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
-                    <div className="px-6 py-4 border-b border-zinc-800/50">
+                    <div className="px-6 py-4 border-b border-zinc-800/50 flex items-center gap-3">
                         <h3 className="text-lg font-medium text-zinc-200">Two-Factor Authentication</h3>
-                        <p className="text-xs text-zinc-500 mt-0.5">Add an extra layer of security to your account</p>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">
+                            Not Setup
+                        </span>
                     </div>
 
                     <div className="p-8 text-center max-w-lg mx-auto">
@@ -451,9 +318,17 @@ export default function SecurityPage() {
             {activeSection === 'alerts' && (
                 <div className="space-y-6">
                     <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
-                        <div className="px-6 py-4 border-b border-zinc-800/50">
+                        <div className="px-6 py-4 border-b border-zinc-800/50 flex items-center gap-3">
                             <h3 className="text-lg font-medium text-zinc-200">Telegram Alerts</h3>
-                            <p className="text-xs text-zinc-500 mt-0.5">Get instant notifications for security events</p>
+                            {telegramStatus?.connected ? (
+                                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">
+                                    Connected
+                                </span>
+                            ) : (
+                                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-500">
+                                    Not Linked
+                                </span>
+                            )}
                         </div>
 
                         <div className="p-6">
@@ -581,9 +456,13 @@ export default function SecurityPage() {
             {activeSection === 'logs' && (
                 <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
                     <div className="px-6 py-4 border-b border-zinc-800/50 flex justify-between items-center">
-                        <div>
+                        <div className="flex items-center gap-3">
                             <h3 className="text-lg font-medium text-zinc-200">Security Logs</h3>
-                            <p className="text-xs text-zinc-500 mt-0.5">Recent security events on your account</p>
+                            {failedLogins > 0 && (
+                                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">
+                                    {failedLogins} failed
+                                </span>
+                            )}
                         </div>
                         <span className="text-xs text-zinc-500 bg-zinc-900 px-2 py-1 rounded">Last 50 events</span>
                     </div>
@@ -626,8 +505,8 @@ export default function SecurityPage() {
                                             <td className="py-4 px-4 text-zinc-500">{formatDistanceToNow(new Date(log.created_at))} ago</td>
                                             <td className="py-4 px-4">
                                                 <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${log.event_type?.includes('FAILED')
-                                                        ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                                                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                                                     }`}>
                                                     {log.event_type?.includes('FAILED') ? (
                                                         <><X className="w-3 h-3" /> Blocked</>

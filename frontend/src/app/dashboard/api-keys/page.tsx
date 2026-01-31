@@ -147,7 +147,7 @@ export default function ApiKeysPage() {
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <h1 className="text-[28px] font-bold text-white tracking-tight">API Keys</h1>
-                    <p className="text-zinc-500 text-sm mt-1">Manage your system access credentials</p>
+
                 </div>
                 <button
                     onClick={() => setShowCreateModal(true)}

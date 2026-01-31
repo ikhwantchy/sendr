@@ -9,6 +9,40 @@ This guide details how to deploy the Sendr platform to your existing AWS server 
 - **Git** installed on the server.
 - **Nginx** (already installed on your server).
 
+## ⚡ Step 1.5: Server Optimization (CRITICAL for 2GB RAM)
+
+**⚠️ WAJIB DILAKUKAN:** Mengingat Anda menggunakan server dengan RAM 2GB (`t3.small`), langkah ini **SANGAT KRUSIAL** untuk mencegah server crash saat proses `build` atau saat beban tinggi.
+
+Jalankan perintah ini satu per satu di terminal server Anda:
+
+```bash
+# 1. Matikan swap lama jika ada (optional)
+sudo swapoff -a
+
+# 2. Buat file swap sebesar 4GB (biar lega)
+sudo fallocate -l 4G /swapfile
+
+# 3. Ubah permission file agar aman
+sudo chmod 600 /swapfile
+
+# 4. Format file sebagai swap area
+sudo mkswap /swapfile
+
+# 5. Aktifkan swap
+sudo swapon /swapfile
+
+# 6. Buat permanen (agar tetap jalan setelah restart)
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# 7. Cek apakah swap sudah aktif
+sudo free -h
+# Pastikan di baris 'Swap' muncul angka sekitar 4.0G
+```
+
+*Dengan melakukan ini, server Anda sekarang punya total memori 6GB (2GB RAM Fisik + 4GB Virtual), cukup untuk menampung lonjakan trafik.*
+
+---
+
 ## 🚀 Step 1: Prepare Your Codebase
 
 1.  **Protect Sensitive Data**:

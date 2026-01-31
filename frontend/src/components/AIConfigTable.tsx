@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
@@ -11,11 +12,13 @@ interface AIConfigTableProps {
 }
 
 export default function AIConfigTable({ botId }: AIConfigTableProps) {
+    const router = useRouter()
+
     // Table states
     const [currentPage, setCurrentPage] = useState(1)
     const [itemsPerPage] = useState(10)
 
-    // Modal states
+    // Modal states (kept for edit modal and delete confirm)
     const [showModal, setShowModal] = useState(false)
     const [editingConfig, setEditingConfig] = useState<any>(null)
     const [showTargetDropdown, setShowTargetDropdown] = useState(false)
@@ -221,9 +224,13 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
 
 
     const openCreateModal = () => {
-        resetForm()
-        setEditingConfig(null)
-        setShowModal(true)
+        // Navigate to full-screen create page
+        router.push(`/dashboard/ai-config/create?botId=${botId}`)
+    }
+
+    const openEditPage = (configId: string) => {
+        // Navigate to full-screen edit page
+        router.push(`/dashboard/ai-config/create?botId=${botId}&edit=${configId}`)
     }
 
     const resetForm = () => {
@@ -294,159 +301,164 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
     }
 
     return (
-        <div className="space-y-4">
+        <div className="flex flex-col">
+            {/* Table */}
+            <div>
+                <table className="w-full table-fixed">
+                    <thead>
+                        <tr className="bg-zinc-800/50 rounded-t-xl">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-zinc-400 w-[18%] rounded-tl-xl">
+                                Name
+                            </th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[20%]">
+                                Target
+                            </th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[14%]">
+                                Status
+                            </th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[14%]">
+                                Provider
+                            </th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-zinc-400 w-[14%]">
+                                Model
+                            </th>
+                            <th className="text-right py-3 px-4 text-sm font-medium text-zinc-400 w-[20%] rounded-tr-xl">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {isLoading ? (
+                            <tr>
+                                <td colSpan={6} className="px-4 py-8 text-center text-sm text-zinc-500">
+                                    Loading configurations...
+                                </td>
+                            </tr>
+                        ) : paginatedConfigs.length === 0 ? (
+                            <tr>
+                                <td colSpan={6} className="px-4 py-8 text-center">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Bot className="w-8 h-8 text-zinc-700" />
+                                        <p className="text-sm text-zinc-500">
+                                            No configurations yet. Create one to get started.
+                                        </p>
+                                    </div>
+                                </td>
+                            </tr>
+                        ) : (
+                            paginatedConfigs.map((config: any) => {
+                                const llmConfig = parseConfig(config.llm_config)
+                                return (
+                                    <tr
+                                        key={config.id}
+                                        className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors h-[52px]"
+                                    >
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center gap-2">
+                                                <Bot className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                                                <span className="text-zinc-100 font-medium truncate max-w-[160px]">
+                                                    {config.config_name || 'Unnamed'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4 text-center">
+                                            <div>
+                                                <div className="text-sm text-white truncate max-w-[180px] mx-auto">
+                                                    {config.target_name || config.target_jid}
+                                                </div>
+                                                <div className="text-xs text-zinc-500 capitalize">
+                                                    {config.target_type}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4 text-center">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <button
+                                                    onClick={() => handleToggle(config.id)}
+                                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${config.is_enabled ? 'bg-emerald-500' : 'bg-zinc-700'
+                                                        }`}
+                                                >
+                                                    <span
+                                                        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${config.is_enabled ? 'translate-x-5' : 'translate-x-1'
+                                                            }`}
+                                                    />
+                                                </button>
+                                                <span className={`text-xs font-medium ${config.is_enabled ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                                                    {config.is_enabled ? 'On' : 'Off'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4 text-center">
+                                            <span className={`inline-flex px-2.5 py-1 rounded-full border text-xs font-medium ${getProviderBadgeColor(llmConfig.provider || 'gemini')}`}>
+                                                {(llmConfig.provider || 'gemini').toUpperCase()}
+                                            </span>
+                                        </td>
+                                        <td className="py-4 px-4 text-sm text-zinc-400 text-center">
+                                            {llmConfig.model || '-'}
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center justify-end gap-2">
+                                                {deleteConfirmId === config.id ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={confirmDelete}
+                                                            className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setDeleteConfirmId(null)}
+                                                            className="px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 text-xs font-medium hover:bg-zinc-800 transition-colors"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            onClick={() => openEditPage(config.id)}
+                                                            className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 transition-all flex items-center justify-center text-blue-400"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(config.id)}
+                                                            className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })
+                        )}
 
-            {/* Action Bar */}
-            <div className="flex items-center justify-end gap-2">
-                <button
-                    onClick={openCreateModal}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium rounded-lg transition-all active:scale-95 border border-zinc-700"
-                >
-                    <Plus className="w-4 h-4" />
-                    Create configuration
-                </button>
+                        {/* Empty rows to fill up to 10 */}
+                        {Array.from({ length: Math.max(0, itemsPerPage - paginatedConfigs.length) }).map((_, index) => (
+                            <tr key={`empty-${index}`} className="border-b border-zinc-800/50 h-[52px]">
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                                <td className="py-4 px-4">{'\u00A0'}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
 
-            {/* Table */}
-            <div className="border border-zinc-800 rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead className="bg-zinc-900/30 border-b border-zinc-800">
-                            <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                                    Name
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                                    Status
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                                    Target
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                                    Provider
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                                    Model
-                                </th>
-                                <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {isLoading ? (
-                                <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-zinc-500">
-                                        Loading configurations...
-                                    </td>
-                                </tr>
-                            ) : paginatedConfigs.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <Bot className="w-8 h-8 text-zinc-700" />
-                                            <p className="text-sm text-zinc-500">
-                                                No configurations yet. Create one to get started.
-                                            </p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : (
-                                paginatedConfigs.map((config: any) => {
-                                    const llmConfig = parseConfig(config.llm_config)
-                                    return (
-                                        <tr
-                                            key={config.id}
-                                            className="border-b border-zinc-800/50 hover:bg-zinc-900/30 transition-colors"
-                                        >
-                                            <td className="px-4 py-3 text-sm text-white font-medium">
-                                                {config.config_name || 'Unnamed'}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-3">
-                                                    <button
-                                                        onClick={() => handleToggle(config.id)}
-                                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${config.is_enabled ? 'bg-emerald-500' : 'bg-zinc-700'
-                                                            }`}
-                                                    >
-                                                        <span
-                                                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${config.is_enabled ? 'translate-x-5' : 'translate-x-1'
-                                                                }`}
-                                                        />
-                                                    </button>
-                                                    <span className={`text-xs font-medium ${config.is_enabled ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                                                        {config.is_enabled ? 'Enabled' : 'Disabled'}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div>
-                                                    <div className="text-sm text-white">
-                                                        {config.target_name || config.target_jid}
-                                                    </div>
-                                                    <div className="text-xs text-zinc-500 capitalize">
-                                                        {config.target_type}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="inline-flex px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium">
-                                                    {(llmConfig.provider || 'gemini').toUpperCase()}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-zinc-400">
-                                                {llmConfig.model || '-'}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    {deleteConfirmId === config.id ? (
-                                                        <>
-                                                            <button
-                                                                onClick={confirmDelete}
-                                                                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-all"
-                                                            >
-                                                                Confirm
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setDeleteConfirmId(null)}
-                                                                className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium rounded-lg transition-all"
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleEdit(config)}
-                                                                className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md transition-colors"
-                                                                title="Edit"
-                                                            >
-                                                                <Edit2 className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDelete(config.id)}
-                                                                className="px-3 py-1.5 bg-red-600/10 hover:bg-red-600/20 text-red-400 text-xs font-medium rounded-md transition-colors border border-red-600/20"
-                                                                title="Delete"
-                                                            >
-                                                                Delete
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/20 border-t border-zinc-800">
+            {/* Pagination */}
+            <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/50 rounded-b-xl">
+                {totalPages > 1 ? (
+                    <>
                         <div className="text-sm text-zinc-500">
-                            Items {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, filteredConfigs.length)} of {filteredConfigs.length}
+                            Showing <span className="text-zinc-300 font-medium">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="text-zinc-300 font-medium">{Math.min(currentPage * itemsPerPage, filteredConfigs.length)}</span> of <span className="text-zinc-300 font-medium">{filteredConfigs.length}</span> configs
                         </div>
                         <div className="flex items-center gap-1">
                             <button
@@ -466,31 +478,36 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
                             >
                                 ▶
                             </button>
-                            <div className="ml-2 text-sm text-zinc-500">
-                                每页条数: {itemsPerPage}
-                            </div>
                         </div>
+                    </>
+                ) : (
+                    <div className="text-sm text-zinc-500">
+                        Showing <span className="text-zinc-300 font-medium">{filteredConfigs.length}</span> configs
                     </div>
                 )}
             </div>
 
+
             {/* Create/Edit Modal - Full Page */}
-            {
-                showModal && (
-                    <div className="fixed inset-0 z-[100] bg-zinc-950 flex">
-                        <div className="flex-1 flex flex-col h-full overflow-hidden">
-                            {/* Header */}
-                            <div className="shrink-0 bg-zinc-950 z-20 border-b border-zinc-800">
-                                <div className="h-16 flex items-center justify-between px-6 lg:px-8">
+            {showModal && (
+                <div className="fixed inset-0 z-[100] bg-black flex">
+                    <div className="flex-1 flex flex-col h-full overflow-hidden">
+                        {/* Header */}
+                        <div className="shrink-0 bg-black z-20 border-b border-zinc-800">
+                            <div className="max-w-6xl mx-auto px-6 py-4">
+                                <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4">
                                         <button type="button" onClick={() => setShowModal(false)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors">
                                             <ChevronLeft size={20} />
                                         </button>
-                                        <h1 className="text-xl font-bold text-white tracking-tight">
-                                            {editingConfig ? 'Edit' : 'Create'} AI Configuration
-                                        </h1>
+                                        <div>
+                                            <h1 className="text-xl font-semibold text-white">
+                                                {editingConfig ? 'Edit' : 'Create'} AI Configuration
+                                            </h1>
+                                            <p className="text-sm text-zinc-400">Configure AI personas and behaviors for specific groups or contacts</p>
+                                        </div>
                                     </div>
-                                    <button 
+                                    <button
                                         type="submit"
                                         form="ai-config-form"
                                         className="hidden lg:flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg transition-all"
@@ -499,495 +516,496 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
                                     </button>
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Scrollable Content */}
-                            <div className="flex-1 overflow-y-auto px-6 lg:px-12 py-8 pb-24 lg:pb-8">
-                                <div className="max-w-3xl mx-auto">
-                            <form id="ai-config-form" onSubmit={handleCreate} className="space-y-6" autoComplete="off" data-lpignore="true" data-form-type="other">
-                                
-                                {/* Configuration Name */}
-                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                                    <h3 className="text-lg font-semibold text-white mb-4">Basic Details</h3>
-                                    <div>
-                                        <label className="block text-sm font-medium text-zinc-300 mb-2">
-                                            Configuration Name <span className="text-red-400">*</span>
-                                        </label>
-                                        <input
-                                            name="wa_bot_config_name_unique"
-                                            type="text"
-                                            required
-                                            value={formData.config_name}
-                                            onChange={(e) => setFormData({ ...formData, config_name: e.target.value })}
-                                            placeholder="e.g., Customer Support, VIP Group"
-                                            autoComplete="off"
-                                            className="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-                                        />
-                                    </div>
-                                </section>
+                        {/* Scrollable Content */}
+                        <div className="flex-1 overflow-y-auto px-6 lg:px-12 py-8 pb-24 lg:pb-8">
+                            <div className="max-w-3xl mx-auto">
+                                <form id="ai-config-form" onSubmit={handleCreate} className="space-y-6" autoComplete="off" data-lpignore="true" data-form-type="other">
 
-                                {/* Target Selection */}
-                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                                    <h3 className="text-lg font-semibold text-white mb-4">Target</h3>
-                                    {editingConfig ? (
-                                        <div className="p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
-                                            <label className="block text-xs text-zinc-500 uppercase font-semibold mb-1">
-                                                Current Target
-                                            </label>
-                                            <div className="text-sm text-white font-medium">
-                                                {formData.target_name} ({formData.target_jid})
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <>
+                                    {/* Configuration Name */}
+                                    <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                                        <h3 className="text-lg font-semibold text-white mb-4">Basic Details</h3>
+                                        <div>
                                             <label className="block text-sm font-medium text-zinc-300 mb-2">
-                                                Target Group/Contact *
+                                                Configuration Name <span className="text-red-400">*</span>
                                             </label>
+                                            <input
+                                                name="wa_bot_config_name_unique"
+                                                type="text"
+                                                required
+                                                value={formData.config_name}
+                                                onChange={(e) => setFormData({ ...formData, config_name: e.target.value })}
+                                                placeholder="e.g., Customer Support, VIP Group"
+                                                autoComplete="off"
+                                                className="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                                            />
+                                        </div>
+                                    </section>
 
-                                            {/* Selected Targets Chips */}
-                                            {selectedTargets.length > 0 && (
-                                                <div className="flex flex-wrap gap-2 mb-2 p-2 bg-zinc-900/50 border border-zinc-800 rounded-md">
-                                                    {selectedTargets.map((target) => (
-                                                        <div key={target.jid} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-md text-sm">
-                                                            <span className="text-blue-400">{target.name}</span>
+                                    {/* Target Selection */}
+                                    <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                                        <h3 className="text-lg font-semibold text-white mb-4">Target</h3>
+                                        {editingConfig ? (
+                                            <div className="p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+                                                <label className="block text-xs text-zinc-500 uppercase font-semibold mb-1">
+                                                    Current Target
+                                                </label>
+                                                <div className="text-sm text-white font-medium">
+                                                    {formData.target_name} ({formData.target_jid})
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                                    Target Group/Contact *
+                                                </label>
+
+                                                {/* Selected Targets Chips */}
+                                                {selectedTargets.length > 0 && (
+                                                    <div className="flex flex-wrap gap-2 mb-2 p-2 bg-zinc-900/50 border border-zinc-800 rounded-md">
+                                                        {selectedTargets.map((target) => (
+                                                            <div key={target.jid} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-md text-sm">
+                                                                <span className="text-blue-400">{target.name}</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setSelectedTargets(selectedTargets.filter(t => t.jid !== target.jid))
+                                                                    }}
+                                                                    className="text-blue-400 hover:text-blue-300"
+                                                                >
+                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                    </svg>
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                <div className="relative">
+                                                    {showTargetDropdown ? (
+                                                        <div className="relative animate-in fade-in duration-200">
+                                                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                            </svg>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Search groups..."
+                                                                autoFocus
+                                                                value={dropdownSearchQuery}
+                                                                onChange={(e) => setDropdownSearchQuery(e.target.value)}
+                                                                className="w-full pl-10 pr-10 py-2.5 bg-[#0f0f0f] border border-blue-500/50 rounded-lg text-white text-sm focus:outline-none ring-2 ring-blue-500/20 transition-all"
+                                                            />
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setSelectedTargets(selectedTargets.filter(t => t.jid !== target.jid))
+                                                                    setShowTargetDropdown(false)
+                                                                    setDropdownSearchQuery('')
                                                                 }}
-                                                                className="text-blue-400 hover:text-blue-300"
+                                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
                                                             >
-                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                                </svg>
+                                                                <ChevronDown className="w-4 h-4 rotate-180 transition-transform" />
                                                             </button>
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            <div className="relative">
-                                                {showTargetDropdown ? (
-                                                    <div className="relative animate-in fade-in duration-200">
-                                                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                        </svg>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Search groups..."
-                                                            autoFocus
-                                                            value={dropdownSearchQuery}
-                                                            onChange={(e) => setDropdownSearchQuery(e.target.value)}
-                                                            className="w-full pl-10 pr-10 py-2.5 bg-[#0f0f0f] border border-blue-500/50 rounded-lg text-white text-sm focus:outline-none ring-2 ring-blue-500/20 transition-all"
-                                                        />
+                                                    ) : (
                                                         <button
                                                             type="button"
-                                                            onClick={() => {
-                                                                setShowTargetDropdown(false)
-                                                                setDropdownSearchQuery('')
-                                                            }}
-                                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+                                                            onClick={() => setShowTargetDropdown(true)}
+                                                            className="w-full px-4 py-2.5 bg-[#0f0f0f] border border-zinc-800/50 rounded-lg text-white text-sm flex items-center justify-between hover:border-zinc-700 transition-all group"
                                                         >
-                                                            <ChevronDown className="w-4 h-4 rotate-180 transition-transform" />
+                                                            <span className={selectedTargets.length > 0 ? 'text-white' : 'text-zinc-500'}>
+                                                                {selectedTargets.length > 0
+                                                                    ? `${selectedTargets.length} target(s) selected`
+                                                                    : 'Select target...'}
+                                                            </span>
+                                                            <div className="flex items-center gap-2">
+                                                                {selectedTargets.length > 0 && (
+                                                                    <span className="flex items-center justify-center w-5 h-5 bg-blue-500/20 text-blue-400 text-[10px] font-bold rounded-full border border-blue-500/30">
+                                                                        {selectedTargets.length}
+                                                                    </span>
+                                                                )}
+                                                                <ChevronDown className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                                                            </div>
                                                         </button>
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowTargetDropdown(true)}
-                                                        className="w-full px-4 py-2.5 bg-[#0f0f0f] border border-zinc-800/50 rounded-lg text-white text-sm flex items-center justify-between hover:border-zinc-700 transition-all group"
-                                                    >
-                                                        <span className={selectedTargets.length > 0 ? 'text-white' : 'text-zinc-500'}>
-                                                            {selectedTargets.length > 0
-                                                                ? `${selectedTargets.length} target(s) selected`
-                                                                : 'Select target...'}
-                                                        </span>
-                                                        <div className="flex items-center gap-2">
-                                                            {selectedTargets.length > 0 && (
-                                                                <span className="flex items-center justify-center w-5 h-5 bg-blue-500/20 text-blue-400 text-[10px] font-bold rounded-full border border-blue-500/30">
-                                                                    {selectedTargets.length}
-                                                                </span>
-                                                            )}
-                                                            <ChevronDown className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
-                                                        </div>
-                                                    </button>
-                                                )}
+                                                    )}
 
-                                                {showTargetDropdown && (
-                                                    <div className="absolute z-50 w-full mt-2 bg-[#0f0f0f] border border-zinc-800 rounded-xl shadow-2xl overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                                                        <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                                                            {groups.length === 0 ? (
-                                                                <div className="px-4 py-10 text-center bg-zinc-900/10">
-                                                                    <div className="w-12 h-12 bg-zinc-800/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-zinc-700">
-                                                                        <Users className="w-6 h-6 text-zinc-500" />
-                                                                    </div>
-                                                                    <div className="text-zinc-300 font-medium mb-1">No groups found</div>
-                                                                    <div className="text-zinc-500 text-xs mb-6 max-w-[200px] mx-auto">
-                                                                        Make sure the bot is connected and has joined some groups.
-                                                                    </div>
-                                                                    <div className="flex flex-col gap-2 max-w-[180px] mx-auto">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleSyncGroups();
-                                                                            }}
-                                                                            disabled={isSyncingGroups}
-                                                                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-500/20 active:scale-95"
-                                                                        >
-                                                                            {isSyncingGroups ? (
-                                                                                <>
-                                                                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                                                    Syncing...
-                                                                                </>
-                                                                            ) : (
-                                                                                <>
-                                                                                    <Plus className="w-3.5 h-3.5" />
-                                                                                    Sync Groups Now
-                                                                                </>
-                                                                            )}
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                refetchGroups();
-                                                                            }}
-                                                                            className="text-zinc-500 hover:text-zinc-300 text-xs py-1 transition-colors"
-                                                                        >
-                                                                            Refresh list only
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                (() => {
-                                                                    const filtered = groups.filter((g: any) =>
-                                                                        (g.subject || g.name || '').toLowerCase().includes(dropdownSearchQuery.toLowerCase()) ||
-                                                                        (g.jid || g.id || '').toLowerCase().includes(dropdownSearchQuery.toLowerCase())
-                                                                    )
-
-                                                                    if (filtered.length === 0) {
-                                                                        return (
-                                                                            <div className="px-4 py-8 text-center bg-zinc-900/10">
-                                                                                <div className="text-zinc-500 text-sm mb-4">
-                                                                                    {dropdownSearchQuery ? `No groups match "${dropdownSearchQuery}"` : 'No groups found in database.'}
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-2 scale-90">
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            refetchGroups();
-                                                                                        }}
-                                                                                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold rounded-lg border border-zinc-700 transition-all"
-                                                                                    >
-                                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                                                        </svg>
-                                                                                        Refresh List
-                                                                                    </button>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            handleSyncGroups();
-                                                                                        }}
-                                                                                        disabled={isSyncingGroups}
-                                                                                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-500/10"
-                                                                                    >
-                                                                                        {isSyncingGroups ? (
-                                                                                            <>
-                                                                                                <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                                                                Syncing from WA...
-                                                                                            </>
-                                                                                        ) : (
-                                                                                            <>
-                                                                                                <Plus className="w-3.5 h-3.5" />
-                                                                                                Deep Sync from WA
-                                                                                            </>
-                                                                                        )}
-                                                                                    </button>
-                                                                                </div>
-                                                                            </div>
-                                                                        )
-                                                                    }
-
-                                                                    return filtered.map((g: any) => {
-                                                                        const isSelected = selectedTargets.some(t => t.jid === g.jid)
-                                                                        return (
+                                                    {showTargetDropdown && (
+                                                        <div className="absolute z-50 w-full mt-2 bg-[#0f0f0f] border border-zinc-800 rounded-xl shadow-2xl overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                                                            <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                                                                {groups.length === 0 ? (
+                                                                    <div className="px-4 py-10 text-center bg-zinc-900/10">
+                                                                        <div className="w-12 h-12 bg-zinc-800/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-zinc-700">
+                                                                            <Users className="w-6 h-6 text-zinc-500" />
+                                                                        </div>
+                                                                        <div className="text-zinc-300 font-medium mb-1">No groups found</div>
+                                                                        <div className="text-zinc-500 text-xs mb-6 max-w-[200px] mx-auto">
+                                                                            Make sure the bot is connected and has joined some groups.
+                                                                        </div>
+                                                                        <div className="flex flex-col gap-2 max-w-[180px] mx-auto">
                                                                             <button
-                                                                                key={g.jid}
                                                                                 type="button"
-                                                                                onClick={() => {
-                                                                                    if (isSelected) {
-                                                                                        setSelectedTargets(selectedTargets.filter(t => t.jid !== g.jid))
-                                                                                    } else {
-                                                                                        setSelectedTargets([
-                                                                                            ...selectedTargets,
-                                                                                            { jid: g.jid, name: g.subject || g.name || 'Unnamed Group', type: 'group' }
-                                                                                        ])
-                                                                                    }
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleSyncGroups();
                                                                                 }}
-                                                                                className="w-full px-3 py-2.5 hover:bg-zinc-800 transition-colors flex items-center gap-3 text-left border-b border-zinc-800/50 last:border-0"
+                                                                                disabled={isSyncingGroups}
+                                                                                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-500/20 active:scale-95"
                                                                             >
-                                                                                {/* Avatar */}
-                                                                                <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0">
-                                                                                    <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                                                                    </svg>
-                                                                                </div>
-                                                                                {/* Group Info */}
-                                                                                <div className="flex-1 min-w-0">
-                                                                                    <div className="text-sm font-medium text-white truncate">
-                                                                                        {g.subject || g.name || 'Unnamed Group'}
-                                                                                    </div>
-                                                                                    <div className="text-xs text-zinc-500 truncate">
-                                                                                        {g.jid}
-                                                                                    </div>
-                                                                                </div>
-                                                                                {/* Icon: Plus or Checkmark */}
-                                                                                {isSelected ? (
-                                                                                    <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                                                    </svg>
+                                                                                {isSyncingGroups ? (
+                                                                                    <>
+                                                                                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                                                        Syncing...
+                                                                                    </>
                                                                                 ) : (
-                                                                                    <svg className="w-5 h-5 text-zinc-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                                                                    </svg>
+                                                                                    <>
+                                                                                        <Plus className="w-3.5 h-3.5" />
+                                                                                        Sync Groups Now
+                                                                                    </>
                                                                                 )}
                                                                             </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    refetchGroups();
+                                                                                }}
+                                                                                className="text-zinc-500 hover:text-zinc-300 text-xs py-1 transition-colors"
+                                                                            >
+                                                                                Refresh list only
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    (() => {
+                                                                        const filtered = groups.filter((g: any) =>
+                                                                            (g.subject || g.name || '').toLowerCase().includes(dropdownSearchQuery.toLowerCase()) ||
+                                                                            (g.jid || g.id || '').toLowerCase().includes(dropdownSearchQuery.toLowerCase())
                                                                         )
-                                                                    })
-                                                                })()
-                                                            )}
+
+                                                                        if (filtered.length === 0) {
+                                                                            return (
+                                                                                <div className="px-4 py-8 text-center bg-zinc-900/10">
+                                                                                    <div className="text-zinc-500 text-sm mb-4">
+                                                                                        {dropdownSearchQuery ? `No groups match "${dropdownSearchQuery}"` : 'No groups found in database.'}
+                                                                                    </div>
+                                                                                    <div className="flex flex-col gap-2 scale-90">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                refetchGroups();
+                                                                                            }}
+                                                                                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold rounded-lg border border-zinc-700 transition-all"
+                                                                                        >
+                                                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                                                            </svg>
+                                                                                            Refresh List
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                handleSyncGroups();
+                                                                                            }}
+                                                                                            disabled={isSyncingGroups}
+                                                                                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-500/10"
+                                                                                        >
+                                                                                            {isSyncingGroups ? (
+                                                                                                <>
+                                                                                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                                                                    Syncing from WA...
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <Plus className="w-3.5 h-3.5" />
+                                                                                                    Deep Sync from WA
+                                                                                                </>
+                                                                                            )}
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )
+                                                                        }
+
+                                                                        return filtered.map((g: any) => {
+                                                                            const isSelected = selectedTargets.some(t => t.jid === g.jid)
+                                                                            return (
+                                                                                <button
+                                                                                    key={g.jid}
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        if (isSelected) {
+                                                                                            setSelectedTargets(selectedTargets.filter(t => t.jid !== g.jid))
+                                                                                        } else {
+                                                                                            setSelectedTargets([
+                                                                                                ...selectedTargets,
+                                                                                                { jid: g.jid, name: g.subject || g.name || 'Unnamed Group', type: 'group' }
+                                                                                            ])
+                                                                                        }
+                                                                                    }}
+                                                                                    className="w-full px-3 py-2.5 hover:bg-zinc-800 transition-colors flex items-center gap-3 text-left border-b border-zinc-800/50 last:border-0"
+                                                                                >
+                                                                                    {/* Avatar */}
+                                                                                    <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+                                                                                        <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                                                                        </svg>
+                                                                                    </div>
+                                                                                    {/* Group Info */}
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <div className="text-sm font-medium text-white truncate">
+                                                                                            {g.subject || g.name || 'Unnamed Group'}
+                                                                                        </div>
+                                                                                        <div className="text-xs text-zinc-500 truncate">
+                                                                                            {g.jid}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    {/* Icon: Plus or Checkmark */}
+                                                                                    {isSelected ? (
+                                                                                        <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                                        </svg>
+                                                                                    ) : (
+                                                                                        <svg className="w-5 h-5 text-zinc-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                                                        </svg>
+                                                                                    )}
+                                                                                </button>
+                                                                            )
+                                                                        })
+                                                                    })()
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
+                                    </section>
+
+                                    {/* API Key & Model Selection */}
+                                    <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                                        <h3 className="text-lg font-semibold text-white mb-4">AI Provider</h3>
+                                        <div>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label className="block text-sm text-zinc-400">
+                                                    API Authentication
+                                                </label>
+                                                <a
+                                                    href="https://console.groq.com/keys"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm text-blue-500 hover:text-blue-400 transition-colors"
+                                                >
+                                                    Get API Key
+                                                </a>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <div className="relative flex-1">
+                                                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                                    </svg>
+                                                    <input
+                                                        name="wa_bot_api_key_secure"
+                                                        type={showApiKey ? "text" : "password"}
+                                                        required
+                                                        value={formData.api_key}
+                                                        onChange={(e) => handleApiKeyChange(e.target.value)}
+                                                        placeholder="Place your API here"
+                                                        autoComplete="new-password"
+                                                        className="w-full pl-10 pr-10 py-2.5 bg-zinc-900 border border-zinc-800 rounded-md text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowApiKey(!showApiKey)}
+                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                                                    >
+                                                        {showApiKey ? (
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.046m4.577-2.236A11.042 11.042 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.028 10.028 0 01-4.438 4.418m-1.93-1.93a3.5 3.5 0 01-4.95-4.95l-1.414-1.414l6.364 6.364l1.414 1.414z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
+                                                            </svg>
+                                                        ) : (
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                            </svg>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-sm font-medium rounded-md transition-colors whitespace-nowrap"
+                                                >
+                                                    Verify Key
+                                                </button>
+                                            </div>
+                                            {formData.api_key && (
+                                                <p className="mt-2 text-xs text-zinc-500">
+                                                    Detected Provider: <span className="text-blue-400 font-medium">{formData.provider.toUpperCase()}</span>
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Model Selection - CONDITIONAL */}
+                                        {formData.api_key && (
+                                            <div>
+                                                <label className="block text-sm text-zinc-400 mb-2">
+                                                    Model *
+                                                </label>
+                                                <select
+                                                    required
+                                                    value={formData.model}
+                                                    onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                                                    className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-md text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                                >
+                                                    {modelOptions[formData.provider].map((m) => (
+                                                        <option key={m.id} value={m.id}>
+                                                            {m.name} - {m.description}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </section>
+
+                                    {/* System Prompt */}
+                                    <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                                        <h3 className="text-lg font-semibold text-white mb-4">System Prompt</h3>
+                                        <div>
+                                            <label className="block text-sm text-zinc-400 mb-2">
+                                                System Prompt (Optional)
+                                            </label>
+                                            <textarea
+                                                rows={4}
+                                                value={formData.system_prompt}
+                                                onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
+                                                placeholder="Custom instructions for this configuration..."
+                                                className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-md text-white text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none"
+                                            />
+                                        </div>
+                                    </section>
+
+                                    {/* Bot Behavior */}
+                                    <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                                        <h3 className="text-lg font-semibold text-white mb-4">Bot Behavior</h3>
+                                        <div className="space-y-2">
+                                            {/* Conversation Model */}
+                                            <div className={`p-3 rounded-lg border transition-all ${formData.conversation_model ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-[#0f0f0f] border-zinc-800/50'}`}>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <svg className={`w-4 h-4 ${formData.conversation_model ? 'text-emerald-400' : 'text-zinc-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                        </svg>
+                                                        <div>
+                                                            <div className={`text-xs font-medium ${formData.conversation_model ? 'text-white' : 'text-zinc-400'}`}>
+                                                                Conversation Model
+                                                            </div>
+                                                            <div className="text-xs text-zinc-500">
+                                                                Responds with full context
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, conversation_model: !formData.conversation_model })}
+                                                        className={`relative w-10 h-5 rounded-full transition-colors ${formData.conversation_model ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+                                                    >
+                                                        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${formData.conversation_model ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </>
-                                    )}
-                                </section>
 
-                                {/* API Key & Model Selection */}
-                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                                    <h3 className="text-lg font-semibold text-white mb-4">AI Provider</h3>
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <label className="block text-sm text-zinc-400">
-                                            API Authentication
-                                        </label>
-                                        <a
-                                            href="https://console.groq.com/keys"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-sm text-blue-500 hover:text-blue-400 transition-colors"
-                                        >
-                                            Get API Key
-                                        </a>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <div className="relative flex-1">
-                                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                                            </svg>
-                                            <input
-                                                name="wa_bot_api_key_secure"
-                                                type={showApiKey ? "text" : "password"}
-                                                required
-                                                value={formData.api_key}
-                                                onChange={(e) => handleApiKeyChange(e.target.value)}
-                                                placeholder="Place your API here"
-                                                autoComplete="new-password"
-                                                className="w-full pl-10 pr-10 py-2.5 bg-zinc-900 border border-zinc-800 rounded-md text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowApiKey(!showApiKey)}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
-                                            >
-                                                {showApiKey ? (
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.046m4.577-2.236A11.042 11.042 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.028 10.028 0 01-4.438 4.418m-1.93-1.93a3.5 3.5 0 01-4.95-4.95l-1.414-1.414l6.364 6.364l1.414 1.414z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
-                                                    </svg>
-                                                ) : (
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                    </svg>
-                                                )}
-                                            </button>
+                                            {/* Silent Collection */}
+                                            <div className={`p-3 rounded-lg border transition-all ${formData.silent_collection ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-900/50 border-zinc-800'}`}>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <svg className={`w-4 h-4 ${formData.silent_collection ? 'text-emerald-400' : 'text-zinc-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                                                        </svg>
+                                                        <div>
+                                                            <div className={`text-xs font-medium ${formData.silent_collection ? 'text-white' : 'text-zinc-400'}`}>
+                                                                Silent Collection
+                                                            </div>
+                                                            <div className="text-xs text-zinc-500">
+                                                                No replies, background only
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, silent_collection: !formData.silent_collection })}
+                                                        className={`relative w-10 h-5 rounded-full transition-colors ${formData.silent_collection ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+                                                    >
+                                                        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${formData.silent_collection ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Hybrid Mode */}
+                                            <div className={`p-3 rounded-lg border transition-all ${formData.hybrid_mode ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-900/50 border-zinc-800'}`}>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <svg className={`w-4 h-4 ${formData.hybrid_mode ? 'text-emerald-400' : 'text-zinc-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                        </svg>
+                                                        <div>
+                                                            <div className={`text-xs font-medium ${formData.hybrid_mode ? 'text-white' : 'text-zinc-400'}`}>
+                                                                Hybrid Mode
+                                                            </div>
+                                                            <div className="text-xs text-zinc-500">
+                                                                Reply only if confident
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, hybrid_mode: !formData.hybrid_mode })}
+                                                        className={`relative w-10 h-5 rounded-full transition-colors ${formData.hybrid_mode ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+                                                    >
+                                                        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${formData.hybrid_mode ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
+                                    </section>
+
+                                    {/* Actions - Hidden on desktop (use header button) */}
+                                    <div className="lg:hidden flex justify-end gap-2 pt-4">
                                         <button
                                             type="button"
-                                            className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-sm font-medium rounded-md transition-colors whitespace-nowrap"
+                                            onClick={() => setShowModal(false)}
+                                            className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-sm font-medium rounded-md transition-colors"
                                         >
-                                            Verify Key
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg transition-all shadow-lg"
+                                        >
+                                            {editingConfig ? 'Update' : 'Create'}
                                         </button>
                                     </div>
-                                    {formData.api_key && (
-                                        <p className="mt-2 text-xs text-zinc-500">
-                                            Detected Provider: <span className="text-blue-400 font-medium">{formData.provider.toUpperCase()}</span>
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* Model Selection - CONDITIONAL */}
-                                {formData.api_key && (
-                                    <div>
-                                        <label className="block text-sm text-zinc-400 mb-2">
-                                            Model *
-                                        </label>
-                                        <select
-                                            required
-                                            value={formData.model}
-                                            onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                                            className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-md text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                                        >
-                                            {modelOptions[formData.provider].map((m) => (
-                                                <option key={m.id} value={m.id}>
-                                                    {m.name} - {m.description}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-                                </section>
-
-                                {/* System Prompt */}
-                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                                    <h3 className="text-lg font-semibold text-white mb-4">System Prompt</h3>
-                                <div>
-                                    <label className="block text-sm text-zinc-400 mb-2">
-                                        System Prompt (Optional)
-                                    </label>
-                                    <textarea
-                                        rows={4}
-                                        value={formData.system_prompt}
-                                        onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
-                                        placeholder="Custom instructions for this configuration..."
-                                        className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-md text-white text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none"
-                                    />
-                                </div>
-                                </section>
-
-                                {/* Bot Behavior */}
-                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                                    <h3 className="text-lg font-semibold text-white mb-4">Bot Behavior</h3>
-                                    <div className="space-y-2">
-                                        {/* Conversation Model */}
-                                        <div className={`p-3 rounded-lg border transition-all ${formData.conversation_model ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-[#0f0f0f] border-zinc-800/50'}`}>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <svg className={`w-4 h-4 ${formData.conversation_model ? 'text-emerald-400' : 'text-zinc-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                                    </svg>
-                                                    <div>
-                                                        <div className={`text-xs font-medium ${formData.conversation_model ? 'text-white' : 'text-zinc-400'}`}>
-                                                            Conversation Model
-                                                        </div>
-                                                        <div className="text-xs text-zinc-500">
-                                                            Responds with full context
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData({ ...formData, conversation_model: !formData.conversation_model })}
-                                                    className={`relative w-10 h-5 rounded-full transition-colors ${formData.conversation_model ? 'bg-emerald-500' : 'bg-zinc-700'}`}
-                                                >
-                                                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${formData.conversation_model ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Silent Collection */}
-                                        <div className={`p-3 rounded-lg border transition-all ${formData.silent_collection ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-900/50 border-zinc-800'}`}>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <svg className={`w-4 h-4 ${formData.silent_collection ? 'text-emerald-400' : 'text-zinc-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-                                                    </svg>
-                                                    <div>
-                                                        <div className={`text-xs font-medium ${formData.silent_collection ? 'text-white' : 'text-zinc-400'}`}>
-                                                            Silent Collection
-                                                        </div>
-                                                        <div className="text-xs text-zinc-500">
-                                                            No replies, background only
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData({ ...formData, silent_collection: !formData.silent_collection })}
-                                                    className={`relative w-10 h-5 rounded-full transition-colors ${formData.silent_collection ? 'bg-emerald-500' : 'bg-zinc-700'}`}
-                                                >
-                                                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${formData.silent_collection ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Hybrid Mode */}
-                                        <div className={`p-3 rounded-lg border transition-all ${formData.hybrid_mode ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-900/50 border-zinc-800'}`}>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <svg className={`w-4 h-4 ${formData.hybrid_mode ? 'text-emerald-400' : 'text-zinc-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                                    </svg>
-                                                    <div>
-                                                        <div className={`text-xs font-medium ${formData.hybrid_mode ? 'text-white' : 'text-zinc-400'}`}>
-                                                            Hybrid Mode
-                                                        </div>
-                                                        <div className="text-xs text-zinc-500">
-                                                            Reply only if confident
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData({ ...formData, hybrid_mode: !formData.hybrid_mode })}
-                                                    className={`relative w-10 h-5 rounded-full transition-colors ${formData.hybrid_mode ? 'bg-emerald-500' : 'bg-zinc-700'}`}
-                                                >
-                                                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${formData.hybrid_mode ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </section>
-
-                                {/* Actions - Hidden on desktop (use header button) */}
-                                <div className="lg:hidden flex justify-end gap-2 pt-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowModal(false)}
-                                        className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-sm font-medium rounded-md transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg transition-all shadow-lg"
-                                    >
-                                        {editingConfig ? 'Update' : 'Create'}
-                                    </button>
-                                </div>
-                            </form>
-                                </div>
-                            </div>
-
-                            {/* Mobile Save Button */}
-                            <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 z-30">
-                                <button 
-                                    type="submit" 
-                                    form="ai-config-form"
-                                    className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg"
-                                >
-                                    {editingConfig ? 'Update Configuration' : 'Save Configuration'} <Save size={18} />
-                                </button>
+                                </form>
                             </div>
                         </div>
+
+                        {/* Mobile Save Button */}
+                        <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 z-30">
+                            <button
+                                type="submit"
+                                form="ai-config-form"
+                                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg"
+                            >
+                                {editingConfig ? 'Update Configuration' : 'Save Configuration'} <Save size={18} />
+                            </button>
+                        </div>
                     </div>
-                )
+                </div>
+            )
             }
         </div>
     )

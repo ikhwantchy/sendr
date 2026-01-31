@@ -6,8 +6,8 @@ import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { useRouter, useSearchParams } from 'next/navigation'
 import EditRuleModal from '@/components/modals/EditRuleModal'
-import { 
-    Plus, RefreshCw, Loader2, ChevronDown, Bot, 
+import {
+    Plus, RefreshCw, Loader2, ChevronDown, Bot,
     Zap, Trash2, Pencil, MessageSquare, Search
 } from 'lucide-react'
 
@@ -84,7 +84,7 @@ export default function RulesPage() {
                             <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
                         )}
                     </div>
-                    <p className="text-zinc-500 text-sm mt-1">Create keyword-based automation rules</p>
+                    <p className="text-zinc-500 dark:text-zinc-100 text-sm mt-1">Create keyword-based automation rules</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {/* Bot Filter Dropdown */}
@@ -184,7 +184,7 @@ export default function RulesPage() {
                             <p className="text-xs text-zinc-500 mt-0.5">{filteredRules.length} rule{filteredRules.length !== 1 ? 's' : ''} found</p>
                         </div>
                     </div>
-                    
+
                     <div className="overflow-x-auto">
                         <table className="w-full table-fixed">
                             <thead>

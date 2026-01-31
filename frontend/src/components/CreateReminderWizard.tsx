@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -9,13 +9,14 @@ import {
     Database, Wand2, ChevronDown, ChevronUp, RefreshCw, Type,
     Bold, Italic, Link, Image as ImageIcon, Smile, Globe,
     Strikethrough, Code, Search, ArrowRight, Lock, Eye, MessageSquare, Paperclip,
-    Cat, Coffee, Dumbbell, Car, Lightbulb, Heart, Hand, ChevronLeft, ExternalLink
+    Cat, Coffee, Dumbbell, Car, Lightbulb, Heart, Hand, ChevronLeft, ExternalLink, Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 import AdvancedFilters from './AdvancedFilters'
 import ContactTable, { ContactRow, ContactColumn, contactTableToParsedContacts, getContactTableVariables } from '@/components/ContactTable'
+import SharedMessageEditor, { formatWhatsAppText } from '@/components/SharedMessageEditor'
 
 // --- Types ---
 type TargetType = 'group' | 'contact'
@@ -81,24 +82,13 @@ interface CreateReminderWizardProps {
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const CONTACT_TABLE_STORAGE_KEY = 'reminder_contact_table_data'
 
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-    'Smileys': <Smile size={18} />,
-    'Gestures & People': <Hand size={18} />,
-    'Animals & Nature': <Cat size={18} />,
-    'Food & Drink': <Coffee size={18} />,
-    'Activity': <Dumbbell size={18} />,
-    'Objects': <Lightbulb size={18} />,
-    'Travel & Places': <Car size={18} />,
-    'Symbols': <Heart size={18} />,
-}
+
 
 export default function CreateReminderWizard({ botId, onClose, reminderId }: CreateReminderWizardProps) {
     const queryClient = useQueryClient()
     const router = useRouter()
     const searchParams = useSearchParams()
-    const textareaRef = useRef<HTMLDivElement>(null)
-    const fileInputRef = useRef<HTMLInputElement>(null)
-    const isTypingRef = useRef(false)
+
 
     // Default Dates (Local Time)
     const today = new Date().toLocaleDateString('en-CA'); // en-CA gives YYYY-MM-DD format
@@ -106,15 +96,28 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
     // UI State
     const [isContactPreviewOpen, setIsContactPreviewOpen] = useState(false)
     const [isGroupSelectorOpen, setIsGroupSelectorOpen] = useState(false)
-    const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
     const [isPreviewOpen, setIsPreviewOpen] = useState(false)
-    const [activeEmojiCategory, setActiveEmojiCategory] = useState<keyof typeof EMOJI_CATEGORIES>('Smileys')
     const [availableTabs, setAvailableTabs] = useState<Array<{ gid: string; name: string }>>([])
     const [isLoadingTabs, setIsLoadingTabs] = useState(false)
-    const emojiPickerRef = useRef<HTMLDivElement>(null)
-    const emojiTriggerRef = useRef<HTMLButtonElement>(null)
+
+    const [isEditorExpanded, setIsEditorExpanded] = useState(false)
 
     // Form State
+    const [groupSearchTerm, setGroupSearchTerm] = useState('')
+    const [isSyncingGroups, setIsSyncingGroups] = useState(false)
+
+    const handleSyncGroups = async () => {
+        setIsSyncingGroups(true)
+        try {
+            await queryClient.invalidateQueries({ queryKey: ['bot-groups', effectiveBotId] })
+            toast.success('Groups synced')
+        } catch (error) {
+            toast.error('Failed to sync groups')
+        } finally {
+            setIsSyncingGroups(false)
+        }
+    }
+
     const [formData, setFormData] = useState<FormData>({
         name: '',
         targetType: 'group',
@@ -215,33 +218,33 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         { id: 'phone', name: 'Phone', required: true },
                         { id: 'name_col', name: 'Name' }
                     ]
-                    
+
                     if (templateConfig.manualContacts && Array.isArray(templateConfig.manualContacts) && templateConfig.manualContacts.length > 0) {
                         // Build columns from first contact's keys
                         const firstContact = templateConfig.manualContacts[0]
                         const columnNames = Object.keys(firstContact).filter(k => !['phone', 'jid'].includes(k.toLowerCase()))
-                        
+
                         loadedTableColumns = [
                             { id: 'phone', name: 'Phone', required: true },
                         ]
-                        
+
                         // Track added columns to prevent duplicates (case-insensitive)
                         const addedColumns = new Set<string>(['phone'])
-                        
+
                         columnNames.forEach((colName, idx) => {
                             const lowerName = colName.toLowerCase()
-                            
+
                             // Skip if column already added (case-insensitive check)
                             if (addedColumns.has(lowerName)) return
                             addedColumns.add(lowerName)
-                            
+
                             if (lowerName === 'name') {
                                 loadedTableColumns.push({ id: 'name_col', name: 'Name' })
                             } else {
                                 loadedTableColumns.push({ id: `col_${idx}`, name: colName })
                             }
                         })
-                        
+
                         // Convert contacts to ContactRow format
                         loadedTableContacts = templateConfig.manualContacts.map((c: any, idx: number) => {
                             const row: ContactRow = { id: `row_${idx}`, phone: c.phone || '' }
@@ -329,15 +332,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         }
     }, [searchParams])
 
-    // Sync initial message to contentEditable on load (for edit mode)
-    useEffect(() => {
-        if (reminderId && textareaRef.current && formData.message && !isTypingRef.current) {
-            // Only set if editor matches or is empty to avoid jumpy cursor
-            if (textareaRef.current.innerHTML === '' || textareaRef.current.innerText === '') {
-                textareaRef.current.innerHTML = markdownToHtml(formData.message)
-            }
-        }
-    }, [formData.message, reminderId])
+
 
     // Auto-detect tabs when Sheet URL changes
     useEffect(() => {
@@ -386,23 +381,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         return () => clearTimeout(timeoutId)
     }, [formData.contactSheetUrl, formData.dataSource])
 
-    // Close emoji picker when clicking outside
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (
-                emojiPickerRef.current &&
-                !emojiPickerRef.current.contains(event.target as Node) &&
-                emojiTriggerRef.current &&
-                !emojiTriggerRef.current.contains(event.target as Node)
-            ) {
-                setIsEmojiPickerOpen(false)
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [])
+
 
     // Auto-render preview when message or sheet data changes
     useEffect(() => {
@@ -441,46 +420,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         return () => clearTimeout(timeoutId);
     }, [formData.message, formData.contactSheetUrl, formData.sheetName, formData.dataSource])
 
-    // Sync markdown to contentEditable (only on external changes)
-    useEffect(() => {
-        if (textareaRef.current && !isTypingRef.current) {
-            const currentMD = htmlToMarkdown(textareaRef.current);
-            if (currentMD !== formData.message) {
-                // Save cursor position
-                const selection = window.getSelection();
-                let cursorOffset = 0;
-                if (selection && selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    cursorOffset = range.startOffset;
-                }
 
-                // Update content
-                textareaRef.current.innerHTML = markdownToHtml(formData.message);
-
-                // Restore cursor position
-                if (selection && textareaRef.current.firstChild) {
-                    try {
-                        const newRange = document.createRange();
-                        const textNode = textareaRef.current.firstChild;
-                        const offset = Math.min(cursorOffset, (textNode.textContent || '').length);
-                        newRange.setStart(textNode, offset);
-                        newRange.collapse(true);
-                        selection.removeAllRanges();
-                        selection.addRange(newRange);
-                    } catch (e) {
-                        // Cursor restoration failed, ignore
-                    }
-                }
-            }
-        }
-    }, [formData.message])
-
-    // Set initial content
-    useEffect(() => {
-        if (textareaRef.current && !textareaRef.current.innerHTML) {
-            textareaRef.current.innerHTML = markdownToHtml(formData.message) || '<br>';
-        }
-    }, [])
 
     // Live Preview Fetcher
     useEffect(() => {
@@ -557,13 +497,13 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
                     // Get contacts with all fields (phone, name, custom columns)
                     const parsedContacts = contactTableToParsedContacts(formData.tableContacts, formData.tableColumns)
-                    
+
                     // Store full contact data for template replacement
                     templateConfig.manualContacts = parsedContacts.map(c => ({
                         ...c,
                         jid: formatPhoneToJID(c.phone.trim())
                     }));
-                    
+
                     // targetId is just the JIDs for backwards compatibility
                     targetId = parsedContacts
                         .map(c => formatPhoneToJID(c.phone.trim()))
@@ -659,197 +599,36 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         return `0 9 * * *`
     }
 
-    // Helper: Convert Markdown to HTML for visual display
-    const markdownToHtml = (text: string) => {
-        if (!text) return '';
-
-        let html = text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-
-        html = html.replace(/\*([^\*]+)\*/g, '<b>$1</b>');
-        html = html.replace(/_([^_]+)_/g, '<i>$1</i>');
-        html = html.replace(/~([^~]+)~/g, '<s>$1</s>');
-        html = html.replace(/```([^`]+)```/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px; font-family: monospace;">$1</code>');
-
-        html = html.replace(/\n/g, '<br>');
-
-        return html;
-    }
-
-    // Helper: Convert HTML Visual back to Markdown for storage
-    const htmlToMarkdown = (element: HTMLElement, activeStyles: { bold?: boolean, italic?: boolean, strike?: boolean, code?: boolean } = {}): string => {
-        let markdown = '';
-
-        for (const node of Array.from(element.childNodes)) {
-            if (node.nodeType === Node.TEXT_NODE) {
-                markdown += node.textContent;
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                const el = node as HTMLElement;
-                const tagName = el.tagName.toLowerCase();
-                const styles = window.getComputedStyle(el);
-
-                const isBold = tagName === 'b' || tagName === 'strong' || parseInt(styles.fontWeight) >= 600 || el.style.fontWeight === 'bold';
-                const isItalic = tagName === 'i' || tagName === 'em' || styles.fontStyle === 'italic';
-                const isStrike = tagName === 's' || tagName === 'strike' || styles.textDecoration.includes('line-through');
-                const isCode = tagName === 'code';
-                const isDiv = tagName === 'div';
-
-                let content = htmlToMarkdown(el, {
-                    bold: activeStyles.bold || isBold,
-                    italic: activeStyles.italic || isItalic,
-                    strike: activeStyles.strike || isStrike,
-                    code: activeStyles.code || isCode
-                });
-
-                // Format wrapping logic - prevent redundancy
-                if (isBold && !activeStyles.bold) content = `*${content}*`;
-                if (isItalic && !activeStyles.italic) content = `_${content}_`;
-                if (isStrike && !activeStyles.strike) content = `~${content}~`;
-                if (isCode && !activeStyles.code) content = `\`\`\`${content}\`\`\``;
-
-                if (isDiv) {
-                    markdown += (markdown ? '\n' : '') + content;
-                } else if (tagName === 'br') {
-                    markdown += '\n';
-                } else {
-                    markdown += content;
-                }
+    const getPreviewContactName = () => {
+        if (formData.targetType === 'contact' && formData.contactMethod === 'manual') {
+            const firstContact = formData.tableContacts.find(c => c.phone?.trim())
+            if (firstContact) {
+                const nameCol = formData.tableColumns.find(col => col.id !== 'phone' && col.name.toLowerCase().includes('name'))
+                    || formData.tableColumns.find(col => col.id !== 'phone')
+                if (nameCol && firstContact[nameCol.id]) return firstContact[nameCol.id]
             }
         }
-
-        return markdown
-            .replace(/\*\*+/g, '*')
-            .replace(/__+/g, '_')
-            .replace(/~~+/g, '~')
-            // Don't collapse newlines - preserve them for WhatsApp formatting
-            .replace(/\n{3,}/g, '\n\n')  // Only collapse 3+ newlines to 2
-            .replace(/^\n+/, '')
-            .trimEnd();  // Use trimEnd instead of trim to preserve leading spaces
+        return 'John Doe'
     }
 
-    const insertText = (str: string) => {
-        if (!textareaRef.current) return
-        textareaRef.current.focus()
-        document.execCommand('insertText', false, str)
-        handleEditorInput()
-    }
-
-    const insertCode = () => {
-        if (!textareaRef.current) return
-        const selection = window.getSelection()
-        if (!selection) return
-
-        const selectedText = selection.toString()
-        const codeText = selectedText || 'code'
-
-        textareaRef.current.focus()
-        document.execCommand('insertHTML', false, `<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px; font-family: monospace;">${codeText}</code>&nbsp;`)
-        handleEditorInput()
-    }
-
-    const handleEditorInput = () => {
-        if (!textareaRef.current) return;
-        isTypingRef.current = true;
-
-        const markdown = htmlToMarkdown(textareaRef.current);
-        setFormData(prev => ({ ...prev, message: markdown.slice(0, 2000) }));
-
-        setTimeout(() => {
-            isTypingRef.current = false;
-        }, 100);
-    }
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-        if (e.key === ' ' || e.key === 'Enter') {
-            const selection = window.getSelection();
-            if (!selection || selection.rangeCount === 0) return;
-
-            const range = selection.getRangeAt(0);
-            const textNode = range.startContainer;
-
-            if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
-                const textBeforeCaret = textNode.textContent.slice(0, range.startOffset);
-
-                const patterns = [
-                    { regex: /\*([^*]+)\*$/, tag: 'b' },
-                    { regex: /_([^_]+)_$/, tag: 'i' },
-                    { regex: /~([^~]+)~$/, tag: 's' },
-                    { regex: /```([^`]+)```$/, tag: 'code' }
-                ];
-
-                for (const pattern of patterns) {
-                    const match = textBeforeCaret.match(pattern.regex);
-                    if (match) {
-                        e.preventDefault();
-                        const matchIndex = match.index!;
-                        const content = match[1];
-
-                        const updateRange = document.createRange();
-                        updateRange.setStart(textNode, matchIndex);
-                        updateRange.setEnd(textNode, range.startOffset);
-                        updateRange.deleteContents();
-
-                        const el = document.createElement(pattern.tag);
-                        if (pattern.tag === 'code') {
-                            el.style.cssText = "background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px; font-family: monospace;";
-                        }
-                        el.textContent = content;
-
-                        updateRange.insertNode(el);
-                        updateRange.setStartAfter(el);
-                        updateRange.setEndAfter(el);
-
-                        const spaceNode = document.createTextNode(e.key === 'Enter' ? '\n' : '\u00A0');
-                        updateRange.insertNode(spaceNode);
-                        updateRange.setStartAfter(spaceNode);
-                        updateRange.setEndAfter(spaceNode);
-
-                        selection.removeAllRanges();
-                        selection.addRange(updateRange);
-
-                        document.execCommand('removeFormat');
-                        handleEditorInput();
-                        return;
-                    }
-                }
+    const getPreviewReplacements = () => {
+        const replacements: Record<string, string> = {}
+        if (formData.targetType === 'contact' && formData.contactMethod === 'manual') {
+            const firstContact = formData.tableContacts.find(c => c.phone?.trim())
+            if (firstContact) {
+                formData.tableColumns.forEach(col => {
+                    replacements[col.name] = firstContact[col.id] || ''
+                })
             }
         }
-    }
-
-    const execCommand = (command: string, value: string | undefined = undefined) => {
-        if (!textareaRef.current) return;
-        textareaRef.current.focus();
-        document.execCommand(command, false, value);
-        handleEditorInput();
-    }
-
-    // Format WhatsApp markdown for preview
-    const formatWhatsAppText = (text: string) => {
-        if (!text) return ''
-
-        let formatted = text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-
-        // Bold: *text*
-        formatted = formatted.replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
-
-        // Italic: _text_
-        formatted = formatted.replace(/_([^_]+)_/g, '<em>$1</em>')
-
-        // Strikethrough: ~text~
-        formatted = formatted.replace(/~([^~]+)~/g, '<s>$1</s>')
-
-        // Code: ```text```
-        formatted = formatted.replace(/```([^`]+)```/g, '<code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px; font-family: monospace;">$1</code>')
-
-        // Newlines
-        formatted = formatted.replace(/\n/g, '<br>')
-
-        return formatted
+        if (formData.dataSource === 'google_sheets' && formData.csvPreview.length > 1) {
+            const headers = formData.csvPreview[0].split(',')
+            const values = formData.csvPreview[1].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v: string) => v.replace(/^"|"$/g, '').trim())
+            headers.forEach((h, i) => {
+                replacements[h.trim()] = values[i] || ''
+            })
+        }
+        return replacements
     }
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -869,79 +648,6 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
     }
 
 
-    // --- Derived State for Preview ---
-    const getPreviewContactName = (): string => {
-        // 1. First check ContactTable data (manual input)
-        if (formData.targetType === 'contact' && formData.contactMethod === 'manual') {
-            const firstContact = formData.tableContacts.find(c => c.phone?.trim())
-            if (firstContact) {
-                // Find a name-like column (not 'phone')
-                const nameCol = formData.tableColumns.find(col => 
-                    col.id !== 'phone' && col.name.toLowerCase().includes('name')
-                ) || formData.tableColumns.find(col => col.id !== 'phone')
-                
-                if (nameCol && firstContact[nameCol.id]?.trim()) {
-                    return firstContact[nameCol.id]
-                }
-            }
-        }
-        
-        // 2. Check CSV/Sheet data
-        if ((formData.contactMethod === 'csv' && formData.csvCount > 0) || (formData.contactMethod === 'sheet' && formData.sheetContactCount > 0)) {
-            const dataLine = formData.csvPreview[1] || formData.csvPreview[0]
-            if (dataLine) {
-                const parts = dataLine.split(',')
-                if (parts[0] && isNaN(Number(parts[0].trim().replace(/['\"+]/g, '')))) {
-                    return parts[0].replace(/['\"]/g, '')
-                }
-            }
-        }
-        return '{NAME}'
-    }
-
-    // Get all preview replacements from ContactTable
-    const getPreviewReplacements = (): Record<string, string> => {
-        const replacements: Record<string, string> = {}
-        
-        if (formData.targetType === 'contact' && formData.contactMethod === 'manual') {
-            const firstContact = formData.tableContacts.find(c => c.phone?.trim())
-            if (firstContact) {
-                // Add Phone
-                if (firstContact.phone) {
-                    replacements['Phone'] = firstContact.phone
-                }
-                // Add all custom columns - use col.id to access the raw ContactRow data
-                formData.tableColumns.forEach(col => {
-                    if (col.id !== 'phone') {
-                        const value = firstContact[col.id]?.trim() || ''
-                        if (value) {
-                            // Map column name to its value (case-insensitive matching)
-                            replacements[col.name] = value
-                        }
-                    }
-                })
-            }
-        }
-        
-        return replacements
-    }
-
-    const previewMessage = (() => {
-        let msg = formData.message
-            .replace(/{NAME}/g, getPreviewContactName().replace(/\"/g, ''))
-        
-        // Replace ContactTable variables ({{ColumnName}} format)
-        const replacements = getPreviewReplacements()
-        Object.entries(replacements).forEach(([key, value]) => {
-            const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi')
-            msg = msg.replace(regex, value)
-        })
-        
-        return msg
-    })()
-
-    // --- Sub-Components ---
-
 
     const SectionHeader = ({ title, desc, step }: { title: string, desc: string, step?: number }) => (
         <div className="mb-6">
@@ -959,65 +665,107 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         </div>
     )
 
+    const currentVariables = useMemo(() => {
+        if (formData.targetType === 'contact' && formData.contactMethod === 'manual' && formData.tableColumns.length > 0) {
+            return formData.tableColumns.map(col => col.name)
+        }
+        if (formData.dataSource === 'google_sheets') {
+            const headers = formData.csvPreview.length > 0 ? formData.csvPreview[0].split(',').map(c => c.trim()) : []
+            const helpers = ['TODAY', '#LOOP', '/LOOP', 'Nama', 'Status', 'index', 'TODAY_DATE', 'TODAY_NAME', 'SCHEDULE_TODAY', 'TASKS_URGENT']
+            return Array.from(new Set([...headers, ...helpers]))
+        }
+        return ['TODAY', '#LOOP', '/LOOP', 'Nama', 'Status', 'index', 'TODAY_DATE', 'TODAY_NAME', 'SCHEDULE_TODAY', 'TASKS_URGENT']
+    }, [formData.targetType, formData.contactMethod, formData.tableColumns, formData.dataSource, formData.csvPreview])
+
+    const extraToolbarItems = (
+        <div className="flex items-center gap-2">
+            <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, isDigestMode: !prev.isDigestMode }))}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors border ${formData.isDigestMode
+                    ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                    : 'text-zinc-500 hover:text-zinc-300 border-transparent hover:bg-zinc-800'
+                    }`}
+                title="Toggle Digest Mode: Group multiple rows into one message"
+            >
+                <FileText size={12} />
+                {formData.isDigestMode ? 'Digest Mode' : 'Digest Mode'}
+            </button>
+
+            {formData.isDigestMode && (
+                <button
+                    type="button"
+                    onClick={() => {
+                        const template = "📬 *DAILY DIGEST ({TODAY_DATE})*\\n\\n🗓️ *Jadwal Hari Ini ({TODAY_NAME})*\\n{SCHEDULE_TODAY}\\n\\n🧾 *Deadline ≤ 3 Hari*\\n{TASKS_URGENT}\\n\\nSemangat! 💪";
+                        setFormData(prev => ({ ...prev, message: prev.message + (prev.message ? '\n\n' : '') + template }))
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 text-xs font-medium rounded transition-colors border border-purple-500/20 animate-in fade-in slide-in-from-left-2"
+                    title="Insert Template"
+                >
+                    <RefreshCw size={12} /> Template
+                </button>
+            )}
+        </div>
+    )
+
     // --- Main Render ---
 
     return (
-        <div className="fixed inset-0 z-[100] bg-zinc-950 flex">
+        <div className="fixed inset-0 z-[100] bg-black flex">
 
-                {/* --- Left Panel: Scrollable Form --- */}
-                <div className="flex-1 flex flex-col h-full border-r border-zinc-800 relative bg-zinc-950 overflow-hidden">
-                    {/* Header */}
-                    <div className="shrink-0 bg-zinc-950/95 backdrop-blur-sm z-20 border-b border-zinc-800">
-                        <div className="max-w-6xl mx-auto px-6 py-4">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
-                                        <ChevronLeft size={20} />
-                                    </button>
-                                    <div>
-                                        <h1 className="text-xl font-semibold text-white">{reminderId ? 'Edit Reminder' : 'Create Reminder'}</h1>
-                                        <p className="text-sm text-zinc-500">Set up automated messages for your contacts</p>
-                                    </div>
+            {/* --- Left Panel: Scrollable Form --- */}
+            <div className="flex-1 flex flex-col h-full border-r border-zinc-800 relative bg-black overflow-hidden">
+                {/* Header */}
+                <div className="shrink-0 bg-black/95 backdrop-blur-sm z-20 border-b border-zinc-800">
+                    <div className="max-w-6xl mx-auto px-6 py-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors group">
+                                    <ChevronLeft size={20} className="transition-transform duration-300 group-hover:-translate-x-1" />
+                                </button>
+                                <div>
+                                    <h1 className="text-xl font-semibold text-white">{reminderId ? 'Edit Reminder' : 'Create Reminder'}</h1>
+                                    <p className="text-sm text-zinc-500">Set up automated messages for your contacts</p>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <button 
-                                        onClick={() => setIsPreviewOpen(!isPreviewOpen)}
-                                        className={`hidden lg:flex items-center gap-2 px-4 py-2 text-sm border rounded-lg font-medium transition-all ${
-                                            isPreviewOpen 
-                                                ? 'bg-zinc-800 border-zinc-700 text-white' 
-                                                : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600'
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setIsPreviewOpen(!isPreviewOpen)}
+                                    className={`hidden lg:flex items-center gap-2 px-4 py-2 text-sm border rounded-lg font-medium transition-all group ${isPreviewOpen
+                                        ? 'bg-zinc-800 border-zinc-700 text-white'
+                                        : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600'
                                         }`}
-                                    >
-                                        <Eye size={16} />
-                                        Preview
-                                    </button>
-                                    <button 
-                                        onClick={() => createMutation.mutate()} 
-                                        disabled={createMutation.isPending || !formData.name} 
-                                        className="flex items-center gap-2 px-5 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg disabled:opacity-50 transition-all"
-                                    >
-                                        <Save size={16} />
-                                        {createMutation.isPending ? 'Saving...' : (reminderId ? 'Update' : 'Save')}
-                                    </button>
-                                </div>
+                                >
+                                    <Eye size={16} className="transition-transform duration-300 group-hover:scale-110" />
+                                    Preview
+                                </button>
+                                <button
+                                    onClick={() => createMutation.mutate()}
+                                    disabled={createMutation.isPending || !formData.name}
+                                    className="flex items-center gap-2 px-5 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg disabled:opacity-50 transition-all group"
+                                >
+                                    <Save size={16} className="transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+                                    {createMutation.isPending ? 'Saving...' : (reminderId ? 'Update' : 'Save')}
+                                </button>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    {/* Scrollable Content */}
-                    <div className="flex-1 overflow-y-auto px-6 lg:px-12 py-8 pb-24 lg:pb-8">
-                        <div className="max-w-3xl mx-auto space-y-8">
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto px-6 lg:px-12 py-8 pb-24 lg:pb-8">
+                    <div className="max-w-3xl mx-auto space-y-8">
 
                         {/* 1. Basic Details */}
                         <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader step={1} title="Basic Details" desc="Name your reminder to easily identify it later." />
                             <div className="mt-5">
-                                <label className="block text-sm font-medium text-zinc-300 mb-2">Reminder Name <span className="text-red-400">*</span></label>
+                                <label className="block text-xs font-medium text-zinc-400 mb-1">Reminder Name <span className="text-red-400">*</span></label>
                                 <input
                                     type="text"
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
+                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
                                     placeholder="e.g. Daily Team Standup"
                                     required
                                 />
@@ -1031,13 +779,13 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                             <div className="mt-5 flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 w-fit">
                                 <button
                                     onClick={() => setFormData({ ...formData, targetType: 'group' })}
-                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${formData.targetType === 'group' ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all group ${formData.targetType === 'group' ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                                 >
                                     WhatsApp Groups
                                 </button>
                                 <button
                                     onClick={() => setFormData({ ...formData, targetType: 'contact' })}
-                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${formData.targetType === 'contact' ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all group ${formData.targetType === 'contact' ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                                 >
                                     Individual Contacts
                                 </button>
@@ -1046,53 +794,124 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
                             {formData.targetType === 'group' ? (
                                 <div className="space-y-4 animate-in fade-in">
-                                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Selected Groups</label>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="text-xs font-medium text-zinc-400">
+                                            Select Groups <span className="text-red-400">*</span>
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={handleSyncGroups}
+                                            disabled={isSyncingGroups}
+                                            className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 disabled:opacity-50 group"
+                                        >
+                                            <RefreshCw size={10} className={`transition-transform duration-500 ${isSyncingGroups ? "animate-spin" : "group-hover:rotate-180"}`} />
+                                            Sync Groups
+                                        </button>
+                                    </div>
 
                                     {/* Selected Chips */}
                                     <div className="flex flex-wrap gap-2 mb-2">
                                         {formData.selectedGroups.map(id => {
                                             const group = groupsData?.find(g => g.jid === id)
                                             return (
-                                                <span key={id} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full text-sm">
-                                                    {group?.name || id}
-                                                    <button onClick={() => setFormData(prev => ({ ...prev, selectedGroups: prev.selectedGroups.filter(g => g !== id) }))} className="hover:text-white">
-                                                        <X size={14} />
+                                                <div key={id} className="flex items-center gap-2 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded text-blue-200 text-xs">
+                                                    <span className="max-w-[150px] truncate">{group?.name || id}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData(prev => ({ ...prev, selectedGroups: prev.selectedGroups.filter(g => g !== id) }))}
+                                                        className="hover:text-white group"
+                                                    >
+                                                        <X size={12} className="transition-transform duration-200 group-hover:rotate-90 group-hover:scale-110" />
                                                     </button>
-                                                </span>
+                                                </div>
                                             )
                                         })}
-                                        <button
-                                            onClick={() => setIsGroupSelectorOpen(!isGroupSelectorOpen)}
-                                            className="inline-flex items-center gap-1 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-full text-sm border border-zinc-700 transition delay-75"
-                                        >
-                                            <Plus size={14} /> Add Group
-                                        </button>
                                     </div>
 
-                                    {/* Dropdown Selector */}
-                                    {isGroupSelectorOpen && (
-                                        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2 max-h-60 overflow-y-auto shadow-xl animate-in zoom-in-95">
-                                            {groupsData?.filter(g => !formData.selectedGroups.includes(g.jid)).map(group => (
-                                                <button
-                                                    key={group.jid}
-                                                    onClick={() => {
-                                                        setFormData(prev => ({
-                                                            ...prev,
-                                                            selectedGroups: [...prev.selectedGroups, group.jid]
-                                                        }))
-                                                        setIsGroupSelectorOpen(false)
-                                                    }}
-                                                    className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 rounded-md flex items-center justify-between group"
-                                                >
-                                                    {group.name}
-                                                    <Plus size={14} className="opacity-0 group-hover:opacity-100 text-zinc-500" />
-                                                </button>
-                                            ))}
-                                            {groupsData?.filter(g => !formData.selectedGroups.includes(g.jid)).length === 0 && (
-                                                <div className="p-2 text-center text-zinc-500 text-xs">No more groups available</div>
-                                            )}
+                                    {/* Group Search Dropdown */}
+                                    <div className="relative">
+                                        <div
+                                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs flex justify-between items-center cursor-pointer hover:border-zinc-600 transition-colors"
+                                            onClick={() => setIsGroupSelectorOpen(!isGroupSelectorOpen)}
+                                        >
+                                            <span className={formData.selectedGroups.length ? "text-white" : "text-zinc-500"}>
+                                                {formData.selectedGroups.length
+                                                    ? `${formData.selectedGroups.length} group(s) selected`
+                                                    : "Select groups..."}
+                                            </span>
+                                            <ChevronDown size={14} className={`text-zinc-500 transition-transform ${isGroupSelectorOpen ? 'rotate-180' : ''}`} />
                                         </div>
-                                    )}
+
+                                        {isGroupSelectorOpen && (
+                                            <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-zinc-800 rounded shadow-xl z-50 max-h-[300px] flex flex-col overflow-hidden animate-in zoom-in-95">
+                                                <div className="p-2 border-b border-zinc-800">
+                                                    <div className="relative">
+                                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
+                                                        <input
+                                                            type="text"
+                                                            value={groupSearchTerm}
+                                                            onChange={(e) => setGroupSearchTerm(e.target.value)}
+                                                            placeholder="Search groups..."
+                                                            className="w-full pl-8 pr-3 py-1.5 bg-zinc-900 rounded text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 border border-zinc-800 focus:border-blue-500/50"
+                                                            autoFocus
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="flex-1 overflow-y-auto p-1">
+                                                    {(() => {
+                                                        const filtered = groupsData?.filter(g =>
+                                                            g.name?.toLowerCase().includes(groupSearchTerm.toLowerCase()) ||
+                                                            g.jid?.toLowerCase().includes(groupSearchTerm.toLowerCase())
+                                                        ) || []
+
+                                                        if (filtered.length === 0) {
+                                                            return <div className="p-3 text-center text-zinc-500 text-xs">No groups found</div>
+                                                        }
+
+                                                        return filtered.map(g => {
+                                                            const isSelected = formData.selectedGroups.includes(g.jid)
+                                                            return (
+                                                                <button
+                                                                    key={g.jid}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (isSelected) {
+                                                                            setFormData(prev => ({ ...prev, selectedGroups: prev.selectedGroups.filter(id => id !== g.jid) }))
+                                                                        } else {
+                                                                            setFormData(prev => ({ ...prev, selectedGroups: [...prev.selectedGroups, g.jid] }))
+                                                                        }
+                                                                    }}
+                                                                    className={`w-full flex items-center gap-3 p-2 rounded text-left transition-colors group ${isSelected ? 'bg-blue-500/10' : 'hover:bg-zinc-800'}`}
+                                                                >
+                                                                    <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+                                                                        <Users size={14} className="text-zinc-400" />
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="text-xs font-medium text-zinc-200 truncate">
+                                                                            {g.name || 'Unnamed Group'}
+                                                                        </div>
+                                                                        <div className="text-[10px] text-zinc-500 truncate">
+                                                                            {g.jid}
+                                                                        </div>
+                                                                    </div>
+                                                                    {isSelected ? (
+                                                                        <div className="w-4 h-4 flex items-center justify-center text-blue-500">
+                                                                            <Check size={12} strokeWidth={3} />
+                                                                        </div>
+                                                                    ) : (
+                                                                        <Plus size={14} className="text-zinc-500 group-hover:text-white transition-colors" />
+                                                                    )}
+                                                                </button>
+                                                            )
+                                                        })
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="text-[10px] text-zinc-600 px-1">
+                                        Auto-filled when API detected
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="space-y-4 animate-in fade-in">
@@ -1105,9 +924,9 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                             <button
                                                 key={m.id}
                                                 onClick={() => setFormData({ ...formData, contactMethod: m.id as any })}
-                                                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition-all ${formData.contactMethod === m.id ? 'border-blue-600 text-blue-500' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+                                                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition-all group ${formData.contactMethod === m.id ? 'border-blue-600 text-blue-500' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
                                             >
-                                                <m.icon size={14} /> {m.label}
+                                                <m.icon size={14} className="transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-0.5" /> {m.label}
                                             </button>
                                         ))}
                                     </div>
@@ -1142,9 +961,9 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                     if (reminderId) params.set('edit', reminderId)
                                                     router.push(`/dashboard/reminders/create/contacts?${params.toString()}`)
                                                 }}
-                                                className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                                                className="text-xs text-blue-400 hover:text-blue-300 hover:underline group inline-flex items-center gap-1"
                                             >
-                                                Open full page editor →
+                                                Open full page editor <ArrowRight size={12} className="transition-transform duration-300 group-hover:translate-x-1" />
                                             </button>
                                         </div>
                                     )}
@@ -1210,24 +1029,23 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader step={3} title="Message Content" desc="Choose how to create your message - simple text or dynamic data from Google Sheets." />
                             <div className="mt-5 space-y-4">
-                                <button
-                                    onClick={() => setFormData({ ...formData, dataSource: formData.dataSource === 'static' ? 'google_sheets' : 'static' })}
-                                    className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all relative overflow-hidden group
-                                    ${formData.dataSource === 'google_sheets' ? 'bg-emerald-500/10 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${formData.dataSource === 'google_sheets' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                                            <Database size={24} />
-                                        </div>
-                                        <div className="text-left">
-                                            <div className={`font-semibold text-base mb-1 ${formData.dataSource === 'google_sheets' ? 'text-emerald-400' : 'text-zinc-200'}`}>Get Data from Google Sheets</div>
-                                            <div className="text-xs text-zinc-500">Pull data from your spreadsheet and send personalized messages</div>
-                                        </div>
-                                    </div>
-                                    <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all ${formData.dataSource === 'google_sheets' ? 'bg-emerald-500 border-emerald-500 text-white scale-110' : 'border-zinc-600 group-hover:border-zinc-500'}`}>
-                                        {formData.dataSource === 'google_sheets' && <Check size={14} />}
-                                    </div>
-                                </button>
+                                <div className="flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 w-fit mb-4">
+                                    {[
+                                        { id: 'static', label: 'Simple Text', icon: FileText },
+                                        { id: 'google_sheets', label: 'Google Sheets', icon: Database }
+                                    ].map(mode => (
+                                        <button
+                                            key={mode.id}
+                                            onClick={() => setFormData({ ...formData, dataSource: mode.id as any })}
+                                            className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all group ${formData.dataSource === mode.id ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                        >
+                                            <mode.icon size={14} className="transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6" /> {mode.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="text-[10px] text-zinc-500 mb-4 italic">
+                                    {formData.dataSource === 'static' ? 'Send a simple text message.' : 'Pull dynamic data from a spreadsheet.'}
+                                </div>
 
                                 {formData.dataSource === 'google_sheets' && (
                                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-6 space-y-6 animate-in fade-in slide-in-from-top-2">
@@ -1235,7 +1053,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                         {/* 1. Connection Inputs */}
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div className="md:col-span-2 space-y-2">
-                                                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Google Sheets URL</label>
+                                                <label className="block text-xs font-medium text-zinc-400 mb-1">Google Sheets URL</label>
                                                 <div className="relative">
                                                     <Database className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
                                                     <input
@@ -1243,7 +1061,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                         value={formData.contactSheetUrl}
                                                         onChange={e => setFormData({ ...formData, contactSheetUrl: e.target.value, sheetContactCount: 0 })}
                                                         placeholder="https://docs.google.com/spreadsheets/d/..."
-                                                        className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:ring-1 focus:ring-emerald-500/50 outline-none text-sm transition-all"
+                                                        className="w-full pl-10 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white focus:ring-1 focus:ring-emerald-500/50 outline-none text-xs transition-all"
                                                     />
                                                 </div>
                                             </div>
@@ -1280,7 +1098,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                         <select
                                                             value={formData.sheetName}
                                                             onChange={e => setFormData({ ...formData, sheetName: e.target.value })}
-                                                            className="w-full px-4 py-2.5 bg-zinc-900 border border-emerald-500/30 rounded-lg text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none text-sm transition-all cursor-pointer appearance-none shadow-[0_0_15px_rgba(16,185,129,0.05)]"
+                                                            className="w-full px-3 py-2 bg-zinc-800 border border-emerald-500/30 rounded text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none text-xs transition-all cursor-pointer appearance-none shadow-[0_0_15px_rgba(16,185,129,0.05)]"
                                                         >
                                                             <option value="" disabled>Select a tab...</option>
                                                             {availableTabs.map(tab => (
@@ -1295,7 +1113,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                             value={formData.sheetName}
                                                             onChange={e => setFormData({ ...formData, sheetName: e.target.value })}
                                                             placeholder={isLoadingTabs ? "Detecting tabs..." : "e.g. Sheet1"}
-                                                            className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none text-sm transition-all"
+                                                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none text-xs transition-all"
                                                             disabled={isLoadingTabs}
                                                         />
                                                     )}
@@ -1375,9 +1193,9 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                         toast.error('Failed to fetch. Check permissions & tab name.', { id: toastId })
                                                     }
                                                 }}
-                                                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2"
+                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 group"
                                             >
-                                                <Database size={14} /> Check Connection
+                                                <Database size={14} className="transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" /> Check Connection
                                             </button>
                                         </div>
 
@@ -1434,9 +1252,9 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                 <button
                                                     type="button"
                                                     onClick={() => setFormData({ ...formData, useAdvancedFilters: !formData.useAdvancedFilters })}
-                                                    className={`w-11 h-6 rounded-full p-0.5 transition-colors ${formData.useAdvancedFilters ? 'bg-emerald-600' : 'bg-zinc-700'}`}
+                                                    className={`w-11 h-6 rounded-full p-0.5 transition-colors group ${formData.useAdvancedFilters ? 'bg-emerald-600' : 'bg-zinc-700'}`}
                                                 >
-                                                    <div className={`w-5 h-5 bg-white rounded-full transition-transform ${formData.useAdvancedFilters ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                    <div className={`w-5 h-5 bg-white rounded-full transition-transform duration-300 group-hover:scale-110 ${formData.useAdvancedFilters ? 'translate-x-5' : 'translate-x-0'}`} />
                                                 </button>
                                             </div>
 
@@ -1461,7 +1279,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                                     sort: e.target.value ? { column: e.target.value, order: formData.sort?.order || 'asc' } : null
                                                                 })}
                                                                 placeholder="Column name (e.g. waktu)"
-                                                                className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-white text-sm focus:ring-1 focus:ring-emerald-500/50 outline-none"
+                                                                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:ring-1 focus:ring-emerald-500/50 outline-none"
                                                             />
                                                             <select
                                                                 value={formData.sort?.order || 'asc'}
@@ -1469,7 +1287,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                                     ...formData,
                                                                     sort: formData.sort ? { ...formData.sort, order: e.target.value as 'asc' | 'desc' } : null
                                                                 })}
-                                                                className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-white text-sm focus:ring-1 focus:ring-emerald-500/50 outline-none"
+                                                                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:ring-1 focus:ring-emerald-500/50 outline-none"
                                                                 disabled={!formData.sort?.column}
                                                             >
                                                                 <option value="asc">Ascending</option>
@@ -1485,26 +1303,26 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                     {/* 5. Trigger Inputs */}
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                                                         <div className="space-y-2">
-                                                            <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Trigger Column Header</label>
+                                                            <label className="block text-xs font-medium text-zinc-400 mb-1">Trigger Column Header</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
                                                                     value={formData.triggerColumn}
                                                                     onChange={e => setFormData({ ...formData, triggerColumn: e.target.value })}
                                                                     placeholder="Status"
-                                                                    className="w-full pl-4 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all font-medium"
+                                                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:ring-1 focus:ring-emerald-500/50 outline-none transition-all font-medium"
                                                                 />
                                                             </div>
                                                             <p className="text-[10px] text-zinc-500">Column to check (e.g. "Status")</p>
                                                         </div>
                                                         <div className="space-y-2">
-                                                            <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Trigger Value</label>
+                                                            <label className="block text-xs font-medium text-zinc-400 mb-1">Trigger Value</label>
                                                             <input
                                                                 type="text"
                                                                 value={formData.triggerValue}
                                                                 onChange={e => setFormData({ ...formData, triggerValue: e.target.value })}
                                                                 placeholder="SEND"
-                                                                className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-emerald-400 placeholder-zinc-700 font-bold focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
+                                                                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-emerald-400 text-xs font-bold placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                                                             />
                                                             <p className="text-[10px] text-zinc-500">Value to match (e.g. "SEND")</p>
                                                         </div>
@@ -1525,56 +1343,34 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                             <SectionHeader step={4} title="Schedule" desc="When should this reminder run?" />
                             <div className="mt-5 space-y-6">
                                 {/* Schedule Type Selector */}
-                                <div className="grid grid-cols-3 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, frequency: 'now' as any })}
-                                        className={`p-4 rounded-xl border transition-all text-left ${formData.frequency === 'now' ? 'bg-cyan-500/20 border-cyan-500 shadow-lg shadow-cyan-500/20' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}
-                                    >
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className={`p-1.5 rounded-lg ${formData.frequency === 'now' ? 'bg-cyan-500/30 text-cyan-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                                                <ArrowRight size={16} />
-                                            </div>
-                                            <span className={`font-semibold text-sm ${formData.frequency === 'now' ? 'text-cyan-400' : 'text-zinc-400'}`}>Send Now</span>
-                                        </div>
-                                        <div className={`text-xs ${formData.frequency === 'now' ? 'text-cyan-300/80' : 'text-zinc-500'}`}>Send immediately</div>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, frequency: 'once' as any })}
-                                        className={`p-4 rounded-xl border transition-all text-left ${formData.frequency === 'once' || formData.frequency === 'daily' ? 'bg-blue-500/20 border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}
-                                    >
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className={`p-1.5 rounded-lg ${formData.frequency === 'once' || formData.frequency === 'daily' ? 'bg-blue-500/30 text-blue-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                                                <Calendar size={16} />
-                                            </div>
-                                            <span className={`font-semibold text-sm ${formData.frequency === 'once' || formData.frequency === 'daily' ? 'text-blue-400' : 'text-zinc-400'}`}>Once / Daily</span>
-                                        </div>
-                                        <div className={`text-xs ${formData.frequency === 'once' || formData.frequency === 'daily' ? 'text-blue-300/80' : 'text-zinc-500'}`}>Schedule or repeat</div>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, frequency: 'weekly' as any })}
-                                        className={`p-4 rounded-xl border transition-all text-left ${formData.frequency === 'weekly' ? 'bg-purple-500/20 border-purple-500 shadow-lg shadow-purple-500/20' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}
-                                    >
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className={`p-1.5 rounded-lg ${formData.frequency === 'weekly' ? 'bg-purple-500/30 text-purple-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                                                <RefreshCw size={16} />
-                                            </div>
-                                            <span className={`font-semibold text-sm ${formData.frequency === 'weekly' ? 'text-purple-400' : 'text-zinc-400'}`}>Weekly</span>
-                                        </div>
-                                        <div className={`text-xs ${formData.frequency === 'weekly' ? 'text-purple-300/80' : 'text-zinc-500'}`}>Repeat weekly</div>
-                                    </button>
+                                <div className="flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 w-fit">
+                                    {[
+                                        { id: 'now', label: 'Send Now', icon: ArrowRight },
+                                        { id: 'once', label: 'Once / Daily', icon: Calendar },
+                                        { id: 'weekly', label: 'Weekly', icon: RefreshCw }
+                                    ].map(mode => (
+                                        <button
+                                            key={mode.id}
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, frequency: mode.id as any })}
+                                            className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all group ${(mode.id === 'now' && formData.frequency === 'now') ||
+                                                (mode.id === 'once' && (formData.frequency === 'once' || formData.frequency === 'daily')) ||
+                                                (mode.id === 'weekly' && formData.frequency === 'weekly')
+                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                : 'text-zinc-400 hover:text-zinc-200'
+                                                }`}
+                                        >
+                                            <mode.icon size={14} className="transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6" /> {mode.label}
+                                        </button>
+                                    ))}
                                 </div>
                                 {/* Once/Daily Options */}
                                 {(formData.frequency === 'once' || formData.frequency === 'daily') && (
                                     <div className="space-y-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg animate-in fade-in slide-in-from-top-2">
                                         {/* Repeat Daily Toggle */}
-                                        <div className="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg border border-zinc-800">
+                                        <div className="flex items-center justify-between p-2.5 bg-zinc-800 rounded-lg border border-zinc-700">
                                             <div>
-                                                <div className="font-medium text-white text-sm">Repeat Daily</div>
+                                                <div className="font-medium text-white text-xs">Repeat Daily</div>
                                                 <div className="text-xs text-zinc-500">Send every day at the same time</div>
                                             </div>
                                             <button
@@ -1595,7 +1391,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                     value={formData.startDate}
                                                     min={today}
                                                     onChange={e => setFormData({ ...formData, startDate: e.target.value })}
-                                                    className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white outline-none focus:border-blue-500 transition-colors"
+                                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
                                                 />
                                             </div>
                                             <div className="space-y-2">
@@ -1604,7 +1400,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                     type="time"
                                                     value={formData.time}
                                                     onChange={e => setFormData({ ...formData, time: e.target.value })}
-                                                    className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white outline-none focus:border-blue-500 transition-colors"
+                                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
                                                 />
                                             </div>
                                         </div>
@@ -1662,164 +1458,109 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                             <SectionHeader step={5} title="Message" desc="Compose your message with formatting and variables." />
 
                             <div className="mt-5 bg-zinc-800/50 border border-zinc-700 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-600/50 transition-all">
-                                {/* Digest Mode Toggle */}
-                                <div className="px-4 py-3 border-b border-zinc-800 bg-[#18181b]/50 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`p-1.5 rounded-md ${formData.isDigestMode ? 'bg-purple-500/20 text-purple-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                                            <FileText size={16} />
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-medium text-zinc-200">Group Multiple Rows?</div>
-                                            <div className="text-[10px] text-zinc-500">Combine all matching rows into one message (useful for daily summaries)</div>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => setFormData({ ...formData, isDigestMode: !formData.isDigestMode })}
-                                        className={`w-10 h-6 rounded-full p-1 transition-colors ${formData.isDigestMode ? 'bg-purple-600' : 'bg-zinc-700'}`}
-                                    >
-                                        <div className={`w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${formData.isDigestMode ? 'translate-x-4' : 'translate-x-0'}`} />
-                                    </button>
+
+
+                                {/* Shared Editor - Dual View */}
+                                <div className="relative">
+                                    <SharedMessageEditor
+                                        value={formData.message}
+                                        onChange={(val) => setFormData({ ...formData, message: val })}
+                                        variables={currentVariables}
+                                        isExpanded={false}
+                                        onToggleExpand={() => setIsEditorExpanded(true)}
+                                        variableWrapper={['{{', '}}']}
+                                        extraToolbarItems={extraToolbarItems}
+                                        placeholder="Type your reminder message here..."
+                                    />
+                                    {isEditorExpanded && (
+                                        <>
+                                            <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsEditorExpanded(false)} />
+                                            <div className="fixed top-[5vh] bottom-[5vh] left-1/2 -translate-x-1/2 w-[95vw] max-w-5xl z-[200] flex flex-col animate-in zoom-in-95 duration-300">
+                                                <SharedMessageEditor
+                                                    value={formData.message}
+                                                    onChange={(val) => setFormData({ ...formData, message: val })}
+                                                    variables={currentVariables}
+                                                    isExpanded={true}
+                                                    onToggleExpand={() => setIsEditorExpanded(false)}
+                                                    variableWrapper={['{{', '}}']}
+                                                    extraToolbarItems={extraToolbarItems}
+                                                    placeholder="Type your reminder message here..."
+                                                />
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
 
-                                {/* Toolbar */}
-                                <div className="bg-[#18181b] p-2 flex items-center justify-between border-b border-zinc-800">
-                                    <div className="flex items-center gap-1 relative">
-                                        <button onClick={() => execCommand('bold')} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded" title="Bold"><Bold size={14} /></button>
-                                        <button onClick={() => execCommand('italic')} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded" title="Italic"><Italic size={14} /></button>
-                                        <button onClick={() => execCommand('strikeThrough')} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded" title="Strikethrough"><Strikethrough size={14} /></button>
-                                        <button onClick={() => insertCode()} className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded" title="Code"><Code size={14} /></button>
-                                        <div className="w-[1px] h-4 bg-zinc-700 mx-1" />
-                                        <button
-                                            ref={emojiTriggerRef}
-                                            onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
-                                            className={`p-1.5 rounded transition-all ${isEmojiPickerOpen ? 'text-yellow-400 bg-yellow-400/10' : 'text-zinc-400 hover:text-yellow-400 hover:bg-zinc-800'}`}
-                                            title="Insert Emoji"
-                                        >
-                                            <Smile size={14} />
-                                        </button>
-
-                                        {/* Rich Emoji Picker */}
-                                        {isEmojiPickerOpen && (
-                                            <div
-                                                ref={emojiPickerRef}
-                                                className="absolute left-0 top-full mt-2 z-50 w-80 bg-[#1f2c34]/95 backdrop-blur-xl border border-zinc-700/50 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 origin-top-left"
-                                            >
-                                                <div className="flex bg-[#111b21]/50 p-1.5 gap-1 overflow-x-auto custom-scrollbar border-b border-zinc-700/30 no-scrollbar">
-                                                    {Object.keys(EMOJI_CATEGORIES).map((cat) => (
-                                                        <button
-                                                            key={cat}
-                                                            type="button"
-                                                            onClick={() => setActiveEmojiCategory(cat as any)}
-                                                            className={`p-2 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ${activeEmojiCategory === cat
-                                                                ? 'bg-[#2a3942] text-[#00a884] shadow-sm ring-1 ring-[#00a884]/20'
-                                                                : 'text-[#8696a0] hover:bg-[#2a3942]/30 hover:text-zinc-300'
-                                                                }`}
-                                                        >
-                                                            {CATEGORY_ICONS[cat] || <Smile size={18} />}
-                                                        </button>
-                                                    ))}
+                                {/* Image Attachment - Styled like Campaign */}
+                                <div className="p-4 border-t border-zinc-700/50 bg-zinc-900/30">
+                                    {!formData.imagePreview ? (
+                                        <label className="flex items-center justify-center gap-3 w-full py-4 bg-zinc-800/50 border-2 border-dashed border-zinc-700/50 rounded-xl cursor-pointer hover:bg-zinc-800 transition-all group hover:border-blue-500/40">
+                                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
+                                                <ImageIcon size={20} className="text-zinc-500 group-hover:text-blue-500 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[-10deg]" />
+                                            </div>
+                                            <div className="text-left">
+                                                <span className="text-sm font-bold text-zinc-300 group-hover:text-white block">Attach Media</span>
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-tighter">Images, flyers, or promo banners</span>
+                                            </div>
+                                            <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                                        </label>
+                                    ) : (
+                                        <div className="flex items-center justify-between p-3 bg-zinc-950 border border-zinc-800 rounded-xl group animate-in slide-in-from-top-2 duration-300">
+                                            <div className="flex items-center gap-4">
+                                                <div
+                                                    className="w-14 h-14 rounded-lg border border-zinc-800 overflow-hidden cursor-pointer hover:border-blue-500/50 transition-colors shrink-0"
+                                                    onClick={() => window.open(formData.imagePreview as string, '_blank')}
+                                                >
+                                                    <img src={formData.imagePreview} className="w-full h-full object-cover" />
                                                 </div>
-                                                <div className="h-64 overflow-y-auto p-3 custom-scrollbar bg-[#111b21]">
-                                                    <div className="grid grid-cols-8 gap-y-2 gap-x-1">
-                                                        {EMOJI_CATEGORIES[activeEmojiCategory].map((emoji) => (
-                                                            <button
-                                                                key={emoji}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    insertText(emoji)
-                                                                    setIsEmojiPickerOpen(false)
-                                                                }}
-                                                                className="w-8 h-8 flex items-center justify-center text-xl rounded-lg hover:bg-[#2a3942] cursor-pointer transition-all hover:scale-110 active:scale-95"
-                                                            >
-                                                                {emoji}
-                                                            </button>
-                                                        ))}
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                        <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold rounded uppercase tracking-wider border border-emerald-500/20">Media Attached</div>
+                                                        <span className="text-xs font-bold text-zinc-300">Image file selected</span>
                                                     </div>
+                                                    <p className="text-[10px] text-zinc-500">This media will be sent as a caption.</p>
                                                 </div>
                                             </div>
-                                        )}
-
-                                        {formData.isDigestMode && (
-                                            <>
-                                                <div className="w-[1px] h-4 bg-zinc-700 mx-1" />
+                                            <div className="flex items-center gap-2">
                                                 <button
-                                                    onClick={() => insertText('📬 *DAILY DIGEST ({TODAY_DATE})*\n\n🗓️ *Jadwal Hari Ini ({TODAY_NAME})*\n{SCHEDULE_TODAY}\n\n🧾 *Deadline ≤ 3 Hari*\n{TASKS_URGENT}\n\nSemangat! 💪')}
-                                                    className="flex items-center gap-1 px-2 py-1 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 text-xs font-medium rounded transition-colors border border-purple-500/20"
+                                                    type="button"
+                                                    onClick={() => window.open(formData.imagePreview as string, '_blank')}
+                                                    className="flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-bold transition-all border border-zinc-800 focus:ring-2 focus:ring-blue-500/20"
                                                 >
-                                                    <RefreshCw size={12} /> Insert Academic Template
+                                                    <Eye size={14} />
+                                                    View
                                                 </button>
-                                            </>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
-                                        <button
-                                            onClick={() => fileInputRef.current?.click()}
-                                            className={`flex items-center gap-2 px-2 py-1 rounded text-xs font-medium transition-colors ${formData.imagePreview ? 'bg-blue-600/10 text-blue-400' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
-                                        >
-                                            <ImageIcon size={14} /> {formData.imagePreview ? 'Change Image' : 'Add Image'}
-                                        </button>
-                                        {formData.imagePreview && (
-                                            <button
-                                                onClick={() => setFormData({ ...formData, imageFile: null, imagePreview: null })}
-                                                className="p-1 hover:bg-red-500/10 text-red-400 rounded transition-colors"
-                                                title="Remove Image"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div
-                                    ref={textareaRef}
-                                    contentEditable
-                                    onInput={handleEditorInput}
-                                    onKeyDown={handleKeyDown}
-                                    className="w-full bg-transparent p-4 min-h-[200px] text-zinc-200 focus:outline-none font-mono text-sm leading-relaxed resize-y overflow-y-auto"
-                                    style={{ maxHeight: '400px' }}
-                                    spellCheck={false}
-                                    suppressContentEditableWarning
-                                />
-
-                                <div className="px-3 py-2 bg-[#18181b] border-t border-zinc-800 flex items-center justify-between gap-2 text-[10px]">
-                                    <div className="flex items-center gap-2 overflow-x-auto flex-1">
-                                        <span className="text-zinc-500 uppercase mr-2 font-bold flex-shrink-0">Variables:</span>
-                                        {/* Dynamic variables from ContactTable */}
-                                        {formData.targetType === 'contact' && formData.contactMethod === 'manual' && formData.tableColumns.length > 0 ? (
-                                            formData.tableColumns.map(col => (
-                                                <button key={col.id} onClick={() => insertText(`{{${col.name}}}`)} className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-blue-400 rounded hover:bg-zinc-700 flex-shrink-0">{`{{${col.name}}}`}</button>
-                                            ))
-                                        ) : (
-                                            // Default variables for Google Sheets mode
-                                            ['{{#LOOP}}', '{{/LOOP}}', '{{Nama}}', '{{Status}}', '{{index}}', '{TODAY}'].map(tag => (
-                                                <button key={tag} onClick={() => insertText(tag)} className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-blue-400 rounded hover:bg-zinc-700 flex-shrink-0">{tag}</button>
-                                            ))
-                                        )}
-                                    </div>
-                                    <div className={`text-[10px] font-medium tracking-wide flex-shrink-0 ${formData.message.length >= 2000 ? 'text-red-500' : 'text-zinc-600'}`}>
-                                        {formData.message.length} / 2000
-                                    </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData({ ...formData, imageFile: null, imagePreview: null })}
+                                                    className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                                                    title="Remove media"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </section>
 
-                        </div>
-                    </div>
-
-                    {/* Mobile Save Button */}
-                    <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 z-30">
-                        <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !formData.name} className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg disabled:opacity-50">
-                            {createMutation.isPending
-                                ? (reminderId ? 'Updating...' : 'Saving...')
-                                : (reminderId ? 'Update Reminder' : 'Save Reminder')
-                            } <Save size={18} />
-                        </button>
                     </div>
                 </div>
 
-                {/* --- Right Panel: Preview - Toggle with button --- */}
-                {isPreviewOpen && (
+                {/* Mobile Save Button */}
+                <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 z-30">
+                    <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !formData.name} className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg disabled:opacity-50">
+                        {createMutation.isPending
+                            ? (reminderId ? 'Updating...' : 'Saving...')
+                            : (reminderId ? 'Update Reminder' : 'Save Reminder')
+                        } <Save size={18} />
+                    </button>
+                </div>
+            </div>
+
+            {/* --- Right Panel: Preview - Toggle with button --- */}
+            {isPreviewOpen && (
                 <div className="hidden lg:flex w-[380px] shrink-0 bg-[#0b141a] relative flex-col h-full border-l border-zinc-800 animate-in slide-in-from-right-5 duration-200">
                     <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10">
                         <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center overflow-hidden">
@@ -1917,7 +1658,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white"><ArrowRight size={16} /></div>
                     </div>
                 </div>
-                )}
+            )}
         </div>
     )
 }

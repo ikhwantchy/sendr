@@ -102,7 +102,7 @@ export default function BotsPage() {
     }
 
     return (
-        <div className="p-8 min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100">
+        <div className="p-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100">
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>
@@ -112,7 +112,7 @@ export default function BotsPage() {
                             <Loader2 className="w-4 h-4 text-blue-500 dark:text-blue-400 animate-spin" />
                         )}
                     </div>
-                    <p className="text-zinc-500 text-sm mt-1">Manage your automation instances</p>
+
                 </div>
                 <div className="flex items-center gap-3">
                     {/* Refresh Button */}
@@ -314,7 +314,7 @@ export default function BotsPage() {
                     </div>
                 )
             }
-        </div >
+        </div>
     )
 }
 
@@ -327,7 +327,16 @@ function StatusBadge({ status }: { status: string }) {
     }
 
     return (
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border uppercase tracking-wide ${styles[status] || styles.disconnected}`}>
+        <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border uppercase tracking-wide ${styles[status] || styles.disconnected}`}>
+            {status === 'connected' && (
+                <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+            )}
+            {status === 'connecting' && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
+            {status === 'disconnected' && <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />}
+            {status === 'error' && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
             {status}
         </span>
     )

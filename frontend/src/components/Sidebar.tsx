@@ -1,37 +1,46 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useState, useEffect, useMemo } from 'react'
 import {
-    LayoutDashboard,
-    Bot,
-    BarChart3,
-    Users,
-    LogOut,
-    Menu,
+    SquaresFour,      // Dashboard
+    Robot,             // Bots
+    ChartBar,          // Analytics
+    Users,             // Users
+    ListBullets,       // Audit Logs
+    HardDrives,        // System
+    ShieldCheck,       // Security
+    Key,               // API Key
+    GearSix,           // Settings
+    SignOut,
+    List,
     X,
-    ChevronLeft,
-    ChevronRight,
-    Settings,
-    Key,
-    FileText,
-    Server,
-    Shield,
+    CaretLeft,
+    CaretDown,
+    CaretRight,
     Sun,
-    Moon
-} from 'lucide-react'
+    Moon,
+    IconProps
+} from '@phosphor-icons/react'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useTheme } from 'next-themes'
+import '@/components/ui/animated-icon.css'
+
+// Phosphor icon type
+type PhosphorIcon = React.ForwardRefExoticComponent<IconProps & React.RefAttributes<SVGSVGElement>>
 
 export default function Sidebar() {
     const pathname = usePathname()
     const router = useRouter()
+    const searchParams = useSearchParams()
     const { user, hasModuleAccess, isAdmin } = usePermissions()
     const { resolvedTheme, setTheme } = useTheme()
     const [isExpanded, setIsExpanded] = useState(true)
     const [isMobileOpen, setIsMobileOpen] = useState(false)
     const [showUserMenu, setShowUserMenu] = useState(false)
+    const [isSecurityExpanded, setIsSecurityExpanded] = useState(false)
+    const [isSystemExpanded, setIsSystemExpanded] = useState(false)
     const [mounted, setMounted] = useState(false)
 
     useEffect(() => {
@@ -44,6 +53,24 @@ export default function Sidebar() {
 
     useEffect(() => {
         setIsMobileOpen(false)
+
+        // Auto-collapse sidebar if on bot detail page
+        if (pathname?.match(/^\/dashboard\/bots\/[^/]+$/)) {
+            setIsExpanded(false)
+        } else {
+            // Restore from localStorage if we navigate away from bot detail page
+            const savedState = localStorage.getItem('sidebarExpanded')
+            setIsExpanded(savedState !== 'false')
+        }
+
+        // Auto-expand security submenu if on security page
+        if (pathname?.startsWith('/dashboard/security')) {
+            setIsSecurityExpanded(true)
+        }
+        // Auto-expand system submenu if on system page
+        if (pathname?.startsWith('/dashboard/system')) {
+            setIsSystemExpanded(true)
+        }
     }, [pathname])
 
     const toggleSidebar = () => {
@@ -59,108 +86,102 @@ export default function Sidebar() {
         router.push('/login')
     }
 
+    // Navigation with Phosphor Icons (same as Resend.com)
     const navigation = useMemo(() => {
-        const base = [
-            {
-                name: 'Dashboard',
-                href: '/dashboard',
-                icon: LayoutDashboard,
-            },
-            {
-                name: 'Bots',
-                href: '/dashboard/bots',
-                icon: Bot,
-            },
+        const base: Array<{ name: string, href: string, icon: PhosphorIcon }> = [
+            { name: 'Dashboard', href: '/dashboard', icon: SquaresFour },
+            { name: 'Bots', href: '/dashboard/bots', icon: Robot },
         ]
 
         if (!user) return base
 
-        // Module Access for Users
         if (hasModuleAccess('analytics')) {
-            base.push({ name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 })
+            base.push({ name: 'Analytics', href: '/dashboard/analytics', icon: ChartBar })
         }
         return base
     }, [user, hasModuleAccess])
 
-    const adminTopNavigation = [
-        {
-            name: 'Users',
-            href: '/dashboard/users',
-            icon: Users,
-            adminOnly: true
-        },
-        {
-            name: 'Audit Logs',
-            href: '/dashboard/audit-logs',
-            icon: FileText,
-            adminOnly: true
-        },
-        {
-            name: 'System',
-            href: '/dashboard/system',
-            icon: Server,
-            adminOnly: true
-        },
-        {
-            name: 'Security',
-            href: '/dashboard/security',
-            icon: Shield,
-            adminOnly: true
-        },
+    const adminTopNavigation: Array<{ name: string, href: string, icon: PhosphorIcon, adminOnly?: boolean, hasSubmenu?: boolean, submenuType?: 'security' | 'system' }> = [
+        { name: 'Users', href: '/dashboard/users', icon: Users, adminOnly: true },
+        { name: 'Audit Logs', href: '/dashboard/audit-logs', icon: ListBullets, adminOnly: true },
+        { name: 'System', href: '/dashboard/system', icon: HardDrives, adminOnly: true, hasSubmenu: true, submenuType: 'system' },
+        { name: 'Security', href: '/dashboard/security', icon: ShieldCheck, adminOnly: true, hasSubmenu: true, submenuType: 'security' },
+    ]
+
+    // Security sub-navigation items
+    const securitySubNavigation = [
+        { name: 'Active Sessions', href: '/dashboard/security?tab=sessions' },
+        { name: 'Two-Factor Auth', href: '/dashboard/security?tab=2fa' },
+        { name: 'Telegram Alerts', href: '/dashboard/security?tab=alerts' },
+        { name: 'Security Logs', href: '/dashboard/security?tab=logs' },
+    ]
+
+    // System sub-navigation items
+    const systemSubNavigation = [
+        { name: 'Health Check', href: '/dashboard/system?tab=health' },
+        { name: 'Backup & Restore', href: '/dashboard/system?tab=backup' },
+        { name: 'Maintenance', href: '/dashboard/system?tab=maintenance' },
     ]
 
     const bottomNavigation = useMemo(() => {
         if (!isAdmin) return []
         return [
-            {
-                name: 'Get API key',
-                href: '/dashboard/api-keys',
-                icon: Key,
-            },
-            {
-                name: 'Settings',
-                href: '/dashboard/settings',
-                icon: Settings,
-            },
+            { name: 'Get API key', href: '/dashboard/api-keys', icon: Key },
+            { name: 'Settings', href: '/dashboard/settings', icon: GearSix },
         ]
     }, [isAdmin])
 
+    // Animated Icon Component (inline for simplicity)
+    // Animated Icon Component using Tailwind group-hover
+    const AnimatedNavIcon = ({ Icon, isActive }: { Icon: PhosphorIcon, isActive: boolean }) => {
+        return (
+            <div className="relative flex items-center justify-center">
+                <Icon
+                    size={20}
+                    weight={isActive ? "fill" : "regular"}
+                    className={`transition-all duration-300 ease-out transform group-hover:rotate-12 group-hover:scale-110 ${isActive
+                        ? 'text-blue-500 rotate-0'
+                        : 'text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-200'
+                        }`}
+                />
+            </div>
+        )
+    }
+
     const SidebarContent = () => (
         <>
-            <div className="flex items-center justify-between px-4 py-6 border-b border-zinc-200 dark:border-zinc-800/50">
-                <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
-                        <img src="/Sendr-logo.png" alt="Sendr" className="w-10 h-10 object-contain dark:invert-0 invert" />
+            <div className={`flex items-center ${isExpanded ? 'justify-between px-6' : 'justify-center px-0'} py-2 border-b border-zinc-200 dark:border-zinc-800 h-[89px]`}>
+                {isExpanded && (
+                    <div className="flex items-center min-w-0 transition-all duration-300 px-0">
+                        <img
+                            src="/sendr-logo.png"
+                            alt="Sendr"
+                            className="w-[125px] h-auto object-contain dark:invert-0 invert"
+                        />
                     </div>
-                    {isExpanded && (
-                        <div className="min-w-0">
-                            <h1 className="text-zinc-900 dark:text-zinc-100 font-semibold text-sm tracking-tight truncate">Sendr</h1>
-                            <p className="text-zinc-500 dark:text-zinc-600 text-xs truncate">Automation Platform</p>
-                        </div>
-                    )}
-                </div>
+                )}
 
                 <button
                     onClick={toggleSidebar}
-                    className="hidden md:flex p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                    className={`${isExpanded ? 'hidden md:flex' : 'flex'} p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors`}
                 >
-                    {isExpanded ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    {isExpanded ? <CaretLeft size={16} weight="bold" /> : <CaretRight size={20} weight="bold" />}
                 </button>
 
                 <button
                     onClick={() => setIsMobileOpen(false)}
-                    className="md:hidden flex items-center justify-center w-6 h-6 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                    className="md:hidden flex items-center justify-center w-6 h-6 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors absolute right-4"
                 >
-                    <X className="w-4 h-4" />
+                    <X size={16} weight="bold" />
                 </button>
             </div>
 
+
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-                {navigation.map((item: any) => {
+                {navigation.map((item) => {
                     const isActive = pathname ? (item.href === '/dashboard'
                         ? pathname === '/dashboard'
                         : pathname === item.href || pathname.startsWith(item.href + '/')) : false
-                    const Icon = item.icon
 
                     return (
                         <Link
@@ -173,23 +194,88 @@ export default function Sidebar() {
                             title={!isExpanded ? item.name : undefined}
                         >
                             {/* Active/Hover indicator bar */}
-                            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r-full transition-all duration-300 ease-out ${
-                                isActive 
-                                    ? 'h-5 opacity-100 bg-blue-500' 
-                                    : 'h-0 opacity-0 bg-zinc-400 dark:bg-zinc-500 group-hover:h-4 group-hover:opacity-100'
-                            }`} />
-                            
-                            <Icon className={`w-4 h-4 flex-shrink-0 transition-all duration-300 ease-out ${isActive ? 'text-blue-500 dark:text-blue-400 scale-110' : 'text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 group-hover:scale-105'}`} />
+                            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r-full transition-all duration-300 ease-out ${isActive
+                                ? 'h-5 opacity-100 bg-blue-500'
+                                : 'h-0 opacity-0 bg-zinc-400 dark:bg-zinc-500 group-hover:h-4 group-hover:opacity-100'
+                                }`} />
+
+                            <AnimatedNavIcon Icon={item.icon} isActive={isActive} />
                             {isExpanded && (
-                                <span className={`text-sm font-medium tracking-tight truncate transition-all duration-300 ${isActive ? 'translate-x-0.5' : ''}`}>{item.name}</span>
+                                <span className={`text-sm font-normal tracking-normal truncate transition-all duration-300 ${isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'}`}>{item.name}</span>
                             )}
                         </Link>
                     )
                 })}
 
                 {isAdmin && adminTopNavigation.map((item) => {
-                    const isActive = pathname === item.href
-                    const Icon = item.icon
+                    const isSecurityActive = item.submenuType === 'security' && pathname?.startsWith('/dashboard/security')
+                    const isSystemActive = item.submenuType === 'system' && pathname?.startsWith('/dashboard/system')
+                    const isActive = pathname === item.href || isSecurityActive || isSystemActive
+
+                    if (item.hasSubmenu) {
+                        // Determine which submenu type
+                        const isSecurityMenu = item.submenuType === 'security'
+                        const isSystemMenu = item.submenuType === 'system'
+                        const isThisExpanded = isSecurityMenu ? isSecurityExpanded : isSystemExpanded
+                        const setThisExpanded = isSecurityMenu ? setIsSecurityExpanded : setIsSystemExpanded
+                        const subNavItems = isSecurityMenu ? securitySubNavigation : systemSubNavigation
+                        const basePath = isSecurityMenu ? '/dashboard/security' : '/dashboard/system'
+
+                        return (
+                            <div key={item.name}>
+                                <button
+                                    onClick={() => setThisExpanded(!isThisExpanded)}
+                                    className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 ease-out active:scale-[0.97] w-full ${isActive
+                                        ? 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-900 dark:text-white'
+                                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
+                                        }`}
+                                    title={!isExpanded ? item.name : undefined}
+                                >
+                                    {/* Active/Hover indicator bar */}
+                                    <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r-full transition-all duration-300 ease-out ${isActive
+                                        ? 'h-5 opacity-100 bg-blue-500'
+                                        : 'h-0 opacity-0 bg-zinc-400 dark:bg-zinc-500 group-hover:h-4 group-hover:opacity-100'
+                                        }`} />
+
+                                    <AnimatedNavIcon Icon={item.icon} isActive={!!isActive} />
+                                    {isExpanded && (
+                                        <>
+                                            <span className={`text-sm font-normal tracking-normal truncate transition-all duration-300 flex-1 text-left ${isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'}`}>{item.name}</span>
+                                            <CaretDown
+                                                size={14}
+                                                weight="bold"
+                                                className={`text-zinc-500 transition-transform duration-200 ${isThisExpanded ? 'rotate-180' : ''}`}
+                                            />
+                                        </>
+                                    )}
+                                </button>
+
+                                {/* Submenu */}
+                                {isThisExpanded && isExpanded && (
+                                    <div className="ml-6 mt-1 space-y-0.5 border-l border-zinc-700/50 pl-3">
+                                        {subNavItems.map((subItem) => {
+                                            const tabValue = subItem.href.split('tab=')[1]
+                                            const currentTab = searchParams?.get('tab')
+                                            const isSubActive = pathname === basePath && currentTab === tabValue
+                                            return (
+                                                <Link
+                                                    key={subItem.name}
+                                                    href={subItem.href}
+                                                    className={`block px-3 py-2 rounded-md text-xs transition-all duration-200 ${isSubActive
+                                                        ? 'bg-zinc-800/60 text-white'
+                                                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+                                                        }`}
+                                                >
+                                                    {subItem.name}
+                                                </Link>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    }
+
                     return (
                         <Link
                             key={item.name}
@@ -201,15 +287,14 @@ export default function Sidebar() {
                             title={!isExpanded ? item.name : undefined}
                         >
                             {/* Active/Hover indicator bar */}
-                            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r-full transition-all duration-300 ease-out ${
-                                isActive
-                            ? 'h-5 opacity-100 bg-blue-500' 
-                                    : 'h-0 opacity-0 bg-zinc-400 dark:bg-zinc-500 group-hover:h-4 group-hover:opacity-100'
-                            }`} />
-                            
-                            <Icon className={`w-4 h-4 flex-shrink-0 transition-all duration-300 ease-out ${isActive ? 'text-blue-500 dark:text-blue-400 scale-110' : 'text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 group-hover:scale-105'}`} />
+                            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r-full transition-all duration-300 ease-out ${isActive
+                                ? 'h-5 opacity-100 bg-blue-500'
+                                : 'h-0 opacity-0 bg-zinc-400 dark:bg-zinc-500 group-hover:h-4 group-hover:opacity-100'
+                                }`} />
+
+                            <AnimatedNavIcon Icon={item.icon} isActive={!!isActive} />
                             {isExpanded && (
-                                <span className={`text-sm font-medium tracking-tight truncate transition-all duration-300 ${isActive ? 'translate-x-0.5' : ''}`}>{item.name}</span>
+                                <span className={`text-sm font-normal tracking-normal truncate transition-all duration-300 ${isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'}`}>{item.name}</span>
                             )}
                         </Link>
                     )
@@ -219,7 +304,6 @@ export default function Sidebar() {
             <div className="px-3 py-4 space-y-1">
                 {bottomNavigation.map((item) => {
                     const isActive = pathname === item.href
-                    const Icon = item.icon
                     return (
                         <Link
                             key={item.name}
@@ -231,70 +315,71 @@ export default function Sidebar() {
                             title={!isExpanded ? item.name : undefined}
                         >
                             {/* Active/Hover indicator bar */}
-                            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r-full transition-all duration-300 ease-out ${
-                                isActive 
-                                    ? 'h-5 opacity-100 bg-blue-500' 
-                                    : 'h-0 opacity-0 bg-zinc-400 dark:bg-zinc-500 group-hover:h-4 group-hover:opacity-100'
-                            }`} />
-                            
-                            <Icon className={`w-4 h-4 flex-shrink-0 transition-all duration-300 ease-out ${isActive ? 'text-blue-500 dark:text-blue-400 scale-110' : 'text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 group-hover:scale-105'}`} />
+                            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r-full transition-all duration-300 ease-out ${isActive
+                                ? 'h-5 opacity-100 bg-blue-500'
+                                : 'h-0 opacity-0 bg-zinc-400 dark:bg-zinc-500 group-hover:h-4 group-hover:opacity-100'
+                                }`} />
+
+                            <AnimatedNavIcon Icon={item.icon} isActive={isActive} />
                             {isExpanded && (
-                                <span className={`text-sm font-medium tracking-tight truncate transition-all duration-300 ${isActive ? 'translate-x-0.5' : ''}`}>{item.name}</span>
+                                <span className={`text-sm font-normal tracking-normal truncate transition-all duration-300 ${isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'}`}>{item.name}</span>
                             )}
                         </Link>
                     )
                 })}
             </div>
 
-            {user && (
-                <div className="p-4 border-t border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950 relative">
-                    <button
-                        onClick={() => setShowUserMenu(!showUserMenu)}
-                        className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} hover:bg-zinc-100 dark:hover:bg-zinc-900/50 rounded-xl p-1.5 transition-colors gap-3 overflow-hidden group`}
-                    >
-                        <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-zinc-300 dark:border-zinc-800 group-hover:border-zinc-400 dark:group-hover:border-zinc-700 transition-colors bg-zinc-200 dark:bg-zinc-800">
-                            <div className="w-full h-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-500 uppercase font-bold text-xs">
-                                {user.name[0]}
+            {
+                user && (
+                    <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-black relative">
+                        <button
+                            onClick={() => setShowUserMenu(!showUserMenu)}
+                            className={`w-full flex items-center ${isExpanded ? 'justify-start' : 'justify-center'} hover:bg-zinc-100 dark:hover:bg-zinc-900/50 rounded-xl p-1.5 transition-colors gap-3 overflow-hidden group`}
+                        >
+                            <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-zinc-300 dark:border-zinc-800 group-hover:border-zinc-400 dark:group-hover:border-zinc-700 transition-colors bg-zinc-200 dark:bg-zinc-800">
+                                <div className="w-full h-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-500 uppercase font-bold text-xs">
+                                    {user.name[0]}
+                                </div>
                             </div>
-                        </div>
-                        {isExpanded && (
-                            <div className="flex-1 text-left min-w-0">
-                                <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">{user.name}</p>
-                                <p className="text-[10px] text-zinc-500 truncate">{user.email}</p>
+                            {isExpanded && (
+                                <div className="flex-1 text-left min-w-0">
+                                    <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">{user.name}</p>
+                                    <p className="text-[10px] text-zinc-500 truncate">{user.email}</p>
+                                </div>
+                            )}
+                        </button>
+
+                        {showUserMenu && (
+                            <div className="absolute bottom-full left-4 right-4 mb-2 p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg dark:shadow-2xl z-[60] overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                <button
+                                    onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors group"
+                                >
+                                    {resolvedTheme === 'dark' ? (
+                                        <>
+                                            <Sun size={16} weight="light" className="text-amber-500 transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110" />
+                                            <span>Light Mode</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Moon size={16} weight="light" className="text-blue-500 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
+                                            <span>Dark Mode</span>
+                                        </>
+                                    )}
+                                </button>
+                                <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-1" />
+                                <button
+                                    onClick={handleLogout}
+                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors group"
+                                >
+                                    <SignOut size={16} weight="light" className="transition-transform duration-300 group-hover:-translate-x-1" />
+                                    <span>Sign Out</span>
+                                </button>
                             </div>
                         )}
-                    </button>
-
-                    {showUserMenu && (
-                        <div className="absolute bottom-full left-4 right-4 mb-2 p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg dark:shadow-2xl z-[60] overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
-                            <button
-                                onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-                            >
-                                {resolvedTheme === 'dark' ? (
-                                    <>
-                                        <Sun className="w-4 h-4 text-amber-500" />
-                                        <span>Light Mode</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Moon className="w-4 h-4 text-blue-500" />
-                                        <span>Dark Mode</span>
-                                    </>
-                                )}
-                            </button>
-                            <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-1" />
-                            <button
-                                onClick={handleLogout}
-                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                            >
-                                <LogOut className="w-4 h-4" />
-                                <span>Sign Out</span>
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
+                    </div>
+                )
+            }
         </>
     )
 
@@ -311,21 +396,21 @@ export default function Sidebar() {
             {!isMobileOpen && (
                 <button
                     onClick={() => setIsMobileOpen(true)}
-                    className="md:hidden fixed top-4 right-4 z-[45] p-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-lg text-zinc-600 dark:text-zinc-400"
+                    className="md:hidden fixed top-4 right-4 z-[45] p-2 bg-white dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-600 dark:text-zinc-400"
                 >
-                    <Menu className="w-6 h-6" />
+                    <List size={24} weight="light" />
                 </button>
             )}
 
             <aside
-                className={`fixed left-0 top-0 h-full bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-900 z-[55] transition-all duration-300 ease-in-out flex flex-col ${isExpanded ? 'w-64' : 'w-20'
+                className={`fixed left-0 top-0 h-full bg-white dark:bg-black border-r border-zinc-200 dark:border-zinc-800 z-[55] transition-all duration-300 ease-in-out flex flex-col ${isExpanded ? 'w-64' : 'w-20'
                     } hidden md:flex`}
             >
                 <SidebarContent />
             </aside>
 
             <aside
-                className={`fixed left-0 top-0 h-full bg-white dark:bg-zinc-950 z-[60] transition-transform duration-300 ease-in-out flex flex-col w-64 md:hidden ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+                className={`fixed left-0 top-0 h-full bg-white dark:bg-black z-[60] transition-transform duration-300 ease-in-out flex flex-col w-64 md:hidden ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'
                     }`}
             >
                 <SidebarContent />

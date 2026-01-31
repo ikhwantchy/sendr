@@ -276,7 +276,7 @@ export default function CampaignsPage() {
                             <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
                         )}
                     </div>
-                    <p className="text-zinc-500 text-sm mt-1">Send bulk messages to your contacts with anti-spam protection</p>
+                    <p className="text-zinc-500 dark:text-zinc-100 text-sm mt-1">Send bulk messages to your contacts with anti-spam protection</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {/* Refresh Button */}

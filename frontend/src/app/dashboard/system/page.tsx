@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
     Server, Database, HardDrive, Activity, Download, Trash2, RefreshCw,
     ChevronDown, CheckCircle, XCircle, AlertTriangle, Cpu, Clock,
@@ -24,7 +25,7 @@ interface Backup {
     created_at: string;
 }
 
-// KPI Card Component - Same as Analytics
+// KPI Card Component for Health Check
 interface KPICardProps {
     title: string
     value: number | string
@@ -82,6 +83,7 @@ function KPICard({ title, value, icon, loading, status, subtitle }: KPICardProps
 }
 
 export default function SystemPage() {
+    const searchParams = useSearchParams();
     const [mounted, setMounted] = useState(false);
     const [activeTab, setActiveTab] = useState<'health' | 'backup' | 'maintenance'>('health');
     const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -89,9 +91,14 @@ export default function SystemPage() {
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
+    // Read tab from URL on mount and when searchParams change
     useEffect(() => {
         setMounted(true);
-    }, []);
+        const tabParam = searchParams?.get('tab');
+        if (tabParam && ['health', 'backup', 'maintenance'].includes(tabParam)) {
+            setActiveTab(tabParam as 'health' | 'backup' | 'maintenance');
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         if (!mounted) return;
@@ -207,76 +214,21 @@ export default function SystemPage() {
 
     return (
         <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
-            {/* Header - Same style as Analytics */}
+            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-1">
-                        System Management
-                    </h1>
-                    <p className="text-zinc-500 text-sm">
-                        Monitor system health and perform maintenance tasks
-                    </p>
-                </div>
+                <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
+                    {activeTab === 'health' ? 'Health Check' :
+                        activeTab === 'backup' ? 'Backup & Restore' : 'Maintenance'}
+                </h1>
 
-                <div className="flex flex-wrap items-center gap-3">
-                    {/* Tab Dropdown */}
-                    <div className="relative">
-                        <button
-                            onClick={() => {
-                                const dropdown = document.getElementById('system-tab-dropdown')
-                                if (dropdown) dropdown.classList.toggle('hidden')
-                            }}
-                            onBlur={(e) => {
-                                setTimeout(() => {
-                                    const dropdown = document.getElementById('system-tab-dropdown')
-                                    if (dropdown && !dropdown.contains(e.relatedTarget as Node)) {
-                                        dropdown.classList.add('hidden')
-                                    }
-                                }, 150)
-                            }}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-all"
-                        >
-                            <Settings className="w-3.5 h-3.5 text-blue-500" />
-                            <span>
-                                {activeTab === 'health' ? 'Health Check' :
-                                    activeTab === 'backup' ? 'Backup & Restore' : 'Maintenance'}
-                            </span>
-                            <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
-                        </button>
-
-                        <div
-                            id="system-tab-dropdown"
-                            className="hidden absolute top-full right-0 mt-2 w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1"
-                        >
-                            {[
-                                { id: 'health', label: 'Health Check', icon: Activity },
-                                { id: 'backup', label: 'Backup & Restore', icon: Archive },
-                                { id: 'maintenance', label: 'Maintenance', icon: Settings }
-                            ].map((item) => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => {
-                                        setActiveTab(item.id as any)
-                                        document.getElementById('system-tab-dropdown')?.classList.add('hidden')
-                                    }}
-                                    className={`w-full flex items-center gap-2 text-left px-4 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${activeTab === item.id ? 'text-blue-500 bg-blue-50 dark:bg-blue-400/5' : 'text-zinc-600 dark:text-zinc-400'}`}
-                                >
-                                    <item.icon className="w-3.5 h-3.5" />
-                                    {item.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Refresh Button */}
-                    <button
-                        onClick={() => activeTab === 'health' ? fetchHealth(true) : fetchBackups()}
-                        disabled={refreshing || loading}
-                        className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors disabled:opacity-50"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                    </button>
-                </div>
+                {/* Refresh Button */}
+                <button
+                    onClick={() => activeTab === 'health' ? fetchHealth(true) : fetchBackups()}
+                    disabled={refreshing || loading}
+                    className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors disabled:opacity-50 w-fit"
+                >
+                    <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                </button>
             </div>
 
             {/* Health Check Tab */}
@@ -326,8 +278,8 @@ export default function SystemPage() {
                                 <p className="text-xs text-zinc-500 mt-0.5">Detailed health information</p>
                             </div>
                             <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${health?.status === 'healthy'
-                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                                 }`}>
                                 Overall: {health?.status || 'Unknown'}
                             </span>
@@ -360,8 +312,8 @@ export default function SystemPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${getHealthStatus(health?.database?.status || 'unknown') === 'healthy'
-                                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                                        : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                    : 'bg-red-500/10 text-red-400 border-red-500/20'
                                                     }`}>
                                                     {getHealthStatus(health?.database?.status || 'unknown') === 'healthy' ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                                                     {health?.database?.status || 'Unknown'}
@@ -381,8 +333,8 @@ export default function SystemPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${getHealthStatus(health?.memory?.status || 'unknown') === 'healthy'
-                                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                                                     }`}>
                                                     {getHealthStatus(health?.memory?.status || 'unknown') === 'healthy' ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
                                                     {health?.memory?.status || 'Unknown'}
@@ -404,8 +356,8 @@ export default function SystemPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${getHealthStatus(health?.whatsapp?.status || 'unknown') === 'healthy'
-                                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                                                     }`}>
                                                     {getHealthStatus(health?.whatsapp?.status || 'unknown') === 'healthy' ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
                                                     {health?.whatsapp?.status || 'Unknown'}
@@ -427,10 +379,10 @@ export default function SystemPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${getHealthStatus(health?.redis?.status || 'unknown') === 'healthy'
-                                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                                        : getHealthStatus(health?.redis?.status || 'unknown') === 'warning'
-                                                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                            : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                    : getHealthStatus(health?.redis?.status || 'unknown') === 'warning'
+                                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                        : 'bg-zinc-800 text-zinc-400 border-zinc-700'
                                                     }`}>
                                                     {getHealthStatus(health?.redis?.status || 'unknown') === 'healthy' ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
                                                     {health?.redis?.status || 'Unknown'}

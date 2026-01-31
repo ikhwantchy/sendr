@@ -25,6 +25,9 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en" suppressHydrationWarning>
+            <head>
+                <script src="https://cdn.lordicon.com/lordicon.js"></script>
+            </head>
             <body className={inter.className}>
                 <Providers>
                     {children}

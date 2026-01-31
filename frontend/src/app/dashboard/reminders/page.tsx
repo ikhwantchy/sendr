@@ -162,7 +162,7 @@ export default function RemindersPage() {
                             <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
                         )}
                     </div>
-                    <p className="text-zinc-500 text-sm mt-1">Schedule automated messages for your contacts</p>
+                    <p className="text-zinc-500 dark:text-zinc-100 text-sm mt-1">Schedule automated messages for your contacts</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {/* Refresh Button */}
@@ -214,8 +214,8 @@ export default function RemindersPage() {
                                     <div className="flex items-center gap-3 mb-1">
                                         <h3 className="text-lg font-semibold text-white">{reminder.name}</h3>
                                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${reminder.isActive
-                                                ? 'bg-green-500/10 text-green-500'
-                                                : 'bg-zinc-700 text-zinc-400'
+                                            ? 'bg-green-500/10 text-green-500'
+                                            : 'bg-zinc-700 text-zinc-400'
                                             }`}>
                                             {reminder.isActive ? 'Active' : 'Paused'}
                                         </span>
@@ -287,8 +287,8 @@ export default function RemindersPage() {
                                 <button
                                     onClick={() => toggleActive(reminder.id)}
                                     className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${reminder.isActive
-                                            ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                                            : 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
+                                        ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                                        : 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
                                         }`}
                                 >
                                     {reminder.isActive ? (

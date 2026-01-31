@@ -134,7 +134,7 @@ export default function SystemSettingsPage() {
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">System Settings</h1>
-                    <p className="text-zinc-500 mt-1">Configure system-wide settings and preferences</p>
+
                 </div>
                 <button
                     onClick={handleSave}
@@ -154,7 +154,7 @@ export default function SystemSettingsPage() {
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-className={`flex items-center gap-2 px-4 py-2 font-medium transition-colors ${activeTab === tab.id
+                            className={`flex items-center gap-2 px-4 py-2 font-medium transition-colors ${activeTab === tab.id
                                 ? 'text-purple-500 dark:text-purple-400 border-b-2 border-purple-500 dark:border-purple-400'
                                 : 'text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'
                                 }`}

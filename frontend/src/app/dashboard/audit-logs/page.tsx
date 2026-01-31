@@ -122,8 +122,8 @@ function AuditLogDetailModal({ isOpen, onClose, log }: AuditLogDetailModalProps)
                             <div className="flex items-center gap-2">
                                 {getStatusIcon(log.status)}
                                 <span className={`text-sm font-medium capitalize ${log.status === 'success' ? 'text-emerald-500' :
-                                        log.status === 'failed' ? 'text-red-500' :
-                                            log.status === 'warning' ? 'text-amber-500' : 'text-zinc-400'
+                                    log.status === 'failed' ? 'text-red-500' :
+                                        log.status === 'warning' ? 'text-amber-500' : 'text-zinc-400'
                                     }`}>
                                     {log.status}
                                 </span>
@@ -277,7 +277,7 @@ export default function AuditLogsPage() {
     const fetchLogs = useCallback(async (isRefresh = false) => {
         // Start transition - fade out current content
         setIsTransitioning(true);
-        
+
         if (isRefresh) setRefreshing(true);
         else setLoading(true);
 
@@ -292,7 +292,7 @@ export default function AuditLogsPage() {
 
             if (filters.action_category) params.action_category = filters.action_category;
             if (filters.status) params.status = filters.status;
-            
+
             // Calculate date range based on timeRange selection
             if (timeRange === 'custom' && customDateRange.from && customDateRange.to) {
                 params.start_date = customDateRange.from.toISOString();
@@ -300,7 +300,7 @@ export default function AuditLogsPage() {
             } else if (timeRange !== 'all') {
                 const now = new Date();
                 let fromDate = new Date();
-                
+
                 switch (timeRange) {
                     case '30m':
                         fromDate = new Date(now.getTime() - 30 * 60 * 1000);
@@ -315,7 +315,7 @@ export default function AuditLogsPage() {
                         fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
                         break;
                 }
-                
+
                 params.start_date = fromDate.toISOString();
                 params.end_date = now.toISOString();
             }
@@ -344,7 +344,7 @@ export default function AuditLogsPage() {
             const params: any = {};
             if (filters.action_category) params.action_category = filters.action_category;
             if (filters.status) params.status = filters.status;
-            
+
             // Calculate date range based on timeRange selection
             if (timeRange === 'custom' && customDateRange.from && customDateRange.to) {
                 params.start_date = customDateRange.from.toISOString();
@@ -352,7 +352,7 @@ export default function AuditLogsPage() {
             } else if (timeRange !== 'all') {
                 const now = new Date();
                 let fromDate = new Date();
-                
+
                 switch (timeRange) {
                     case '30m':
                         fromDate = new Date(now.getTime() - 30 * 60 * 1000);
@@ -367,7 +367,7 @@ export default function AuditLogsPage() {
                         fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
                         break;
                 }
-                
+
                 params.start_date = fromDate.toISOString();
                 params.end_date = now.toISOString();
             }
@@ -492,9 +492,7 @@ export default function AuditLogsPage() {
                     <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-1">
                         Audit Logs
                     </h1>
-                    <p className="text-zinc-500 text-sm">
-                        Track all system activity and user actions
-                    </p>
+
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -614,10 +612,10 @@ export default function AuditLogsPage() {
                             <Clock className="w-3.5 h-3.5 text-blue-500" />
                             <span>
                                 {timeRange === '30m' ? 'Last 30m' :
-                                 timeRange === '24h' ? 'Last 24h' :
-                                 timeRange === '7d' ? 'Last 7d' :
-                                 timeRange === '30d' ? 'Last 30d' :
-                                 timeRange === 'custom' ? 'Custom' : 'All Time'}
+                                    timeRange === '24h' ? 'Last 24h' :
+                                        timeRange === '7d' ? 'Last 7d' :
+                                            timeRange === '30d' ? 'Last 30d' :
+                                                timeRange === 'custom' ? 'Custom' : 'All Time'}
                             </span>
                             <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
                         </button>
@@ -654,11 +652,10 @@ export default function AuditLogsPage() {
                     <button
                         onClick={() => fetchLogs(true)}
                         disabled={refreshing || isTransitioning}
-                        className={`p-2 bg-white dark:bg-zinc-900 border rounded-lg transition-all duration-300 ${
-                            refreshing || isTransitioning 
-                                ? 'border-blue-500/50 text-blue-500 dark:text-blue-400' 
-                                : 'border-zinc-200 dark:border-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700'
-                        } disabled:cursor-not-allowed`}
+                        className={`p-2 bg-white dark:bg-zinc-900 border rounded-lg transition-all duration-300 ${refreshing || isTransitioning
+                            ? 'border-blue-500/50 text-blue-500 dark:text-blue-400'
+                            : 'border-zinc-200 dark:border-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700'
+                            } disabled:cursor-not-allowed`}
                         title="Refresh logs"
                     >
                         <RefreshCw className={`w-4 h-4 transition-transform duration-700 ${refreshing || isTransitioning ? 'animate-spin' : ''}`} />
@@ -759,8 +756,8 @@ export default function AuditLogsPage() {
                                 </thead>
                                 <tbody>
                                     {filteredLogs.map((log, index) => (
-                                        <tr 
-                                            key={log.id} 
+                                        <tr
+                                            key={log.id}
                                             className="border-b border-zinc-200 dark:border-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 transition-colors duration-150"
                                         >
                                             <td className="py-4 px-4 w-[80px]">
@@ -909,7 +906,7 @@ export default function AuditLogsPage() {
                                                 </p>
                                             </div>
                                         </button>
-                                        
+
                                         {/* Calendar Popup for From */}
                                         {showCalendarPopup && selectingDate === 'from' && (
                                             <div className="absolute top-full left-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-4 w-72 z-50">
@@ -961,13 +958,12 @@ export default function AuditLogsPage() {
                                                                         setCustomDateRange({ ...customDateRange, from: date });
                                                                         setShowCalendarPopup(false);
                                                                     }}
-                                                                    className={`h-8 w-full rounded-lg text-sm font-medium transition-all ${
-                                                                        isSelected 
-                                                                            ? 'bg-blue-500 text-white' 
-                                                                            : isToday
-                                                                                ? 'bg-zinc-800 text-white'
-                                                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-                                                                    }`}
+                                                                    className={`h-8 w-full rounded-lg text-sm font-medium transition-all ${isSelected
+                                                                        ? 'bg-blue-500 text-white'
+                                                                        : isToday
+                                                                            ? 'bg-zinc-800 text-white'
+                                                                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                                                                        }`}
                                                                 >
                                                                     {day}
                                                                 </button>
@@ -980,7 +976,7 @@ export default function AuditLogsPage() {
                                             </div>
                                         )}
                                     </div>
-                                    
+
                                     {/* Time Picker Button */}
                                     <div className="relative">
                                         <button
@@ -993,7 +989,7 @@ export default function AuditLogsPage() {
                                                 <p className="text-sm text-white font-medium">{customTime.from}</p>
                                             </div>
                                         </button>
-                                        
+
                                         {/* Time Picker Popup for From */}
                                         {showTimePopup === 'from' && (
                                             <div className="absolute top-full right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-3 w-36 z-50">
@@ -1011,11 +1007,10 @@ export default function AuditLogsPage() {
                                                                             setCustomTime({ ...customTime, from: time });
                                                                             setShowTimePopup(null);
                                                                         }}
-                                                                        className={`w-full text-left px-3 py-1.5 rounded-lg text-sm font-mono transition-all ${
-                                                                            isSelected 
-                                                                                ? 'bg-blue-500 text-white' 
-                                                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-                                                                        }`}
+                                                                        className={`w-full text-left px-3 py-1.5 rounded-lg text-sm font-mono transition-all ${isSelected
+                                                                            ? 'bg-blue-500 text-white'
+                                                                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                                                                            }`}
                                                                     >
                                                                         {time}
                                                                     </button>
@@ -1049,7 +1044,7 @@ export default function AuditLogsPage() {
                                                 </p>
                                             </div>
                                         </button>
-                                        
+
                                         {/* Calendar Popup for To */}
                                         {showCalendarPopup && selectingDate === 'to' && (
                                             <div className="absolute top-full left-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-4 w-72 z-50">
@@ -1101,13 +1096,12 @@ export default function AuditLogsPage() {
                                                                         setCustomDateRange({ ...customDateRange, to: date });
                                                                         setShowCalendarPopup(false);
                                                                     }}
-                                                                    className={`h-8 w-full rounded-lg text-sm font-medium transition-all ${
-                                                                        isSelected 
-                                                                            ? 'bg-blue-500 text-white' 
-                                                                            : isToday
-                                                                                ? 'bg-zinc-800 text-white'
-                                                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-                                                                    }`}
+                                                                    className={`h-8 w-full rounded-lg text-sm font-medium transition-all ${isSelected
+                                                                        ? 'bg-blue-500 text-white'
+                                                                        : isToday
+                                                                            ? 'bg-zinc-800 text-white'
+                                                                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                                                                        }`}
                                                                 >
                                                                     {day}
                                                                 </button>
@@ -1120,7 +1114,7 @@ export default function AuditLogsPage() {
                                             </div>
                                         )}
                                     </div>
-                                    
+
                                     {/* Time Picker Button */}
                                     <div className="relative">
                                         <button
@@ -1133,7 +1127,7 @@ export default function AuditLogsPage() {
                                                 <p className="text-sm text-white font-medium">{customTime.to}</p>
                                             </div>
                                         </button>
-                                        
+
                                         {/* Time Picker Popup for To */}
                                         {showTimePopup === 'to' && (
                                             <div className="absolute top-full right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-3 w-36 z-50">
@@ -1151,11 +1145,10 @@ export default function AuditLogsPage() {
                                                                             setCustomTime({ ...customTime, to: time });
                                                                             setShowTimePopup(null);
                                                                         }}
-                                                                        className={`w-full text-left px-3 py-1.5 rounded-lg text-sm font-mono transition-all ${
-                                                                            isSelected 
-                                                                                ? 'bg-blue-500 text-white' 
-                                                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-                                                                        }`}
+                                                                        className={`w-full text-left px-3 py-1.5 rounded-lg text-sm font-mono transition-all ${isSelected
+                                                                            ? 'bg-blue-500 text-white'
+                                                                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                                                                            }`}
                                                                     >
                                                                         {time}
                                                                     </button>
@@ -1193,13 +1186,13 @@ export default function AuditLogsPage() {
                                         // Combine date and time
                                         const [fromHour, fromMin] = customTime.from.split(':').map(Number);
                                         const [toHour, toMin] = customTime.to.split(':').map(Number);
-                                        
+
                                         const fromDateTime = new Date(customDateRange.from);
                                         fromDateTime.setHours(fromHour, fromMin, 0, 0);
-                                        
+
                                         const toDateTime = new Date(customDateRange.to);
                                         toDateTime.setHours(toHour, toMin, 59, 999);
-                                        
+
                                         setCustomDateRange({ from: fromDateTime, to: toDateTime });
                                         setShowCustomDatePicker(false);
                                         setShowCalendarPopup(false);

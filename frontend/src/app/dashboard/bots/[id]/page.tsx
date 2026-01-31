@@ -39,7 +39,9 @@ import {
     Users,
     ChevronDown,
     Plus,
-    RefreshCw
+    RefreshCw,
+    Activity,
+    Bot
 } from 'lucide-react'
 
 export default function BotDetailPage() {
@@ -60,10 +62,18 @@ export default function BotDetailPage() {
 
     // Handle URL hash for tab switching
     useEffect(() => {
-        const hash = window.location.hash.replace('#', '')
-        if (hash && ['overview', 'rules', 'ai-assistant', 'campaigns', 'reminders', 'settings'].includes(hash)) {
-            setActiveTab(hash)
+        const handleHashChange = () => {
+            const hash = window.location.hash.replace('#', '')
+            if (hash && ['overview', 'rules', 'ai-assistant', 'campaigns', 'reminders', 'settings'].includes(hash)) {
+                setActiveTab(hash)
+            } else {
+                setActiveTab('overview')
+            }
         }
+
+        handleHashChange()
+        window.addEventListener('hashchange', handleHashChange)
+        return () => window.removeEventListener('hashchange', handleHashChange)
     }, [])
 
     // Delete reminder confirmation state
@@ -378,7 +388,7 @@ export default function BotDetailPage() {
                     <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
                 </div>
             </div>
-        )
+        );
     }
 
     if (!bot) {
@@ -391,214 +401,77 @@ export default function BotDetailPage() {
                     </Link>
                 </div>
             </div>
-        )
+        );
     }
 
-    const isConnected = bot.status === 'connected'
+    const isConnected = bot.status === 'connected';
 
     return (
         <div className="p-6 md:p-8 min-h-screen bg-black animate-fade-in">
-            <Link
-                href="/dashboard/bots"
-                className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-100 mb-6 transition-colors text-sm"
-            >
-                <ChevronLeft className="w-4 h-4" />
-                Back to Bots
-            </Link>
-
-            <div className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-bold text-zinc-100 mb-3 tracking-tight">
-                    {bot.name}
-                </h1>
-                <div className="flex flex-wrap items-center gap-3">
-                    {bot.phone_number && (
-                        <div className="flex items-center gap-2 text-zinc-400 text-sm">
-                            <Phone className="w-4 h-4 text-zinc-600" />
-                            <span className="font-mono">{bot.phone_number}</span>
-                        </div>
-                    )}
-                    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${isConnected
-                        ? bot.is_paused
-                            ? 'bg-orange-500/10 border-orange-500/20 text-orange-500'
-                            : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-                        : 'bg-zinc-500/10 border-zinc-500/20 text-zinc-500'
-                        }`}>
-                        <Circle className="w-2 h-2 fill-current" />
-                        <span>{isConnected ? (bot.is_paused ? 'Paused' : 'Connected') : 'Disconnected'}</span>
-                    </div>
-                    {(isConnected || bot.is_paused) && (
-                        <button
-                            onClick={handleToggleBotPause}
-                            disabled={isBotPausing}
-                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                bot.is_paused 
-                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' 
-                                    : 'bg-orange-500/10 border-orange-500/30 text-orange-400 hover:bg-orange-500/20'
-                            } disabled:opacity-50 disabled:cursor-not-allowed`}
-                        >
-                            {isBotPausing ? (
-                                <RefreshCw className="w-3 h-3 animate-spin" />
-                            ) : bot.is_paused ? (
-                                <Play className="w-3 h-3" />
-                            ) : (
-                                <Pause className="w-3 h-3" />
-                            )}
-                            <span>{bot.is_paused ? 'Resume' : 'Pause'}</span>
-                        </button>
-                    )}
-                    {!isConnected && !bot.is_paused && bot.phone_number && (
-                        <Link
-                            href={`/dashboard/bots/${botId}/connect`}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20"
-                        >
-                            <RefreshCw className="w-3 h-3" />
-                            <span>Reconnect</span>
-                        </Link>
-                    )}
-                </div>
-            </div>
-
-            <div className="mb-8 border-b border-zinc-800/50">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex overflow-x-auto no-scrollbar gap-1">
-                        {tabs.map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-all relative ${activeTab === tab.id
-                                    ? 'text-zinc-100'
-                                    : 'text-zinc-500 hover:text-zinc-300'
-                                    }`}
-                            >
-                                <span>{tab.name}</span>
-                                {activeTab === tab.id && (
-                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500"></div>
-                                )}
-                            </button>
-                        ))}
-                    </div>
-
-                    {(activeTab === 'rules' || activeTab === 'reminders') && (
-                        <div className="flex items-center gap-2 pb-2 md:pb-0 pr-2">
-                            {activeTab === 'rules' ? (
-                                <>
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setOpenFilter(openFilter === 'rule-status' ? null : 'rule-status')}
-                                            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-300 hover:border-zinc-700 transition-all"
-                                        >
-                                            <div className={`w-1.5 h-1.5 rounded-full ${ruleFilters.status === 'active' ? 'bg-emerald-500' : ruleFilters.status === 'inactive' ? 'bg-zinc-500' : 'bg-blue-500'}`} />
-                                            <span>{ruleFilters.status === 'all' ? 'All Status' : ruleFilters.status.charAt(0).toUpperCase() + ruleFilters.status.slice(1)}</span>
-                                            <ChevronDown className={`w-3 h-3 transition-transform ${openFilter === 'rule-status' ? 'rotate-180' : ''}`} />
-                                        </button>
-                                        {openFilter === 'rule-status' && (
-                                            <div className="absolute top-full right-0 mt-1 w-32 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                                {['all', 'active', 'inactive'].map((s) => (
-                                                    <button
-                                                        key={s}
-                                                        onClick={() => {
-                                                            setRuleFilters({ ...ruleFilters, status: s })
-                                                            setOpenFilter(null)
-                                                        }}
-                                                        className={`w-full px-3 py-2 text-left text-xs font-medium hover:bg-zinc-800 transition-colors ${ruleFilters.status === s ? 'text-blue-400 bg-blue-500/5' : 'text-zinc-400'}`}
-                                                    >
-                                                        {s === 'all' ? 'All Status' : s.charAt(0).toUpperCase() + s.slice(1)}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setOpenFilter(openFilter === 'rule-scope' ? null : 'rule-scope')}
-                                            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-300 hover:border-zinc-700 transition-all"
-                                        >
-                                            <Filter className="w-3 h-3 text-zinc-500" />
-                                            <span>{ruleFilters.scope === 'all' ? 'All Scopes' : ruleFilters.scope.charAt(0).toUpperCase() + ruleFilters.scope.slice(1)}</span>
-                                            <ChevronDown className={`w-3 h-3 transition-transform ${openFilter === 'rule-scope' ? 'rotate-180' : ''}`} />
-                                        </button>
-                                        {openFilter === 'rule-scope' && (
-                                            <div className="absolute top-full right-0 mt-1 w-32 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                                {['all', 'global', 'group'].map((s) => (
-                                                    <button
-                                                        key={s}
-                                                        onClick={() => {
-                                                            setRuleFilters({ ...ruleFilters, scope: s })
-                                                            setOpenFilter(null)
-                                                        }}
-                                                        className={`w-full px-3 py-2 text-left text-xs font-medium hover:bg-zinc-800 transition-colors ${ruleFilters.scope === s ? 'text-blue-400 bg-blue-500/5' : 'text-zinc-400'}`}
-                                                    >
-                                                        {s === 'all' ? 'All Scopes' : s.charAt(0).toUpperCase() + s.slice(1)}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setOpenFilter(openFilter === 'rem-status' ? null : 'rem-status')}
-                                            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-300 hover:border-zinc-700 transition-all"
-                                        >
-                                            <div className={`w-1.5 h-1.5 rounded-full ${reminderFilters.status === 'active' ? 'bg-emerald-500' : reminderFilters.status === 'inactive' ? 'bg-zinc-500' : 'bg-blue-500'}`} />
-                                            <span>{reminderFilters.status === 'all' ? 'All Status' : reminderFilters.status.charAt(0).toUpperCase() + reminderFilters.status.slice(1)}</span>
-                                            <ChevronDown className={`w-3 h-3 transition-transform ${openFilter === 'rem-status' ? 'rotate-180' : ''}`} />
-                                        </button>
-                                        {openFilter === 'rem-status' && (
-                                            <div className="absolute top-full right-0 mt-1 w-32 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                                {['all', 'active', 'inactive'].map((s) => (
-                                                    <button
-                                                        key={s}
-                                                        onClick={() => {
-                                                            setReminderFilters({ ...reminderFilters, status: s })
-                                                            setOpenFilter(null)
-                                                        }}
-                                                        className={`w-full px-3 py-2 text-left text-xs font-medium hover:bg-zinc-800 transition-colors ${reminderFilters.status === s ? 'text-emerald-400 bg-emerald-500/5' : 'text-zinc-400'}`}
-                                                    >
-                                                        {s === 'all' ? 'All Status' : s.charAt(0).toUpperCase() + s.slice(1)}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setOpenFilter(openFilter === 'rem-type' ? null : 'rem-type')}
-                                            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-300 hover:border-zinc-700 transition-all"
-                                        >
-                                            <Clock className="w-3 h-3 text-zinc-500" />
-                                            <span>{reminderFilters.type === 'all' ? 'All Types' : reminderFilters.type.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('-')}</span>
-                                            <ChevronDown className={`w-3 h-3 transition-transform ${openFilter === 'rem-type' ? 'rotate-180' : ''}`} />
-                                        </button>
-                                        {openFilter === 'rem-type' && (
-                                            <div className="absolute top-full right-0 mt-1 w-32 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                                {['all', 'now', 'daily', 'weekly', 'one-time'].map((s) => (
-                                                    <button
-                                                        key={s}
-                                                        onClick={() => {
-                                                            setReminderFilters({ ...reminderFilters, type: s })
-                                                            setOpenFilter(null)
-                                                        }}
-                                                        className={`w-full px-3 py-2 text-left text-xs font-medium hover:bg-zinc-800 transition-colors ${reminderFilters.type === s ? 'text-emerald-400 bg-emerald-500/5' : 'text-zinc-400'}`}
-                                                    >
-                                                        {s === 'all' ? 'All Types' : s.split('-').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('-')}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div>
+            <div className="space-y-8">
                 {activeTab === 'overview' && (
                     <div className="space-y-6">
+                        {/* Integrated Hero Section (Overview ONLY) */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-8 border-b border-zinc-900/50 mb-6">
+                            {/* Left: Bot Name with Icon */}
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center text-blue-500 shadow-lg shadow-blue-500/5">
+                                    <Bot className="w-6 h-6" />
+                                </div>
+                                <h1 className="text-2xl font-bold text-zinc-100 tracking-tight">
+                                    {bot.name}
+                                </h1>
+                            </div>
+
+                            {/* Right: Badges & Buttons (Sejajar & Samanya Ukuran) */}
+                            <div className="flex flex-wrap items-center gap-3">
+                                {bot.phone_number && (
+                                    <>
+                                        <div className="flex items-center gap-2.5 px-4 py-2.5 bg-amber-500/5 border border-amber-500/20 rounded-xl text-amber-500 text-xs font-semibold shadow-sm shadow-amber-500/5">
+                                            <Phone className="w-4 h-4" />
+                                            <span>{bot.phone_number}</span>
+                                        </div>
+                                        <div className="hidden lg:block h-5 w-[1px] bg-zinc-700/80 mx-1" />
+                                    </>
+                                )}
+                                <div className={`inline-flex items-center justify-center gap-2.5 w-[140px] py-2.5 rounded-xl text-xs font-semibold uppercase tracking-widest border transition-all ${isConnected
+                                    ? bot.is_paused
+                                        ? 'bg-orange-500/5 border-orange-500/20 text-orange-500'
+                                        : 'bg-emerald-500/5 border-emerald-500/20 text-emerald-500'
+                                    : 'bg-zinc-500/5 border-zinc-500/20 text-zinc-500'
+                                    }`}>
+                                    <Circle className={`w-2 h-2 flex-shrink-0 fill-current ${isConnected && !bot.is_paused ? 'animate-pulse' : ''}`} />
+                                    <span className="truncate">{isConnected ? (bot.is_paused ? 'PAUSED' : 'CONNECTED') : 'DISCONNECTED'}</span>
+                                </div>
+
+                                <div className="hidden lg:block h-5 w-[1px] bg-zinc-700/80 mx-1" />
+
+                                <div className="w-[145px]">
+                                    {!!(bot.phone_number || isBotPausing) && (
+                                        <button
+                                            onClick={handleToggleBotPause}
+                                            disabled={isBotPausing}
+                                            className={`w-full inline-flex items-center justify-center gap-2.5 py-2.5 rounded-xl text-xs font-semibold border transition-all duration-300 ${isBotPausing || bot.is_paused
+                                                ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25'
+                                                : 'bg-zinc-900 border-red-500/40 text-red-500 hover:bg-red-500/10 hover:border-red-500/60 shadow-xl'
+                                                } active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
+                                        >
+                                            {isBotPausing ? (
+                                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                            ) : bot.is_paused ? (
+                                                <Play className="w-4 h-4 fill-current" />
+                                            ) : (
+                                                <Pause className="w-4 h-4 fill-current" />
+                                            )}
+                                            <span className="font-semibold tracking-tight uppercase">
+                                                {isBotPausing ? 'PROCESSING...' : (bot.is_paused ? 'RESUME BOT' : 'PAUSE BOT')}
+                                            </span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
                         {!isConnected && !bot.phone_number && (
                             <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6 mb-6">
                                 <h3 className="text-lg font-semibold text-zinc-100 mb-2 tracking-tight">Connect WhatsApp</h3>
@@ -610,7 +483,7 @@ export default function BotDetailPage() {
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/80 transition-all">
+                            <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/30 transition-all">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
                                         <MessageSquare className="w-5 h-5 text-blue-500" />
@@ -620,15 +493,15 @@ export default function BotDetailPage() {
                                 <div className="text-sm text-zinc-500">{isConnected ? 'Bot is active' : 'Connect to start tracking'}</div>
                             </div>
                             {hasModuleAccess('auto_reply', botId) && (
-                                <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/80 transition-all">
-                                    <div className="w-10 h-10 bg-zinc-800/50 rounded-xl flex items-center justify-center mb-4 text-zinc-400"><Zap className="w-5 h-5" /></div>
+                                <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/30 transition-all">
+                                    <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4 text-blue-400"><Zap className="w-5 h-5" /></div>
                                     <div className="text-3xl font-bold text-zinc-100 mb-1 font-mono tracking-tight">{stats.activeRules}</div>
                                     <div className="text-sm text-zinc-500">{stats.totalRules} total rules</div>
                                 </div>
                             )}
                             {hasModuleAccess('campaigns', botId) && (
-                                <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/80 transition-all">
-                                    <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center mb-4 text-purple-400"><Megaphone className="w-5 h-5" /></div>
+                                <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/30 transition-all">
+                                    <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4 text-blue-400"><Megaphone className="w-5 h-5" /></div>
                                     <div className="text-3xl font-bold text-zinc-100 mb-1 font-mono tracking-tight">{stats.totalCampaigns}</div>
                                     <div className="text-sm text-zinc-500">{stats.activeCampaigns} active broadcasts</div>
                                 </div>
@@ -636,7 +509,7 @@ export default function BotDetailPage() {
                         </div>
 
                         <div className="mt-8 space-y-6">
-                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6">
+                            <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                                     <div className="flex-1 space-y-2">
                                         <div className="flex justify-between text-sm">
@@ -649,7 +522,7 @@ export default function BotDetailPage() {
                                     </div>
                                     <div className="flex flex-col gap-1.5 min-w-[200px]">
                                         <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Rate Limit</label>
-                                        <select value={rateLimit} onChange={(e) => setRateLimit(e.target.value)} className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm rounded-lg px-3 py-2">
+                                        <select value={rateLimit} onChange={(e) => setRateLimit(e.target.value)} className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm rounded-lg px-3 py-2 outline-none focus:border-zinc-700 transition-all">
                                             <option value="Unlimited">Unlimited</option>
                                             <option value="50 msg/s">50 msg/s</option>
                                             <option value="20 msg/s">20 msg/s</option>
@@ -664,7 +537,7 @@ export default function BotDetailPage() {
                                 </div>
                                 {isAdmin && (
                                     <div className="xl:col-span-1">
-                                        <RecentActivityList title="Bot Live Logs" botId={botId} logs={activityLogs} className="h-[400px]" />
+                                        <RecentActivityList title="LIVE LOGS" botId={botId} logs={activityLogs} className="h-[400px]" />
                                     </div>
                                 )}
                             </div>
@@ -673,63 +546,63 @@ export default function BotDetailPage() {
                 )}
 
                 {activeTab === 'rules' && hasModuleAccess('auto_reply', botId) && (
-                    <div className="space-y-6">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Auto-Reply Rules</h2>
-                            <button onClick={() => router.push(`/dashboard/rules/create?botId=${botId}`)} className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-100 rounded-lg text-sm">
-                                <Plus className="w-4 h-4" />
-                                New Rule
-                            </button>
-                        </div>
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <RulesTable botId={botId} />
                     </div>
                 )}
 
+                {activeTab === 'ai-assistant' && hasModuleAccess('ai_assistant', botId) && (
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <AIConfigTable botId={botId} />
+                    </div>
+                )}
+
                 {activeTab === 'campaigns' && hasModuleAccess('campaigns', botId) && (
-                    <div className="space-y-6">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Campaigns</h2>
-                            <button onClick={() => router.push(`/dashboard/campaigns/create?botId=${botId}`)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm"><Plus className="w-4 h-4" />New Campaign</button>
-                        </div>
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <CampaignsTable botId={botId} />
                     </div>
                 )}
 
                 {activeTab === 'reminders' && hasModuleAccess('reminders', botId) && (
-                    <div className="space-y-6">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Reminders</h2>
-                            <button onClick={() => router.push(`/dashboard/reminders/create?botId=${botId}`)} className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800 text-white rounded-lg text-sm">
-                                <Plus className="w-4 h-4" />
-                                New Reminder
-                            </button>
-                        </div>
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <RemindersTable botId={botId} />
                     </div>
                 )}
 
-                {activeTab === 'ai-assistant' && hasModuleAccess('ai_assistant', botId) && (
-                    <AIConfigTable botId={botId} />
-                )}
-
                 {activeTab === 'settings' && (
-                    <div className="bg-zinc-900/30 border border-zinc-800 rounded-2xl p-8 max-w-2xl">
-                        <h2 className="text-2xl font-bold text-zinc-100 mb-6">Settings</h2>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Bot Name</label>
-                                <input type="text" defaultValue={bot.name} className="w-full bg-zinc-950 border border-zinc-800 p-3 rounded-xl text-white outline-none focus:border-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Status</label>
-                                <div className="p-3 bg-zinc-800 rounded-xl text-zinc-200 capitalize">{bot.status}</div>
+                    <div className="max-w-4xl mx-auto py-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <div className="bg-zinc-900/40 border border-zinc-800 p-10 rounded-3xl space-y-8">
+                            <h3 className="text-xl font-bold text-white border-b border-zinc-800 pb-6">Bot Settings</h3>
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-3 tracking-widest">Bot Name</label>
+                                    <input type="text" defaultValue={bot.name} className="w-full bg-zinc-950 border border-zinc-800 p-4 rounded-2xl text-white outline-none focus:border-blue-500 transition-all font-medium" />
+                                </div>
+                                <div className="pt-4 flex justify-between items-center">
+                                    <div>
+                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1 tracking-widest">Bot ID</label>
+                                        <code className="text-[10px] text-zinc-600 font-mono">{bot.id}</code>
+                                    </div>
+                                    <button className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all">
+                                        Save Changes
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 )}
             </div>
 
-            {showEditRuleModal && selectedRule && <EditRuleModal botId={botId} rule={selectedRule} onClose={() => { setShowEditRuleModal(false); setSelectedRule(null); }} />}
+            {showEditRuleModal && selectedRule && (
+                <EditRuleModal
+                    botId={botId}
+                    rule={selectedRule}
+                    onClose={() => {
+                        setShowEditRuleModal(false)
+                        setSelectedRule(null)
+                    }}
+                />
+            )}
         </div>
     )
 }
