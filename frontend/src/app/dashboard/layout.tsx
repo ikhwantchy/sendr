@@ -135,7 +135,13 @@ export default function DashboardLayout({
                             }`}
                     >
                         <div className="max-w-[1440px] mx-auto w-full">
-                            {children}
+                            <Suspense fallback={
+                                <div className="flex items-center justify-center p-12">
+                                    <div className="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-800 border-t-zinc-600 dark:border-t-white rounded-full animate-spin" />
+                                </div>
+                            }>
+                                {children}
+                            </Suspense>
                         </div>
                     </div>
                 </div>
