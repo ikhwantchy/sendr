@@ -10,7 +10,7 @@ import { logger } from '../utils/logger';
 
 const DB_PATH = join(__dirname, '../../data/database.sqlite');
 
-let db: Database | null = null;
+export let db: Database | null = null;
 
 export async function initDatabase(): Promise<void> {
   if (db) return;

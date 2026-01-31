@@ -5,7 +5,7 @@
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { pool, closePool } from './connection';
+import { query, closePool } from './connection';
 import { logger } from '../utils/logger';
 
 async function runMigration() {
@@ -17,7 +17,7 @@ async function runMigration() {
         const schema = readFileSync(schemaPath, 'utf-8');
 
         // Execute schema
-        await pool.query(schema);
+        await query(schema);
 
         logger.info('✅ Database migration completed successfully');
         logger.info('📊 Tables created:');

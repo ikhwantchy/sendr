@@ -22,7 +22,7 @@ import { botRepository } from '../../database/repositories/botRepository';
 
 class WhatsAppWebAdapter implements IWhatsAppAdapter {
     private clients: Map<string, Client> = new Map();
-    private qrCodes: Map<string, { qr: string; expires_at: string }> = new Map();
+    private qrCodes: Map<string, { qr_code: string; expires_at: string }> = new Map();
     private sessionPath: string;
 
     constructor() {
@@ -98,7 +98,7 @@ class WhatsAppWebAdapter implements IWhatsAppAdapter {
 
                 // Store QR code
                 this.qrCodes.set(botId, {
-                    qr: qrDataUrl,
+                    qr_code: qrDataUrl,
                     expires_at: expiresAt,
                 });
 

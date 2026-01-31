@@ -43,7 +43,7 @@ export const requireFeature = (featureKey: string) => {
             }
 
             // Admin bypass - admins have access to all features
-            if (req.user?.role === 'admin') {
+            if (req.user?.role === 'ADMIN') {
                 logger.debug('Admin bypass for feature access', { user_id: userId, feature_key: featureKey });
                 return next();
             }
@@ -199,7 +199,7 @@ export const trackFeatureUsage = (featureKey: string) => {
  * Middleware to check if user is admin
  */
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-    if (req.user?.role !== 'admin') {
+    if (req.user?.role !== 'ADMIN') {
         logger.warn('Admin access denied', { user_id: req.user?.id });
         return res.status(403).json({
             success: false,
@@ -227,7 +227,7 @@ export const requireBotOwnerOrAdmin = async (req: Request, res: Response, next: 
         }
 
         // Admin bypass
-        if (req.user?.role === 'admin') {
+        if (req.user?.role === 'ADMIN') {
             return next();
         }
 

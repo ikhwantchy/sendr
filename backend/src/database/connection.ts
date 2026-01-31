@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger';
-import { query as queryPg, transaction as transactionPg, closePool as closePoolPg } from './connection-postgres';
+import { query as queryPg, transaction as transactionPg, closePool as closePoolPg, pool as poolPg } from './connection-postgres';
 import { query as querySqlite, transaction as transactionSqlite, closePool as closePoolSqlite, logActivity as logActivitySqlite } from './connection-sqlite';
 
 // Robust detection
@@ -15,8 +15,7 @@ export async function query(text: string, params?: any[]) {
     return queryPg(text, params);
 }
 
-// Transaction wrapper is tricky because callback expects specific client type
-// Ideally we should unify client interface
+// Transaction wrapper
 export async function transaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
     if (isSqlite) {
         return transactionSqlite(callback);
@@ -31,10 +30,23 @@ export async function closePool(): Promise<void> {
     return closePoolPg();
 }
 
-// Export logActivity (SQLite only for now)
+// Export logActivity
 export async function logActivity(type: 'bot' | 'rule' | 'campaign' | 'message' | 'error', message: string, metadata: any = {}) {
     if (isSqlite) {
         return logActivitySqlite(type, message, metadata);
     }
-    // For postgres, we can add implementation later if needed
 }
+
+// Exports for backward compatibility and specific driver access
+export { db } from './connection-sqlite';
+
+// Mock pool for migrate scripts that expect pg pool
+export const pool = isSqlite ? {
+    query: async (text: string, params?: any[]) => {
+        // migration runner sends "text" as object { text: string } sometimes or string
+        const sql = typeof text === 'string' ? text : (text as any).text;
+        const p = params || (text as any).values;
+        return querySqlite(sql, p);
+    },
+    end: closePoolSqlite
+} : poolPg;

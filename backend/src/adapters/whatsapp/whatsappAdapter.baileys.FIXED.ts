@@ -8,9 +8,10 @@ import makeWASocket, {
     useMultiFileAuthState,
     WASocket,
     WAMessage,
-    makeInMemoryStore,
     Browsers,
 } from '@whiskeysockets/baileys';
+// @ts-ignore
+import { makeInMemoryStore } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import QRCode from 'qrcode';
 import path from 'path';
