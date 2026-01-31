@@ -9,6 +9,7 @@ import {
     Layout, Smartphone, FileText, UserPlus
 } from 'lucide-react'
 import Link from 'next/link'
+import RecentActivityList from '@/components/RecentActivityList'
 
 interface DashboardStats {
     totalBots: number
@@ -93,27 +94,7 @@ export default function DashboardPage() {
         return () => clearInterval(interval)
     }, [router])
 
-    const formatTimestamp = (timestamp: string) => {
-        const timeString = timestamp.endsWith('Z') ? timestamp : `${timestamp}Z`
-        const date = new Date(timeString)
-        const now = new Date()
-        const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
 
-        if (diff < 60) return `${Math.max(0, diff)}s ago`
-        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-        return `${Math.floor(diff / 86400)}d ago`
-    }
-
-    const getActivityIcon = (type: string) => {
-        switch (type) {
-            case 'bot': return <Bot className="w-3.5 h-3.5 text-blue-500" />
-            case 'rule': return <Zap className="w-3.5 h-3.5 text-yellow-400" />
-            case 'campaign': return <MessageSquare className="w-3.5 h-3.5 text-emerald-500" />
-            case 'error': return <Activity className="w-3.5 h-3.5 text-red-500" />
-            default: return <Clock className="w-3.5 h-3.5 text-zinc-500" />
-        }
-    }
 
     if (!user || loading) {
         return (
@@ -206,39 +187,11 @@ export default function DashboardPage() {
 
                     {/* Recent Activity - Hidden for USER */}
                     {(user?.role === 'ADMIN' || user?.role === 'OWNER') && (
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Recent Activity</h3>
-                                <Link href="/dashboard/activity" className="text-xs text-zinc-500 hover:text-white transition-colors">View All</Link>
-                            </div>
-
-                            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl overflow-hidden min-h-[300px]">
-                                {activityLogs.length === 0 ? (
-                                    <div className="p-8 text-center text-zinc-400 dark:text-zinc-600 text-sm flex flex-col items-center justify-center h-full">
-                                        <Clock className="w-8 h-8 mb-3 opacity-20" />
-                                        No recent activity
-                                    </div>
-                                ) : (
-                                    <div className="divide-y divide-zinc-100 dark:divide-zinc-800/30">
-                                        {activityLogs.map((log) => (
-                                            <div key={log.id} className="group flex items-center gap-4 px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/20 transition-colors">
-                                                <div className="flex-shrink-0 mt-0.5">
-                                                    {getActivityIcon(log.type)}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm text-zinc-600 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors truncate">
-                                                        {log.message}
-                                                    </p>
-                                                </div>
-                                                <span className="text-xs font-mono text-zinc-400 dark:text-zinc-600 whitespace-nowrap">
-                                                    {formatTimestamp(log.timestamp)}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                        <RecentActivityList
+                            title="RECENT ACTIVITY"
+                            logs={activityLogs}
+                            className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900"
+                        />
                     )}
                 </div>
 

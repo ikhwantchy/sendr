@@ -126,8 +126,8 @@ export const api = {
             return apiClient.get(url);
         },
         getDashboardStats: () => apiClient.get('/analytics/dashboard-stats'),
-        getActivityLogs: (limit: number = 8, botId?: string) => {
-            let url = `/analytics/activity-logs?limit=${limit}`;
+        getActivityLogs: (limit: number = 8, botId?: string, timeRange: string = '24h') => {
+            let url = `/analytics/activity-logs?limit=${limit}&timeRange=${timeRange}`;
             if (botId) url += `&botId=${botId}`;
             return apiClient.get(url);
         },

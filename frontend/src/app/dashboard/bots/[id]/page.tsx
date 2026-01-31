@@ -486,11 +486,11 @@ export default function BotDetailPage() {
                             <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/30 transition-all">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
-                                        <MessageSquare className="w-5 h-5 text-blue-500" />
+                                        <Clock className="w-5 h-5 text-blue-500" />
                                     </div>
                                 </div>
-                                <div className="text-3xl font-bold text-zinc-100 mb-1 font-mono tracking-tight">{stats.totalMessages.toLocaleString()}</div>
-                                <div className="text-sm text-zinc-500">{isConnected ? 'Bot is active' : 'Connect to start tracking'}</div>
+                                <div className="text-3xl font-bold text-zinc-100 mb-1 font-mono tracking-tight">{stats.totalReminders}</div>
+                                <div className="text-sm text-zinc-500">{stats.activeReminders} active reminders</div>
                             </div>
                             {hasModuleAccess('auto_reply', botId) && (
                                 <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/30 transition-all">

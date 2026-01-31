@@ -189,7 +189,7 @@ ssh user@your-server-ip
     ```nginx
     server {
         listen 80;
-        server_name wa.yourdomain.com; # CHANGE THIS
+        server_name staging.sendr.web.id;
 
         # Frontend (Next.js)
         location / {
@@ -234,7 +234,7 @@ ssh user@your-server-ip
 
 5.  **SSL Setup (HTTPS)** (Optional but Recommended):
     ```bash
-    sudo certbot --nginx -d wa.yourdomain.com
+    sudo certbot --nginx -d staging.sendr.web.id
     ```
 
 ## 🚪 Alternative: Direct Port Access (No Domain)
@@ -258,7 +258,7 @@ ssh user@your-server-ip
     - Backend: `http://YOUR_SERVER_IP:3001`
 
 ## ✅ Done!
-Your application should now be accessible at `http://wa.cucii.my.id`.
+Your application should now be accessible at `https://staging.sendr.web.id`.
 
 ---
 

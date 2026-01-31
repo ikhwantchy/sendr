@@ -7,7 +7,8 @@ import LogDetailModal from '@/components/modals/LogDetailModal'
 import {
     ArrowLeft, Search, RefreshCw, Activity,
     ChevronLeft, ChevronRight, Clock, Bot, Zap,
-    Megaphone, MessageCircle, Play, Pause, Wifi, WifiOff, XCircle, Eye
+    Megaphone, MessageCircle, Play, Pause, Wifi, WifiOff, XCircle, Eye,
+    ArrowUpRight, ArrowDownLeft, Info
 } from 'lucide-react'
 
 interface ActivityLog {
@@ -70,81 +71,6 @@ export default function BotActivityPage() {
         } finally {
             setLoading(false)
         }
-    }
-
-    const getIcon = (log: ActivityLog) => {
-        if (log.type === 'bot') {
-            const msg = log.message.toLowerCase()
-            if (msg.includes('resumed')) return <Play className="w-4 h-4 text-blue-500" />
-            if (msg.includes('paused')) return <Pause className="w-4 h-4 text-yellow-500" />
-            if (msg.includes('connected') && !msg.includes('dis')) return <Wifi className="w-4 h-4 text-emerald-500" />
-            if (msg.includes('disconnected')) return <WifiOff className="w-4 h-4 text-red-500" />
-            return <Bot className="w-4 h-4 text-zinc-500" />
-        }
-
-        switch (log.type) {
-            case 'rule': return <Zap className="w-4 h-4 text-yellow-400" />
-            case 'campaign': return <Megaphone className="w-4 h-4 text-purple-500" />
-            case 'message': return <MessageCircle className="w-4 h-4 text-emerald-500" />
-            case 'reminder': return <Clock className="w-4 h-4 text-cyan-500" />
-            case 'error': return <XCircle className="w-4 h-4 text-red-500" />
-            default: return <Activity className="w-4 h-4 text-zinc-500" />
-        }
-    }
-
-    const getColorBg = (log: ActivityLog) => {
-        if (log.type === 'bot') {
-            const msg = log.message.toLowerCase()
-            if (msg.includes('resumed')) return 'bg-blue-500/10'
-            if (msg.includes('paused')) return 'bg-yellow-500/10'
-            if (msg.includes('connected') && !msg.includes('dis')) return 'bg-emerald-500/10'
-            if (msg.includes('disconnected')) return 'bg-red-500/10'
-            return 'bg-zinc-500/10'
-        }
-
-        switch (log.type) {
-            case 'rule': return 'bg-yellow-500/10'
-            case 'campaign': return 'bg-purple-500/10'
-            case 'message': return 'bg-emerald-500/10'
-            case 'reminder': return 'bg-cyan-500/10'
-            case 'error': return 'bg-red-500/10'
-            default: return 'bg-zinc-500/10'
-        }
-    }
-
-    const renderMessage = (log: ActivityLog) => {
-        const msg = log.message;
-        const isDeleted = log.is_deleted;
-        const isBotEvent = log.type === 'bot';
-
-        return (
-            <div className="flex flex-col gap-0.5 min-w-0 w-full relative notranslate">
-                <div className="flex items-center gap-2">
-                    {/* Status Dot for Deleted */}
-                    {isDeleted && (
-                        <div className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" title="Deleted Message" />
-                    )}
-
-                    <span className={`text-sm truncate select-none ${isDeleted ? 'text-zinc-500 line-through decoration-zinc-700' : 'text-zinc-200'} ${isBotEvent ? 'font-medium' : ''}`}>
-                        {msg}
-                    </span>
-                </div>
-
-                <div className="flex items-center gap-2 h-4">
-                    {isDeleted ? (
-                        <span className="text-[10px] font-bold text-red-500/80 tracking-wider flex items-center gap-1.5">
-                            DELETED
-                            <span className="w-0.5 h-0.5 rounded-full bg-zinc-700" />
-                            <span className="font-normal text-zinc-500 normal-case tracking-normal">Click to view content</span>
-                        </span>
-                    ) : (
-                        <span className="text-[10px] text-zinc-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                            Click to view details
-                        </span>
-                    )}
-                </div>
-            </div>
-        )
     }
 
     // "Real" absolute timestamp format: Jan 01, 14:30:45
@@ -299,34 +225,66 @@ export default function BotActivityPage() {
                     ) : paginatedLogs.length > 0 ? (
                         <div className="divide-y divide-zinc-800/30">
                             {paginatedLogs.map((log) => {
-                                const relTime = getRelativeTime(log.timestamp)
+                                // Logic adaptation from RecentActivityList
+                                let label = 'RECEIVED';
+                                let icon = <ArrowDownLeft className="w-4 h-4 text-emerald-500" />;
+                                let labelColor = 'text-emerald-500';
+
+                                // SYSTEM / BOT EVENTS
+                                if (log.type === 'bot' || log.type === 'error') {
+                                    label = log.type === 'error' ? 'ERROR' : 'SYSTEM';
+                                    icon = log.type === 'error' ? <XCircle className="w-4 h-4 text-red-500" /> : <Info className="w-4 h-4 text-zinc-500" />;
+                                    labelColor = log.type === 'error' ? 'text-red-500' : 'text-zinc-500';
+                                }
+                                // SENT / OUTBOUND
+                                else if (log.type === 'campaign' || log.type === 'reminder' || log.type === 'rule' || log.message?.startsWith('Sent')) {
+                                    label = 'SENT';
+                                    icon = <ArrowUpRight className="w-4 h-4 text-blue-500" />;
+                                    labelColor = 'text-blue-500';
+                                }
+
+                                const relTime = getRelativeTime(log.timestamp);
 
                                 return (
                                     <div
                                         key={log.id}
                                         onClick={() => setSelectedLog(log)}
-                                        className="group flex items-start gap-4 px-6 py-4 hover:bg-zinc-900/50 hover:bg-[#131317] bg-transparent border-b border-zinc-800/30 last:border-0 border-l-2 border-l-transparent hover:border-l-blue-500 transition-all cursor-pointer"
+                                        className="group p-5 hover:bg-zinc-900/50 hover:bg-[#131317] transition-all cursor-pointer border-l-2 border-l-transparent hover:border-l-blue-500"
                                     >
-                                        {/* Icon */}
-                                        <div className={`flex-shrink-0 p-2.5 rounded-xl ${getColorBg(log)} mt-0.5 transition-colors`}>
-                                            {getIcon(log)}
-                                        </div>
+                                        <div className="flex items-start gap-4">
+                                            {/* Icon */}
+                                            <div className="mt-1 flex-shrink-0">
+                                                {icon}
+                                            </div>
 
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0 pt-1">
-                                            {renderMessage(log)}
-                                        </div>
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0 space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`text-[10px] font-bold tracking-widest ${labelColor}`}>{label}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        {relTime && (
+                                                            <span className="text-[10px] font-medium text-zinc-600 bg-zinc-900 px-1.5 py-0.5 rounded">
+                                                                {relTime}
+                                                            </span>
+                                                        )}
+                                                        <span className="text-[10px] text-zinc-600 font-medium font-mono group-hover:text-zinc-400 transition-colors">
+                                                            {formatTimestamp(log.timestamp)}
+                                                        </span>
+                                                    </div>
+                                                </div>
 
-                                        {/* Timestamp & Meta */}
-                                        <div className="text-right flex-shrink-0 flex flex-col items-end gap-1.5 ml-4 pt-1">
-                                            <div className="flex items-center gap-2">
-                                                {relTime && (
-                                                    <span className="text-[10px] font-medium text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                                                        {relTime}
-                                                    </span>
-                                                )}
-                                                <div className="text-xs font-mono text-zinc-500 group-hover:text-zinc-300 transition-colors">
-                                                    {formatTimestamp(log.timestamp)}
+                                                <div className="flex flex-col gap-0.5 mt-1">
+                                                    <p className={`text-sm font-medium leading-relaxed break-words ${log.is_deleted ? 'text-zinc-500 line-through decoration-zinc-700' : 'text-zinc-200'}`}>
+                                                        {log.message}
+                                                    </p>
+
+                                                    {log.is_deleted && (
+                                                        <span className="text-[10px] font-bold text-red-500/80 tracking-wider flex items-center gap-1.5 mt-1">
+                                                            DELETED
+                                                            <span className="w-0.5 h-0.5 rounded-full bg-zinc-700" />
+                                                            <span className="font-normal text-zinc-500 normal-case tracking-normal">Click to view content</span>
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
