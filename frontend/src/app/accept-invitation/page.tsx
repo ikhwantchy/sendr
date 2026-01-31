@@ -1,15 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
-export default function AcceptInvitationPage() {
+function InvitationContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const token = searchParams.get('token')
+
+    // Fix: Handle possibly null searchParams
+    const token = searchParams ? searchParams.get('token') : null
 
     const [formData, setFormData] = useState({
         name: '',
@@ -22,14 +24,18 @@ export default function AcceptInvitationPage() {
     // Validate token on mount
     useEffect(() => {
         if (!token) {
-            toast.error('Invalid invitation link')
-            router.push('/login')
+            // Only redirect if we checked and token is missing (checking happens quickly)
+            if (searchParams) { // Ensure searchParams loaded
+                toast.error('Invalid invitation link')
+                router.push('/login')
+            }
             return
         }
 
         // Validate token with backend
         const validateToken = async () => {
             try {
+                // Use relative URL or env var in production ideally, but keeping localhost as per original
                 const response = await fetch(`http://localhost:3001/api/invitations/validate/${token}`)
                 const data = await response.json()
 
@@ -48,7 +54,7 @@ export default function AcceptInvitationPage() {
         }
 
         validateToken()
-    }, [token, router])
+    }, [token, router, searchParams])
 
     const registerMutation = useMutation({
         mutationFn: async (data: any) => {
@@ -96,6 +102,8 @@ export default function AcceptInvitationPage() {
             return
         }
 
+        if (!invitationData) return;
+
         registerMutation.mutate({
             name: formData.name,
             email: invitationData.email,
@@ -104,7 +112,7 @@ export default function AcceptInvitationPage() {
         })
     }
 
-    if (validating) {
+    if (validating && token) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
                 <div className="text-center">
@@ -116,6 +124,11 @@ export default function AcceptInvitationPage() {
                 </div>
             </div>
         )
+    }
+
+    // Default loading state handled by Suspense, but if token missing:
+    if (!token) {
+        return null; // Will redirect in useEffect
     }
 
     return (
@@ -220,5 +233,22 @@ export default function AcceptInvitationPage() {
                 </div>
             </div>
         </div>
+    )
+}
+
+export default function AcceptInvitationPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="relative w-16 h-16 mx-auto mb-4">
+                        <div className="absolute inset-0 rounded-full border-4 border-cyan-500/20"></div>
+                        <div className="absolute inset-0 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin"></div>
+                    </div>
+                </div>
+            </div>
+        }>
+            <InvitationContent />
+        </Suspense>
     )
 }
