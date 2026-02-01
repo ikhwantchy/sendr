@@ -54,13 +54,39 @@ router.get('/dashboard-stats', async (req, res) => {
             campaigns = campaignsResult.rows[0]?.count || 0;
         } catch (err) { }
 
+        // Get total users
+        let totalUsers = 0;
+        try {
+            const usersResult = await query(`
+                SELECT COUNT(*) as count 
+                FROM users 
+                WHERE tenant_id = ?
+            `, [tenantId]);
+            totalUsers = usersResult.rows[0]?.count || 0;
+        } catch (err) { }
+
+        // Get active users (logged in within last 15 minutes)
+        let activeUsers = 0;
+        try {
+            const activeUsersResult = await query(`
+                SELECT COUNT(*) as count 
+                FROM users 
+                WHERE tenant_id = ? 
+                AND last_login_at IS NOT NULL 
+                AND datetime(last_login_at) >= datetime('now', '-15 minutes')
+            `, [tenantId]);
+            activeUsers = activeUsersResult.rows[0]?.count || 0;
+        } catch (err) { }
+
         res.json({
             success: true,
             data: {
                 totalBots: botsResult.rows[0]?.count || 0,
                 activeRules: rulesResult.rows[0]?.count || 0,
                 campaigns: campaigns,
-                messagesSent: messagesSent
+                messagesSent: messagesSent,
+                totalUsers: totalUsers,
+                activeUsers: activeUsers
             }
         });
     } catch (error) {

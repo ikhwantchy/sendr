@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import {
     Bot, MessageSquare, Zap, Clock, Plus, Activity,
     ArrowUpRight, Server, Cpu, HardDrive, HelpCircle, MessageCircle,
-    Layout, Smartphone, FileText, UserPlus
+    Layout, Smartphone, FileText, UserPlus, Users, UserCheck
 } from 'lucide-react'
 import Link from 'next/link'
 import RecentActivityList from '@/components/RecentActivityList'
@@ -16,6 +16,8 @@ interface DashboardStats {
     activeRules: number
     campaigns: number
     messagesSent: number
+    totalUsers: number
+    activeUsers: number
 }
 
 interface ActivityLog {
@@ -39,7 +41,9 @@ export default function DashboardPage() {
         totalBots: 0,
         activeRules: 0,
         campaigns: 0,
-        messagesSent: 0
+        messagesSent: 0,
+        totalUsers: 0,
+        activeUsers: 0
     })
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
     const [systemStatus, setSystemStatus] = useState<SystemStatus>({
@@ -130,14 +134,14 @@ export default function DashboardPage() {
                     icon={<MessageCircle className="w-4 h-4 text-zinc-500" />}
                 />
                 <StatCard
-                    label="Active Rules"
-                    value={stats.activeRules}
-                    icon={<Zap className="w-4 h-4 text-zinc-500" />}
+                    label="Total Users"
+                    value={stats.totalUsers}
+                    icon={<Users className="w-4 h-4 text-zinc-500" />}
                 />
                 <StatCard
-                    label="Uptime"
-                    value="99.9%"
-                    icon={<Activity className="w-4 h-4 text-zinc-500" />}
+                    label="Active Users"
+                    value={stats.activeUsers}
+                    icon={<UserCheck className="w-4 h-4 text-zinc-500" />}
                 />
             </div>
 
