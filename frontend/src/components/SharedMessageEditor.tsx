@@ -145,6 +145,40 @@ export default function SharedMessageEditor({
         handleInput()
     }
 
+    // Handle paste to preserve newlines
+    const handlePaste = (e: React.ClipboardEvent) => {
+        e.preventDefault()
+        const text = e.clipboardData.getData('text/plain')
+        if (!text) return
+        
+        // Insert plain text with newlines preserved
+        const selection = window.getSelection()
+        if (!selection || !selection.rangeCount) return
+        
+        const range = selection.getRangeAt(0)
+        range.deleteContents()
+        
+        // Split by newlines and insert with <br> tags
+        const lines = text.split('\n')
+        const fragment = document.createDocumentFragment()
+        
+        lines.forEach((line, index) => {
+            fragment.appendChild(document.createTextNode(line))
+            if (index < lines.length - 1) {
+                fragment.appendChild(document.createElement('br'))
+            }
+        })
+        
+        range.insertNode(fragment)
+        
+        // Move cursor to end
+        range.collapse(false)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        
+        handleInput()
+    }
+
     // Emoji outside click
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -229,6 +263,7 @@ export default function SharedMessageEditor({
                 ref={textareaRef}
                 contentEditable
                 onInput={handleInput}
+                onPaste={handlePaste}
                 className={`w-full bg-transparent p-3 text-zinc-200 focus:outline-none font-mono text-xs leading-relaxed resize-y overflow-y-auto ${isExpanded ? 'flex-1 h-full' : 'min-h-[200px]'}`}
                 spellCheck={false}
             />
