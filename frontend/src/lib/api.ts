@@ -46,6 +46,15 @@ export const api = {
             apiClient.get('/auth/profile'),
     },
 
+    // Profile (separate route for profile updates)
+    profile: {
+        get: () => apiClient.get('/profile/profile'),
+        update: (data: { name: string; email: string }) => 
+            apiClient.put('/profile/profile', data),
+        changePassword: (data: { currentPassword: string; newPassword: string }) =>
+            apiClient.put('/profile/password', data),
+    },
+
     // Bots
     bots: {
         list: () => apiClient.get('/bots'),

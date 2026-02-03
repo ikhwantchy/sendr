@@ -24,8 +24,12 @@ export default function LoginPage() {
                 localStorage.setItem('user', JSON.stringify(response.data.data.user))
                 toast.success('Welcome back')
 
+                // Redirect based on user role
+                const userRole = response.data.data.user?.role?.toLowerCase()
+                const redirectPath = (userRole === 'owner' || userRole === 'admin') ? '/dashboard' : '/user'
+                
                 setTimeout(() => {
-                    window.location.replace('/dashboard')
+                    window.location.replace(redirectPath)
                 }, 800)
             }
         } catch (error: any) {
