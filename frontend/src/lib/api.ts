@@ -160,13 +160,46 @@ export const api = {
         previewEnhanced: (data: any) => apiClient.post('/sheets/preview-enhanced', data),
         renderPreview: (data: any) => apiClient.post('/sheets/render-preview', data),
     },
-    // Security
+// Security
     security: {
         getSessions: () => apiClient.get('/security/sessions'),
         revokeSession: (id: string) => apiClient.post(`/security/sessions/${id}/revoke`),
         revokeOtherSessions: () => apiClient.post('/security/sessions/revoke-others'),
         getLogs: () => apiClient.get('/security/logs'),
         setupTelegram: (chatId: string) => apiClient.post('/security/telegram/setup', { chatId }),
+    },
+
+    // AI Sheet Updater
+    sheetUpdater: {
+        getStatus: () => apiClient.get('/sheet-updater/status'),
+        validateSheet: (spreadsheetUrl: string) => apiClient.post('/sheet-updater/validate-sheet', { spreadsheetUrl }),
+        getSheetInfo: (spreadsheetUrl: string, sheetName?: string) => 
+            apiClient.get(`/sheet-updater/sheet-info?spreadsheetUrl=${encodeURIComponent(spreadsheetUrl)}${sheetName ? `&sheetName=${encodeURIComponent(sheetName)}` : ''}`),
+        getConfigs: (botId: string) => apiClient.get(`/sheet-updater/configs/${botId}`),
+        getConfigsByTarget: (botId: string, targetJid: string) => 
+            apiClient.get(`/sheet-updater/configs/${botId}/by-target/${encodeURIComponent(targetJid)}`),
+        getConfig: (configId: string) => apiClient.get(`/sheet-updater/config/${configId}`),
+        createConfig: (data: any) => apiClient.post('/sheet-updater/configs', data),
+        updateConfig: (configId: string, data: any) => apiClient.put(`/sheet-updater/config/${configId}`, data),
+        deleteConfig: (configId: string) => apiClient.delete(`/sheet-updater/config/${configId}`),
+        deleteConfigsByTarget: (botId: string, targetJid: string) => 
+            apiClient.delete(`/sheet-updater/configs/${botId}/by-target/${encodeURIComponent(targetJid)}`),
+        toggleConfig: (configId: string) => apiClient.patch(`/sheet-updater/config/${configId}/toggle`),
+        testClassify: (message: string, valueMappings?: any[], aiInstructions?: string) => 
+            apiClient.post('/sheet-updater/test-classify', { message, valueMappings, aiInstructions }),
+        testUpdate: (botId: string, phone: string, message: string) =>
+            apiClient.post('/sheet-updater/test-update', { botId, phone, message }),
+        getLogs: (configId: string, limit?: number) => 
+            apiClient.get(`/sheet-updater/logs/${configId}${limit ? `?limit=${limit}` : ''}`),
+        getDefaultMappings: () => apiClient.get('/sheet-updater/default-mappings'),
+    },
+
+    // LID to Phone Mappings
+    lidMappings: {
+        list: (botId: string) => apiClient.get(`/lid-mappings/${botId}`),
+        create: (data: { bot_id: string; lid: string; phone: string; name?: string }) => 
+            apiClient.post('/lid-mappings', data),
+        delete: (id: string) => apiClient.delete(`/lid-mappings/${id}`),
     },
 
     // Generic helpers

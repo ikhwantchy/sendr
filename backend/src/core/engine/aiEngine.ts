@@ -10,6 +10,8 @@
 import { eventBus } from '../events/eventBus';
 import { EventType, BaseEvent, MessageReceivedPayload } from '../events/types';
 import { llmService } from '../../services/llm/llmService';
+import { aiSheetUpdaterService } from '../../services/aiSheetUpdaterService';
+import { lidPhoneMappingService } from '../../services/lidPhoneMappingService';
 import { query } from '../../database/connection';
 import { logger } from '../../utils/logger';
 
@@ -35,8 +37,16 @@ class AIEngine {
         const { context, payload } = event;
         const { bot_id, contact_id } = context;
 
+        logger.info('[AIEngine] handleMessageReceived called', { bot_id, contact_id, from: payload.from, content: payload.content?.substring(0, 30) });
+
         try {
-            // Get bot AI config
+            // ✅ AI Sheet Updater - Process message for auto sheet updates (runs independently)
+            // Priority: sender_phone (resolved) > from JID > contact_id
+            const senderJid = payload.from || contact_id || '';
+            const senderPhone = payload.sender_phone; // Resolved phone from LID
+            await this.processSheetUpdate(bot_id, senderJid, payload.content, payload, senderPhone);
+
+            // Get bot AI config for other AI features
             const botResult = await query('SELECT ai_config, name FROM bots WHERE id = ?', [bot_id]);
             if (!botResult.rows.length) return;
 
@@ -251,7 +261,7 @@ class AIEngine {
         return false;
     }
 
-    /**
+/**
      * Check if target (group/contact) is allowed to use LLM
      */
     private async isTargetAllowed(botId: string, targetJid: string): Promise<boolean> {
@@ -275,6 +285,82 @@ class AIEngine {
             logger.error('Error checking LLM whitelist', { error, botId, targetJid });
             // Fail-safe: if error, don't allow (prevents accidental bot loops)
             return false;
+        }
+    }
+
+    /**
+     * Process message for AI Sheet Updater
+     * Checks if sender matches any configured sheet and updates accordingly
+     * Now supports matching by name if phone not found (for LID cases)
+     */
+    private async processSheetUpdate(botId: string, senderJid: string, message: string, payload?: MessageReceivedPayload, resolvedPhone?: string): Promise<void> {
+        logger.info('[SheetUpdater] 🔄 Starting processSheetUpdate', { botId, senderJid, message: message?.substring(0, 30), resolvedPhone, senderName: payload?.sender_name });
+        
+        try {
+            // Use resolved phone number if available, otherwise extract from JID
+            let phone = resolvedPhone;
+            const senderName = payload?.sender_name;
+            
+            if (!phone) {
+                // Check if this is a LID and look up from mapping
+                if (senderJid.includes('@lid')) {
+                    const lid = senderJid.split('@')[0];
+                    logger.info('[SheetUpdater] 🔍 Looking up LID mapping', { botId, lid });
+                    const mappedPhone = await lidPhoneMappingService.getPhoneByLid(botId, lid);
+                    logger.info('[SheetUpdater] 📱 LID lookup result', { lid, mappedPhone });
+                    if (mappedPhone) {
+                        phone = mappedPhone;
+                        logger.info('[SheetUpdater] Resolved LID to phone from mapping', { lid, phone });
+                    } else {
+                        // LID not in mapping - will try to match by name in processMessage
+                        logger.warn('[SheetUpdater] ⚠️ Unknown LID - will try name match', { 
+                            botId, 
+                            lid, 
+                            senderName,
+                            message: message?.substring(0, 30)
+                        });
+                        // Pass LID as phone, but processMessage will try name match
+                        phone = lid;
+                    }
+                } else if (senderJid.includes('@s.whatsapp.net')) {
+                    // Regular phone number format
+                    phone = senderJid.split('@')[0];
+                } else {
+                    phone = senderJid.split('@')[0];
+                }
+            }
+            
+            logger.info('[SheetUpdater] Processing message', { botId, phone, resolvedPhone, senderJid, senderName, message: message?.substring(0, 50) });
+            
+            if (!phone || !message) {
+                logger.warn('[SheetUpdater] Missing phone or message, skipping', { phone, message });
+                return;
+            }
+
+            logger.info('[SheetUpdater] 🚀 Calling aiSheetUpdaterService.processMessage', { botId, phone, senderName, message: message?.substring(0, 30) });
+            
+            const result = await aiSheetUpdaterService.processMessage(
+                botId,
+                phone,
+                message,
+                senderJid,
+                senderName  // Pass sender name for name-based matching
+            );
+
+            logger.info('[SheetUpdater] 📊 processMessage result', { result });
+
+            if (result.success) {
+                logger.info('📊 AI Sheet Update successful', {
+                    botId,
+                    phone,
+                    classification: result.classification,
+                    value: result.updatedValue
+                });
+            } else if (result.message !== 'No active sheet updater configs') {
+                logger.debug('[SheetUpdater] No update made', { reason: result.message, phone });
+            }
+        } catch (error: any) {
+            logger.error('AI Sheet Update error', { error: error.message, botId, senderJid });
         }
     }
 }

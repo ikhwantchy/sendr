@@ -90,6 +90,7 @@ export interface MessageReceivedPayload {
     group_name?: string;
     sender_id?: string;
     sender_name?: string;
+    sender_phone?: string; // Resolved phone number (from LID if needed)
     mentioned_jids?: string[];
     quoted_message?: {
         participant?: string;

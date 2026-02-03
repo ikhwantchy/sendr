@@ -65,7 +65,7 @@ export default function DashboardPage() {
             const logsRes = await api.analytics.getActivityLogs(8)
             if (logsRes.data.success) setActivityLogs(logsRes.data.data)
 
-            // System
+// System
             const sysRes = await api.analytics.getSystemStatus()
             if (sysRes.data.success) setSystemStatus(sysRes.data.data)
 
@@ -186,7 +186,7 @@ export default function DashboardPage() {
                                     />
                                 </>
                             )}
-                        </div>
+</div>
                     </div>
 
                     {/* Recent Activity - Hidden for USER */}

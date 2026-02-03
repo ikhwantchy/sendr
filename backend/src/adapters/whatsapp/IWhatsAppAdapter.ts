@@ -72,5 +72,6 @@ export interface WhatsAppIncomingMessage {
     group_name?: string;
     sender_id?: string;
     sender_name?: string;
+    sender_phone?: string; // Resolved phone number (from LID if needed)
     timestamp: string;
 }

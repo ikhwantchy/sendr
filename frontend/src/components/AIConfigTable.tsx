@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { Bot, Plus, Trash2, Edit2, MoreVertical, X, ChevronDown, Users, ChevronLeft, Save } from 'lucide-react'
+import { Bot, Plus, Trash2, Edit2, MoreVertical, X, ChevronDown, Users, ChevronLeft, Save, FileSpreadsheet } from 'lucide-react'
 
 interface AIConfigTableProps {
     botId: string
@@ -213,6 +213,19 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
         if (!deleteConfirmId) return
 
         try {
+            // Find the config to get its target_jid for cascade delete
+            const configToDelete = configs.find((c: any) => c.id === deleteConfirmId)
+            
+            // Delete linked sheet updater configs first (cascade delete)
+            if (configToDelete?.target_jid) {
+                try {
+                    await api.sheetUpdater.deleteConfigsByTarget(botId, configToDelete.target_jid)
+                } catch (sheetError) {
+                    console.error('Failed to delete linked sheet updater:', sheetError)
+                    // Continue with AI config deletion even if sheet updater delete fails
+                }
+            }
+
             await api.bots.llmTargets.remove(botId, deleteConfirmId)
             refetch()
             toast.success('Configuration deleted!')
@@ -356,9 +369,14 @@ export default function AIConfigTable({ botId }: AIConfigTableProps) {
                                         <td className="py-4 px-4">
                                             <div className="flex items-center gap-2">
                                                 <Bot className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                                                <span className="text-zinc-100 font-medium truncate max-w-[160px]">
+                                                <span className="text-zinc-100 font-medium truncate max-w-[140px]">
                                                     {config.config_name || 'Unnamed'}
                                                 </span>
+                                                {(llmConfig.behavior?.silentCollection || llmConfig.behavior?.hybridMode) && (
+                                                    <span title="Data Collection Enabled" className="flex-shrink-0">
+                                                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="py-4 px-4 text-center">

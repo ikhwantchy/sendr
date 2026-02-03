@@ -24,6 +24,7 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
     private sockets: Map<string, WASocket> = new Map();
     private qrCodes: Map<string, { qr_code: string; expires_at: string }> = new Map();
     private pausedBots: Set<string> = new Set(); // Track paused bots
+    private lidToPhone: Map<string, string> = new Map(); // Cache LID -> phone number mapping
     private sessionPath: string;
 
     constructor() {
@@ -298,6 +299,47 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
         // Credentials update
         sock.ev.on('creds.update', saveCreds);
 
+        // ✅ AUTO-CAPTURE CONTACTS (LID → Phone mapping)
+        sock.ev.on('contacts.upsert', async (contacts) => {
+            logger.info('📇 Contacts upsert event', { bot_id: botId, count: contacts.length });
+            try {
+                const { lidPhoneMappingService } = await import('../../services/lidPhoneMappingService');
+                
+                for (const contact of contacts) {
+                    // contact.id could be either LID or phone format
+                    // contact.lid is the LID if the contact has one
+                    // We need to map LID ↔ Phone
+                    
+                    const contactId = contact.id || '';
+                    const lidValue = (contact as any).lid;
+                    
+                    logger.info('📇 Contact info', { 
+                        bot_id: botId, 
+                        contact_id: contactId,
+                        lid: lidValue,
+                        name: contact.name || contact.notify,
+                        raw: JSON.stringify(contact)
+                    });
+                    
+                    // If contact has both phone JID and LID, save mapping
+                    if (contactId.includes('@s.whatsapp.net') && lidValue) {
+                        const phone = contactId.split('@')[0];
+                        const lid = lidValue.split('@')[0];
+                        
+                        await lidPhoneMappingService.upsertMapping({
+                            bot_id: botId,
+                            lid: lid,
+                            phone: phone,
+                            name: contact.name || contact.notify
+                        });
+                        logger.info('🔗 Auto-mapped LID from contact', { lid, phone, name: contact.name });
+                    }
+                }
+            } catch (err) {
+                logger.error('Failed to process contacts upsert', { error: err });
+            }
+        });
+
         // ✅ AUTO-DETECT GROUPS ON UPSERT
         sock.ev.on('groups.upsert', async (groups) => {
             logger.info('👥 Groups upsert event', { bot_id: botId, count: groups.length });
@@ -425,16 +467,54 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 msg.message?.templateButtonReplyMessage?.selectedId ||
                 '';
 
+            const remoteJid = msg.key.remoteJid || '';
+            const senderId = msg.key.participant || msg.key.remoteJid || '';
+            
+            // Try to resolve LID to phone number
+            let senderPhone: string | undefined;
+            if (remoteJid.includes('@lid') || senderId.includes('@lid')) {
+                // Try to get phone from cache
+                const lid = remoteJid.split('@')[0];
+                senderPhone = this.lidToPhone.get(lid);
+                
+                // If not in cache, try to resolve using socket
+                if (!senderPhone) {
+                    const sock = this.sockets.get(bot.id);
+                    if (sock) {
+                        try {
+                            // Try to get the phone number using fetchStatus or other methods
+                            // Note: This might not always work depending on WhatsApp's API
+                            const status = await sock.fetchStatus(remoteJid).catch(() => null);
+                            if (status && typeof status === 'object' && 'id' in status) {
+                                const phoneJid = (status as any).id;
+                                if (phoneJid && phoneJid.includes('@s.whatsapp.net')) {
+                                    senderPhone = phoneJid.split('@')[0];
+                                    this.lidToPhone.set(lid, senderPhone);
+                                    logger.info('[LID Resolver] Resolved LID to phone', { lid, phone: senderPhone });
+                                }
+                            }
+                        } catch (e) {
+                            // Fallback - check if there's a verifiedName or other identifier
+                            logger.debug('[LID Resolver] Could not resolve LID', { lid, error: (e as Error).message });
+                        }
+                    }
+                }
+            } else if (remoteJid.includes('@s.whatsapp.net')) {
+                // Regular phone number format
+                senderPhone = remoteJid.split('@')[0];
+            }
+
             const incomingMessage: WhatsAppIncomingMessage = {
                 wa_message_id: msg.key.id || '',
-                from: msg.key.remoteJid || '',
+                from: remoteJid,
                 to: bot.phone_number || '',
                 message_type: 'text',
                 content: messageContent,
-                is_group: msg.key.remoteJid?.endsWith('@g.us') || false,
-                sender_id: msg.key.participant || msg.key.remoteJid || undefined,
+                is_group: remoteJid.endsWith('@g.us') || false,
+                sender_id: senderId,
                 sender_name: msg.pushName || 'Unknown',
                 timestamp: new Date((msg.messageTimestamp as number) * 1000).toISOString(),
+                sender_phone: senderPhone, // Add resolved phone number
             };
 
             // Extract mentions and quoted message info
@@ -752,6 +832,35 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 });
             } else {
                 throw new Error(`Unsupported message type: ${message.type}`);
+            }
+
+            // Log full result to see LID info
+            logger.info('📨 sendMessage result', {
+                bot_id: botId,
+                sent_to_jid: jid,
+                result_key: result?.key,
+                remote_jid: result?.key?.remoteJid,
+                participant: result?.key?.participant
+            });
+
+            // Auto-capture LID mapping if response contains LID
+            const remoteJid = result?.key?.remoteJid;
+            if (remoteJid && remoteJid.includes('@lid')) {
+                const lid = remoteJid.split('@')[0];
+                const phone = jid.split('@')[0].replace(/\D/g, '');
+                
+                // Import and save mapping
+                try {
+                    const { lidPhoneMappingService } = await import('../../services/lidPhoneMappingService');
+                    await lidPhoneMappingService.upsertMapping({
+                        bot_id: botId,
+                        lid: lid,
+                        phone: phone
+                    });
+                    logger.info('🔗 Auto-captured LID mapping', { lid, phone, bot_id: botId });
+                } catch (mapError) {
+                    logger.warn('Failed to auto-capture LID mapping', { error: mapError });
+                }
             }
 
             return {

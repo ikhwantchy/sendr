@@ -554,6 +554,87 @@ async function initSchema(): Promise<void> {
      `);
   } catch (e) { }
 
+  // AI Sheet Updaters Table (AI Assistant - supports update, create, smart modes)
+  try {
+    _db!.run(`
+        CREATE TABLE IF NOT EXISTS ai_sheet_updaters (
+            id TEXT PRIMARY KEY,
+            bot_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            spreadsheet_url TEXT NOT NULL,
+            spreadsheet_id TEXT,
+            sheet_name TEXT NOT NULL,
+            match_column TEXT NOT NULL,
+            update_column TEXT NOT NULL,
+            ai_instructions TEXT,
+            value_mappings TEXT NOT NULL DEFAULT '[]',
+            is_enabled INTEGER DEFAULT 1,
+            target_jids TEXT,
+            mode TEXT DEFAULT 'update',
+            column_schema TEXT,
+            trigger_keywords TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+        )
+     `);
+  } catch (e) { }
+
+  // Add new columns to existing ai_sheet_updaters table (for migration)
+  try {
+    _db!.run(`ALTER TABLE ai_sheet_updaters ADD COLUMN mode TEXT DEFAULT 'update'`);
+  } catch (e) { }
+  try {
+    _db!.run(`ALTER TABLE ai_sheet_updaters ADD COLUMN column_schema TEXT`);
+  } catch (e) { }
+  try {
+    _db!.run(`ALTER TABLE ai_sheet_updaters ADD COLUMN trigger_keywords TEXT`);
+  } catch (e) { }
+
+  // AI Sheet Update Logs Table
+  try {
+    _db!.run(`
+        CREATE TABLE IF NOT EXISTS ai_sheet_update_logs (
+            id TEXT PRIMARY KEY,
+            config_id TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            message TEXT,
+            classification TEXT,
+            mapped_value TEXT,
+            confidence REAL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (config_id) REFERENCES ai_sheet_updaters(id) ON DELETE CASCADE
+        )
+     `);
+  } catch (e) { }
+
+  // Create indexes for AI Sheet Updater
+  try {
+    _db!.run(`CREATE INDEX IF NOT EXISTS idx_ai_sheet_updaters_bot_id ON ai_sheet_updaters(bot_id)`);
+    _db!.run(`CREATE INDEX IF NOT EXISTS idx_ai_sheet_updaters_enabled ON ai_sheet_updaters(is_enabled)`);
+    _db!.run(`CREATE INDEX IF NOT EXISTS idx_ai_sheet_update_logs_config ON ai_sheet_update_logs(config_id)`);
+    _db!.run(`CREATE INDEX IF NOT EXISTS idx_ai_sheet_update_logs_phone ON ai_sheet_update_logs(phone)`);
+  } catch (e) { }
+
+  // LID to Phone Mapping Table (for WhatsApp LID resolution)
+  try {
+    _db!.run(`
+        CREATE TABLE IF NOT EXISTS lid_phone_mappings (
+            id TEXT PRIMARY KEY,
+            bot_id TEXT NOT NULL,
+            lid TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            name TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+            UNIQUE(bot_id, lid)
+        )
+     `);
+    _db!.run(`CREATE INDEX IF NOT EXISTS idx_lid_phone_mappings_bot_lid ON lid_phone_mappings(bot_id, lid)`);
+    _db!.run(`CREATE INDEX IF NOT EXISTS idx_lid_phone_mappings_phone ON lid_phone_mappings(phone)`);
+  } catch (e) { }
+
   // Apply migrations manually here
   const migrations = [
     "ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound'))",

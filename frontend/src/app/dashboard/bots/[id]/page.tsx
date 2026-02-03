@@ -13,7 +13,7 @@ import RulesTable from '@/components/tables/RulesTable'
 import RemindersTable from '@/components/tables/RemindersTable'
 import ActivityChart from '@/components/ActivityChart'
 import RecentActivityList from '@/components/RecentActivityList'
-import AIConfigTable from '@/components/AIConfigTable'
+import AIAssistantPanel from '@/components/AIAssistantPanel'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
     ChevronLeft,
@@ -447,7 +447,18 @@ export default function BotDetailPage() {
                                 <div className="hidden lg:block h-5 w-[1px] bg-zinc-700/80 mx-1" />
 
                                 <div className="w-[145px]">
-                                    {!!(bot.phone_number || isBotPausing) && (
+                                    {/* Show Reconnect button when disconnected but has phone number */}
+                                    {!isConnected && bot.phone_number && (
+                                        <Link
+                                            href={`/dashboard/bots/${botId}/connect`}
+                                            className="w-full inline-flex items-center justify-center gap-2.5 py-2.5 rounded-xl text-xs font-semibold border transition-all duration-300 bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"
+                                        >
+                                            <RefreshCw className="w-4 h-4" />
+                                            <span className="font-semibold tracking-tight uppercase">RECONNECT</span>
+                                        </Link>
+                                    )}
+                                    {/* Show Pause/Resume button when connected */}
+                                    {isConnected && (
                                         <button
                                             onClick={handleToggleBotPause}
                                             disabled={isBotPausing}
@@ -553,7 +564,7 @@ export default function BotDetailPage() {
 
                 {activeTab === 'ai-assistant' && hasModuleAccess('ai_assistant', botId) && (
                     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                        <AIConfigTable botId={botId} />
+                        <AIAssistantPanel botId={botId} />
                     </div>
                 )}
 
