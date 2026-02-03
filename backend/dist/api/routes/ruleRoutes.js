@@ -1,0 +1,95 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const keywordRuleRepository_1 = require("../../database/repositories/keywordRuleRepository");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+// GET /api/rules - List rules
+router.get('/', async (req, res) => {
+    try {
+        const rules = await keywordRuleRepository_1.keywordRuleRepository.findByTenant(req.user.tenant_id);
+        res.json({ success: true, data: rules });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// GET /api/rules/bot/:botId - List rules by bot
+router.get('/bot/:botId', async (req, res) => {
+    try {
+        const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'OWNER';
+        const rules = await keywordRuleRepository_1.keywordRuleRepository.findByBot(isAdmin ? undefined : req.user.tenant_id, req.params.botId);
+        res.json({ success: true, data: rules });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// GET /api/rules/:id - Get rule by ID
+router.get('/:id', async (req, res) => {
+    try {
+        const rule = await keywordRuleRepository_1.keywordRuleRepository.findById(req.params.id, req.user.tenant_id);
+        if (!rule) {
+            return res.status(404).json({ success: false, error: 'Rule not found' });
+        }
+        res.json({ success: true, data: rule });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// POST /api/rules - Create rule
+router.post('/', (0, auth_1.requireRole)(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
+    try {
+        const rule = await keywordRuleRepository_1.keywordRuleRepository.create({
+            ...req.body,
+            tenant_id: req.user.tenant_id,
+            created_by: req.user.id,
+        });
+        res.status(201).json({ success: true, data: rule });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// PUT /api/rules/:id - Update rule
+router.put('/:id', (0, auth_1.requireRole)(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
+    try {
+        const rule = await keywordRuleRepository_1.keywordRuleRepository.update(req.params.id, req.user.tenant_id, req.body);
+        res.json({ success: true, data: rule });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// PATCH /api/rules/:id/toggle - Toggle rule active status
+router.patch('/:id/toggle', (0, auth_1.requireRole)(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
+    try {
+        // Get current rule
+        const currentRule = await keywordRuleRepository_1.keywordRuleRepository.findById(req.params.id, req.user.tenant_id);
+        if (!currentRule) {
+            return res.status(404).json({ success: false, error: 'Rule not found' });
+        }
+        // Toggle is_active
+        const updatedRule = await keywordRuleRepository_1.keywordRuleRepository.update(req.params.id, req.user.tenant_id, {
+            is_active: !currentRule.is_active
+        });
+        res.json({ success: true, data: updatedRule });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// DELETE /api/rules/:id - Delete rule
+router.delete('/:id', (0, auth_1.requireRole)(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
+    try {
+        await keywordRuleRepository_1.keywordRuleRepository.delete(req.params.id, req.user.tenant_id);
+        res.json({ success: true, message: 'Rule deleted' });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+exports.default = router;
+//# sourceMappingURL=ruleRoutes.js.map
