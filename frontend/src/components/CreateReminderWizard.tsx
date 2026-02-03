@@ -1564,7 +1564,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                 <div className="hidden lg:flex w-[380px] shrink-0 bg-[#0b141a] relative flex-col h-full border-l border-zinc-800 animate-in slide-in-from-right-5 duration-200">
                     <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10">
                         <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center overflow-hidden">
-                            <img src="/Sendr-logo.png" alt="Sendr" className="w-full h-full object-cover" />
+                            <img src="/sendr-logo.png" alt="Sendr" className="w-full h-full object-cover" />
                         </div>
                         <div className="flex-1 min-w-0">
                             <div className="text-[#e9edef] text-sm font-medium truncate">{formData.name || 'Sendr Assistant'}</div>

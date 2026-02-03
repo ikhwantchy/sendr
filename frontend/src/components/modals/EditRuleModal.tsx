@@ -454,7 +454,7 @@ export default function EditRuleModal({ botId, rule, onClose }: EditRuleModalPro
                     {/* Preview Header */}
                     <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10 shrink-0">
                         <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center overflow-hidden">
-                            <img src="/Sendr-logo.png" alt="Sendr" className="w-full h-full object-cover" />
+                            <img src="/sendr-logo.png" alt="Sendr" className="w-full h-full object-cover" />
                         </div>
                         <div className="flex-1 min-w-0">
                             <div className="text-[#e9edef] text-sm font-medium truncate">Sendr Assistant</div>

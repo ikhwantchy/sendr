@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { Copy, Check, ChevronDown, ChevronUp, Sparkles, Calendar, Megaphone, Bot, X, BarChart3 } from 'lucide-react'
+import { API_URL } from '@/lib/api'
 
 interface CreateUserModalProps {
     isOpen: boolean
@@ -33,7 +34,7 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
         mutationFn: async (data: any) => {
             const token = localStorage.getItem('token')
             const response = await axios.post(
-                `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/admin/users/create`,
+                `${API_URL}/api/admin/users/create`,
                 data,
                 {
                     headers: {

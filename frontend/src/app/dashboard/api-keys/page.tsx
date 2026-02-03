@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Trash2, Key, Zap, Plus, Check, Copy, X, Shield, Activity, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import AdminGuard from '@/components/AdminGuard';
+import { API_URL } from '@/lib/api';
 
 interface ApiKey {
     id: string;
@@ -17,7 +18,7 @@ interface ApiKey {
     created_at: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
 
 export default function ApiKeysPage() {
     const [keys, setKeys] = useState<ApiKey[]>([]);
