@@ -14,6 +14,7 @@ import {
     X,
     Sun,
     Moon,
+    ChartLine,
     IconProps
 } from '@phosphor-icons/react'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -63,6 +64,10 @@ export default function UserSidebar() {
         return permissions?.some((p: any) => p.can_use_reminders === 1 || p.can_use_reminders === true)
     }, [permissions])
 
+    const hasAnalyticsAccess = useMemo(() => {
+        return permissions?.some((p: any) => p.can_view_analytics === 1 || p.can_view_analytics === true)
+    }, [permissions])
+
     const navigation = useMemo(() => {
         const items: Array<{ name: string, href: string, icon: PhosphorIcon }> = [
             { name: 'Dashboard', href: '/user', icon: SquaresFour },
@@ -77,8 +82,12 @@ export default function UserSidebar() {
             items.push({ name: 'Reminders', href: '/user/reminders', icon: Bell })
         }
 
+        if (hasAnalyticsAccess) {
+            items.push({ name: 'Analytics', href: '/user/analytics', icon: ChartLine })
+        }
+
         return items
-    }, [hasCampaignAccess, hasReminderAccess])
+    }, [hasCampaignAccess, hasReminderAccess, hasAnalyticsAccess])
 
     const bottomNavigation: Array<{ name: string, href: string, icon: PhosphorIcon }> = [
         { name: 'Settings', href: '/user/settings', icon: GearSix },
