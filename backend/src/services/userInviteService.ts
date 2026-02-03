@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { query } from '../database/connection-sqlite';
+import { query } from '../database/connection';
 import auditLogService from './auditLogService';
 import systemSettingsService from './systemSettingsService';
 

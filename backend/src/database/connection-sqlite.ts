@@ -535,23 +535,50 @@ async function initSchema(): Promise<void> {
             invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
             expires_at TEXT NOT NULL,
             accepted_at TEXT,
-            is_used INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
      `);
+  } catch (e) { }
+  
+  // Add missing columns to user_invites (migration)
+  try {
+    _db!.run(`ALTER TABLE user_invites ADD COLUMN status TEXT DEFAULT 'pending'`);
+  } catch (e) { }
+  try {
+    _db!.run(`ALTER TABLE user_invites ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP`);
   } catch (e) { }
 
   // System Settings Table (Admin Panel)
   try {
     _db!.run(`
         CREATE TABLE IF NOT EXISTS system_settings (
+            id TEXT,
+            category TEXT NOT NULL DEFAULT 'general',
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL,
+            data_type TEXT DEFAULT 'string',
             description TEXT,
+            is_public INTEGER DEFAULT 0,
             updated_by TEXT REFERENCES users(id),
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
      `);
+  } catch (e) { }
+  
+  // Add missing columns to system_settings (migration)
+  try {
+    _db!.run(`ALTER TABLE system_settings ADD COLUMN id TEXT`);
+  } catch (e) { }
+  try {
+    _db!.run(`ALTER TABLE system_settings ADD COLUMN category TEXT NOT NULL DEFAULT 'general'`);
+  } catch (e) { }
+  try {
+    _db!.run(`ALTER TABLE system_settings ADD COLUMN data_type TEXT DEFAULT 'string'`);
+  } catch (e) { }
+  try {
+    _db!.run(`ALTER TABLE system_settings ADD COLUMN is_public INTEGER DEFAULT 0`);
   } catch (e) { }
 
   // AI Sheet Updaters Table (AI Assistant - supports update, create, smart modes)

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import systemSettingsService from '../../services/systemSettingsService';
 import auditLogService from '../../services/auditLogService';
 import userInviteService from '../../services/userInviteService';
-import { query } from '../../database/connection-sqlite';
+import { query } from '../../database/connection';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 

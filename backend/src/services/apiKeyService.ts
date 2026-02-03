@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
-import { query } from '../database/connection-sqlite';
+import { query } from '../database/connection';
 import auditLogService from './auditLogService';
 
 /**
