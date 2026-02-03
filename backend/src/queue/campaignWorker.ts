@@ -341,16 +341,22 @@ async function checkCampaignCompletion(campaignId: string): Promise<void> {
             `, [campaign.actual_sent, campaign.actual_failed, campaignId]);
 
             if (totalProcessed >= campaign.total_contacts) {
+                // Determine final status based on results
+                // - 'completed' if at least one message sent successfully
+                // - 'failed' if all messages failed (0 sent)
+                const finalStatus = campaign.actual_sent > 0 ? 'completed' : 'failed';
+                
                 await query(`
                     UPDATE campaigns 
-                    SET status = 'completed', completed_at = CURRENT_TIMESTAMP 
+                    SET status = ?, completed_at = CURRENT_TIMESTAMP 
                     WHERE id = ?
-                `, [campaignId]);
+                `, [finalStatus, campaignId]);
 
-                logger.info(`📣 Campaign completed`, {
+                logger.info(`📣 Campaign ${finalStatus}`, {
                     campaign_id: campaignId,
                     sent: campaign.actual_sent,
                     failed: campaign.actual_failed,
+                    final_status: finalStatus,
                 });
             }
         }

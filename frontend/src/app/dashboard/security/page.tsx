@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
+import AdminGuard from '@/components/AdminGuard'
 import {
     Shield,
     Smartphone,
@@ -531,6 +532,7 @@ import { Suspense } from 'react'
 
 export default function SecurityPage() {
     return (
+        <AdminGuard>
         <Suspense fallback={
             <div className="p-8 flex items-center justify-center min-h-[60vh]">
                 <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
@@ -538,5 +540,6 @@ export default function SecurityPage() {
         }>
             <SecurityContent />
         </Suspense>
+        </AdminGuard>
     )
 }

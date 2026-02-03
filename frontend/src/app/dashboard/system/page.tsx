@@ -8,6 +8,7 @@ import {
     Archive, Settings, Zap, MemoryStick
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import AdminGuard from '@/components/AdminGuard';
 
 interface HealthStatus {
     status: string;
@@ -527,6 +528,7 @@ import { Suspense } from 'react';
 
 export default function SystemPage() {
     return (
+        <AdminGuard>
         <Suspense fallback={
             <div className="p-8 flex items-center justify-center min-h-[60vh]">
                 <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
@@ -534,5 +536,6 @@ export default function SystemPage() {
         }>
             <SystemContent />
         </Suspense>
+        </AdminGuard>
     );
 }

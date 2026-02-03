@@ -191,13 +191,7 @@ export default function ConnectBotPage() {
                                 />
                             </div>
 
-                            {/* Countdown */}
-                            <div className="flex items-center justify-center gap-2 text-sm text-zinc-500 mb-6">
-                                <RefreshCw className="w-4 h-4" />
-                                <span>Refresh in {countdown}s</span>
-                            </div>
-
-                            {/* Refresh Button */}
+                            {/* Refresh Button with Countdown */}
                             <button
                                 onClick={handleConnect}
                                 disabled={connectMutation.isPending}
@@ -211,7 +205,7 @@ export default function ConnectBotPage() {
                                 ) : (
                                     <>
                                         <RefreshCw className="w-4 h-4" />
-                                        Refresh QR Code
+                                        {countdown > 0 ? `Refresh in ${countdown}s` : 'Refresh QR Code'}
                                     </>
                                 )}
                             </button>

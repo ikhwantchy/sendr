@@ -19,6 +19,7 @@ import { logger } from '../../utils/logger';
 import { botRepository } from '../../database/repositories/botRepository';
 import { query } from '../../database/connection';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
 
 class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
     private sockets: Map<string, WASocket> = new Map();
@@ -29,6 +30,19 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
 
     constructor() {
         this.sessionPath = process.env.WA_SESSION_PATH || './sessions';
+    }
+
+    /**
+     * Check if a bot has a valid session (creds.json exists)
+     */
+    public hasValidSession(botId: string): boolean {
+        const authPath = path.join(this.sessionPath, `session-${botId}`);
+        const credsPath = path.join(authPath, 'creds.json');
+        try {
+            return fs.existsSync(credsPath);
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -225,7 +239,9 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             // Disconnected
             if (connection === 'close') {
                 const disconnectReason = (lastDisconnect?.error as Boom)?.output?.statusCode;
-                const shouldReconnect = disconnectReason !== DisconnectReason.loggedOut;
+                // Don't auto-reconnect if logged out or connection replaced (another session took over)
+                const shouldReconnect = disconnectReason !== DisconnectReason.loggedOut && 
+                                        disconnectReason !== DisconnectReason.connectionReplaced;
 
                 const reasonMap = new Map<number, string>([
                     [DisconnectReason.badSession, 'Bad Session'],
@@ -290,6 +306,8 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                     }, 30000); // 30 seconds delay (safer than 5 seconds)
                 } else if (wasPaused) {
                     logger.info('⏸️ Bot was paused by user - not auto-reconnecting', { bot_id: botId });
+                } else if (disconnectReason === DisconnectReason.connectionReplaced) {
+                    logger.warn('⚠️ Connection replaced by another session - not auto-reconnecting to avoid loop', { bot_id: botId });
                 } else {
                     logger.info('❌ Not reconnecting - user logged out', { bot_id: botId });
                 }
@@ -739,7 +757,7 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             all_bot_ids: Array.from(this.sockets.keys())
         });
 
-        const sock = this.sockets.get(botId);
+        let sock = this.sockets.get(botId);
 
         if (!sock) {
             logger.warn('⚠️ Socket not found, checking bot status...', {
@@ -748,42 +766,51 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 total_sockets: this.sockets.size
             });
 
-            // Check if bot is connected in database
-            try {
-                const bot = await botRepository.findById(botId);
+            // Check if bot exists and has valid session
+            const bot = await botRepository.findById(botId);
+            const hasSession = this.hasValidSession(botId);
 
-                if (bot && bot.status === 'connected') {
-                    logger.info('🔄 Bot is connected but socket missing, re-initializing...', {
-                        bot_id: botId,
-                        bot_name: bot.name
-                    });
+            // Re-initialize if: (1) connected status, OR (2) has valid session file
+            if (bot && (bot.status === 'connected' || hasSession)) {
+                logger.info('🔄 Attempting to re-initialize bot...', {
+                    bot_id: botId,
+                    bot_name: bot.name,
+                    bot_status: bot.status,
+                    has_valid_session: hasSession
+                });
 
-                    // Re-initialize the bot
-                    await this.initializeBot(botId);
+                // Re-initialize the bot
+                await this.initializeBot(botId);
 
-                    // Wait a bit for connection to establish
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-
-                    // Try to get socket again
-                    const newSock = this.sockets.get(botId);
-                    if (newSock) {
-                        logger.info('✅ Bot re-initialized successfully', { bot_id: botId });
-                    } else {
-                        logger.error('❌ Re-initialization failed - socket still not found', { bot_id: botId });
-                        throw new Error(`Bot re-initialization failed: ${botId}`);
+                // Wait for connection to establish with retries
+                let connected = false;
+                for (let i = 0; i < 10; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    sock = this.sockets.get(botId);
+                    if (sock) {
+                        // Also check if connection is actually open
+                        const botStatus = await botRepository.findById(botId);
+                        if (botStatus?.status === 'connected') {
+                            connected = true;
+                            logger.info('✅ Bot re-initialized and connected', { bot_id: botId, attempt: i + 1 });
+                            break;
+                        }
                     }
-                } else {
-                    logger.error('❌ Bot not initialized - socket not found!', {
-                        bot_id: botId,
-                        bot_status: bot?.status || 'not found',
-                        available_sockets: Array.from(this.sockets.keys()),
-                        total_sockets: this.sockets.size
-                    });
-                    throw new Error(`Bot not initialized: ${botId}`);
                 }
-            } catch (error) {
-                logger.error('Failed to check/reinitialize bot', { error, bot_id: botId });
-                throw new Error(`Bot not initialized: ${botId}`);
+
+                if (!connected || !sock) {
+                    logger.error('❌ Re-initialization failed - bot not connected after retries', { bot_id: botId });
+                    throw new Error(`Bot not connected: ${botId}. Please wait for connection or reconnect.`);
+                }
+            } else {
+                logger.error('❌ Bot not initialized - no socket and no valid session!', {
+                    bot_id: botId,
+                    bot_status: bot?.status || 'not found',
+                    has_valid_session: hasSession,
+                    available_sockets: Array.from(this.sockets.keys()),
+                    total_sockets: this.sockets.size
+                });
+                throw new Error(`Bot not initialized: ${botId}. Please connect the bot first.`);
             }
         }
 

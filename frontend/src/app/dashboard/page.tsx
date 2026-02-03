@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import {
     Bot, MessageSquare, Zap, Clock, Plus, Activity,
     ArrowUpRight, Server, Cpu, HardDrive, HelpCircle, MessageCircle,
-    Layout, Smartphone, FileText, UserPlus, Users, UserCheck
+    Layout, Smartphone, FileText, UserPlus, Users, UserCheck, Bell
 } from 'lucide-react'
 import Link from 'next/link'
 import RecentActivityList from '@/components/RecentActivityList'
@@ -18,6 +18,7 @@ interface DashboardStats {
     messagesSent: number
     totalUsers: number
     activeUsers: number
+    activeReminders: number
 }
 
 interface ActivityLog {
@@ -43,7 +44,8 @@ export default function DashboardPage() {
         campaigns: 0,
         messagesSent: 0,
         totalUsers: 0,
-        activeUsers: 0
+        activeUsers: 0,
+        activeReminders: 0
     })
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
     const [systemStatus, setSystemStatus] = useState<SystemStatus>({
@@ -133,16 +135,35 @@ export default function DashboardPage() {
                     value={stats.messagesSent.toLocaleString()}
                     icon={<MessageCircle className="w-4 h-4 text-zinc-500" />}
                 />
-                <StatCard
-                    label="Total Users"
-                    value={stats.totalUsers}
-                    icon={<Users className="w-4 h-4 text-zinc-500" />}
-                />
-                <StatCard
-                    label="Active Users"
-                    value={stats.activeUsers}
-                    icon={<UserCheck className="w-4 h-4 text-zinc-500" />}
-                />
+                {/* Admin-only stats */}
+                {(user?.role === 'ADMIN' || user?.role === 'OWNER') ? (
+                    <>
+                        <StatCard
+                            label="Total Users"
+                            value={stats.totalUsers}
+                            icon={<Users className="w-4 h-4 text-zinc-500" />}
+                        />
+                        <StatCard
+                            label="Active Users"
+                            value={stats.activeUsers}
+                            icon={<UserCheck className="w-4 h-4 text-zinc-500" />}
+                        />
+                    </>
+                ) : (
+                    <>
+                        {/* User-only stats */}
+                        <StatCard
+                            label="Active Rules"
+                            value={stats.activeRules}
+                            icon={<Zap className="w-4 h-4 text-zinc-500" />}
+                        />
+                        <StatCard
+                            label="Active Reminders"
+                            value={stats.activeReminders}
+                            icon={<Bell className="w-4 h-4 text-zinc-500" />}
+                        />
+                    </>
+                )}
             </div>
 
             {/* Main Content Grid */}

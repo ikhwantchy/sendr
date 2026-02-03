@@ -140,21 +140,29 @@ const server = app.listen(PORT, async () => {
     initializeGroupIntegration();
     logger.info('✅ Group integration initialized');
 
-    // ✅ Auto-initialize all connected bots
+    // ✅ Auto-initialize all bots with valid sessions
     try {
         const { botRepository } = await import('./database/repositories/botRepository');
         const { whatsappAdapter } = await import('./adapters/whatsapp/whatsappAdapter.baileys');
 
-        const connectedBots = await botRepository.findConnected();
+        const allBots = await botRepository.findAll();
+        
+        // Filter to bots that are connected OR have valid session files
+        const botsToInitialize = allBots.filter(bot => 
+            bot.status === 'connected' || whatsappAdapter.hasValidSession(bot.id)
+        );
 
-        logger.info(`🔄 Found ${connectedBots.length} connected bots, re-initializing...`);
+        logger.info(`🔄 Found ${botsToInitialize.length} bots to initialize (${allBots.length} total)...`);
 
-        for (const bot of connectedBots) {
+        for (const bot of botsToInitialize) {
             try {
+                const hasSession = whatsappAdapter.hasValidSession(bot.id);
+                logger.info(`🔄 Initializing bot: ${bot.name} (status: ${bot.status}, hasSession: ${hasSession})`);
+                
                 await whatsappAdapter.initializeBot(bot.id);
-                logger.info(`✅ Bot re-initialized: ${bot.name} (${bot.id})`);
+                logger.info(`✅ Bot initialized: ${bot.name} (${bot.id})`);
             } catch (error: any) {
-                logger.error(`❌ Failed to re-initialize bot: ${bot.name}`, { error: error.message });
+                logger.error(`❌ Failed to initialize bot: ${bot.name}`, { error: error.message });
             }
         }
 

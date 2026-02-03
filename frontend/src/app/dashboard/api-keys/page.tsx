@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Key, Zap, Plus, Check, Copy, X, Shield, Activity, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
+import AdminGuard from '@/components/AdminGuard';
 
 interface ApiKey {
     id: string;
@@ -135,13 +136,16 @@ export default function ApiKeysPage() {
 
     if (loading) {
         return (
+            <AdminGuard>
             <div className="flex items-center justify-center min-h-[400px]">
                 <div className="w-6 h-6 border-2 border-zinc-800 border-t-white rounded-full animate-spin" />
             </div>
+            </AdminGuard>
         );
     }
 
     return (
+        <AdminGuard>
         <div className="p-8 min-h-screen bg-[#09090b]">
             {/* Header matching Bots page layout & button style EXACTLY */}
             <div className="flex items-center justify-between mb-8">
@@ -294,6 +298,7 @@ export default function ApiKeysPage() {
             {/* Creation Modal */}
             {showCreateModal && <CreateApiKeyModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} onCreate={handleCreateKey} />}
         </div>
+        </AdminGuard>
     );
 }
 

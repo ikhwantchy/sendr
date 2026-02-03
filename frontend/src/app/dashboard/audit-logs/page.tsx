@@ -8,6 +8,7 @@ import {
     XCircle, Clock, Activity, TrendingUp, Hash, ChevronLeft, ChevronRight, Calendar
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import AdminGuard from '@/components/AdminGuard';
 
 interface AuditLog {
     id: string;
@@ -473,6 +474,7 @@ export default function AuditLogsPage() {
 
     if (loading && logs.length === 0) {
         return (
+            <AdminGuard>
             <div className="p-8 min-h-screen bg-zinc-50 dark:bg-black">
                 <div className="flex items-center justify-center h-64">
                     <div className="flex flex-col items-center gap-3">
@@ -481,10 +483,12 @@ export default function AuditLogsPage() {
                     </div>
                 </div>
             </div>
+            </AdminGuard>
         );
     }
 
     return (
+        <AdminGuard>
         <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
             {/* Header - Same style as Analytics */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1210,5 +1214,6 @@ export default function AuditLogsPage() {
                 </div>
             )}
         </div>
+        </AdminGuard>
     );
 }

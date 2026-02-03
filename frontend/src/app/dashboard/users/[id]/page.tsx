@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import AdminGuard from '@/components/AdminGuard'
 import {
     ArrowLeft, Bot, MessageSquare, Megaphone,
     Bell, Activity, Shield, Zap, CloudLightning, Loader2, Eye,
@@ -99,6 +100,7 @@ export default function UserDetailPage() {
 
     if (!mounted || isLoading) {
         return (
+            <AdminGuard>
             <div className="p-8 flex flex-col items-center justify-center min-h-[60vh] text-zinc-500 gap-4">
                 <div className="relative w-12 h-12">
                     <div className="absolute inset-0 rounded-full border-2 border-zinc-800"></div>
@@ -106,14 +108,16 @@ export default function UserDetailPage() {
                 </div>
                 <p className="text-sm font-medium">Loading user details...</p>
             </div>
+            </AdminGuard>
         )
     }
 
-    if (!detail) return <div className="p-8 text-white">User not found</div>
+    if (!detail) return <AdminGuard><div className="p-8 text-white">User not found</div></AdminGuard>
 
     const { user, bots, analytics, permissions } = detail
 
     return (
+        <AdminGuard>
         <div className="p-8 min-h-screen bg-black text-white space-y-8">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -279,6 +283,7 @@ export default function UserDetailPage() {
                 </div>
             )}
         </div>
+        </AdminGuard>
     )
 }
 

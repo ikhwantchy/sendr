@@ -17,6 +17,8 @@ import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 import ContactTable, { ContactRow, ContactColumn, contactTableToParsedContacts, getContactTableVariables } from '@/components/ContactTable'
 import Link from 'next/link'
 import SharedMessageEditor, { formatWhatsAppText } from '@/components/SharedMessageEditor'
+import ScheduleDateTimePicker from '@/components/pickers/ScheduleDateTimePicker'
+import StyledNumberInput from '@/components/ui/StyledNumberInput'
 
 // --- Types ---
 type ContactMethod = 'manual' | 'csv' | 'sheet'
@@ -80,19 +82,19 @@ const DELAY_PRESETS = {
     safe: {
         min: 30, max: 60,
         batchSize: 15, batchPauseMin: 60, batchPauseMax: 120,
-        label: 'Safe (Maximum Security)', icon: ShieldCheck, color: 'text-emerald-400',
+        label: 'Safe (Maximum Security)', shortLabel: 'Safe', icon: ShieldCheck, color: 'text-emerald-400',
         desc: 'Human-paced. Long intervals & rest every 15 messages.'
     },
     normal: {
         min: 10, max: 20,
         batchSize: 30, batchPauseMin: 30, batchPauseMax: 60,
-        label: 'Normal (Recommended)', icon: Activity, color: 'text-blue-400',
+        label: 'Normal (Recommended)', shortLabel: 'Normal', icon: Activity, color: 'text-blue-400',
         desc: 'Best balance. Randomized delays & moderate rest.'
     },
     fast: {
         min: 3, max: 7,
         batchSize: 50, batchPauseMin: 10, batchPauseMax: 20,
-        label: 'Fast (Established Accounts)', icon: Zap, color: 'text-amber-400',
+        label: 'Fast (Established Accounts)', shortLabel: 'Fast', icon: Zap, color: 'text-amber-400',
         desc: 'Fast & efficient. Only use for trusted/aged numbers.'
     }
 }
@@ -506,7 +508,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
     }
 
     const SectionHeader = ({ title, desc, step }: { title: string, desc: string, step?: number }) => (
-        <div className="mb-6">
+        <div className={desc ? "mb-6" : "mb-4"}>
             <div className="flex items-center gap-3 mb-2">
                 {step && (
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold text-sm shrink-0">
@@ -515,7 +517,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                 )}
                 <h3 className="text-lg font-semibold text-white">{title}</h3>
             </div>
-            <p className="text-sm text-zinc-500 ml-11">{desc}</p>
+            {desc && <p className="text-sm text-zinc-500 ml-11">{desc}</p>}
         </div>
     )
 
@@ -533,7 +535,6 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                 </button>
                                 <div>
                                     <h1 className="text-xl font-semibold text-white">Create Campaign</h1>
-                                    <p className="text-sm text-zinc-500">Launch blast messages with anti-spam algorithm</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">
@@ -564,25 +565,20 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                     <div className="max-w-3xl mx-auto space-y-8">
                         {/* 1. Basic Details */}
                         <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-zinc-700/50 transition-colors">
-                            <SectionHeader step={1} title="Campaign Identity" desc="Provide a name for your blast campaign." />
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-zinc-400 mb-1">Campaign Name *</label>
-                                    <input
-                                        type="text"
-                                        value={formData.name}
-                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                                        placeholder="e.g. Ramadhan Promo Batch 1"
-                                        required
-                                    />
-                                </div>
-                            </div>
+                            <SectionHeader step={1} title="Campaign Name" desc="" />
+                            <input
+                                type="text"
+                                value={formData.name}
+                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                                placeholder="e.g. Ramadhan Promo Batch 1"
+                                required
+                            />
                         </section>
 
                         {/* 2. Recipients */}
                         <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-zinc-700/50 transition-colors">
-                            <SectionHeader step={2} title="Target Audience" desc="Import your contacts from various sources." />
+                            <SectionHeader step={2} title="Target Audience" desc="" />
                             <div className="flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 w-fit mb-6">
                                 {[
                                     { id: 'manual', label: 'Manual Input', icon: MessageSquare },
@@ -681,28 +677,25 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                             )}
                         </section>
 
-                        {/* 3. Human Behavior Simulation */}
+                        {/* 3. Sending Speed */}
                         <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-zinc-700/50 transition-colors">
-                            <SectionHeader step={3} title="Human Behavior Simulation" desc="Simulate human behavior to prevent automated spam detection." />
-                            <div className="space-y-6">
+                            <SectionHeader step={3} title="Sending Speed" desc="" />
+                            <div className="space-y-4">
                                 {/* Anti-Spam Strategy */}
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Delivery Strategy</label>
-                                        <div className="flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700">
-                                            <button
-                                                onClick={() => setFormData({ ...formData, delayMode: 'preset' })}
-                                                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${formData.delayMode === 'preset' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-                                            >
-                                                PRESETS
-                                            </button>
-                                            <button
-                                                onClick={() => setFormData({ ...formData, delayMode: 'manual' })}
-                                                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${formData.delayMode === 'manual' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-                                            >
-                                                CUSTOM
-                                            </button>
-                                        </div>
+                                    <div className="flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 w-fit">
+                                        <button
+                                            onClick={() => setFormData({ ...formData, delayMode: 'preset' })}
+                                            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${formData.delayMode === 'preset' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        >
+                                            PRESETS
+                                        </button>
+                                        <button
+                                            onClick={() => setFormData({ ...formData, delayMode: 'manual' })}
+                                            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${formData.delayMode === 'manual' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        >
+                                            CUSTOM
+                                        </button>
                                     </div>
 
                                     {formData.delayMode === 'preset' ? (
@@ -711,98 +704,70 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                                 <button
                                                     key={key}
                                                     onClick={() => setFormData({ ...formData, delayPreset: key as any })}
-                                                    className={`p-4 rounded-xl border text-left transition-all group ${formData.delayPreset === key ? 'bg-blue-600/5 border-blue-500 ring-1 ring-blue-500' : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'}`}
+                                                    className={`relative p-4 rounded-xl border text-left transition-all group ${formData.delayPreset === key ? 'bg-blue-600/5 border-blue-500 ring-1 ring-blue-500' : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'}`}
+                                                    title={config.desc}
                                                 >
-                                                    <div className="flex items-center gap-2 mb-2">
+                                                    <div className="flex items-center gap-2 mb-1">
                                                         <config.icon size={16} className={`transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110 ${formData.delayPreset === key ? 'text-blue-400' : config.color}`} />
-                                                        <span className="text-sm font-bold text-white">{config.label}</span>
+                                                        <span className="text-sm font-bold text-white">{config.shortLabel}</span>
                                                     </div>
-                                                    <div className="text-[11px] text-zinc-500 font-medium mb-1">{config.min}-{config.max}s Message Delay</div>
-                                                    <p className="text-[10px] text-zinc-600 leading-tight">{config.desc}</p>
+                                                    <div className="text-[11px] text-zinc-500 font-medium">{config.min}-{config.max}s delay</div>
+                                                    {/* Tooltip on hover */}
+                                                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-[10px] text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
+                                                        {config.desc}
+                                                    </div>
                                                 </button>
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-5 animate-in fade-in slide-in-from-top-2 space-y-6">
+                                        <div className="space-y-5 animate-in fade-in slide-in-from-top-2">
                                             {/* Primary Delay Range */}
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1.5 block tracking-wider">Min Delay (Sec)</label>
-                                                    <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 focus-within:border-blue-500 transition-colors">
-                                                        <Clock size={14} className="text-zinc-600" />
-                                                        <input
-                                                            type="number"
-                                                            min="1"
-                                                            value={formData.minDelay}
-                                                            onChange={e => setFormData({ ...formData, minDelay: Math.max(1, parseInt(e.target.value) || 0) })}
-                                                            className="bg-transparent text-white text-sm outline-none w-full font-medium"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1.5 block tracking-wider">Max Delay (Sec)</label>
-                                                    <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 focus-within:border-blue-500 transition-colors">
-                                                        <Clock size={14} className="text-zinc-600" />
-                                                        <input
-                                                            type="number"
-                                                            min={formData.minDelay + 1}
-                                                            value={formData.maxDelay}
-                                                            onChange={e => setFormData({ ...formData, maxDelay: Math.max(formData.minDelay + 1, parseInt(e.target.value) || 0) })}
-                                                            className="bg-transparent text-white text-sm outline-none w-full font-medium"
-                                                        />
-                                                    </div>
-                                                </div>
+                                                <StyledNumberInput
+                                                    label="Min Delay (Sec)"
+                                                    value={formData.minDelay}
+                                                    onChange={(val) => setFormData({ ...formData, minDelay: val })}
+                                                    min={1}
+                                                    max={formData.maxDelay - 1}
+                                                />
+                                                <StyledNumberInput
+                                                    label="Max Delay (Sec)"
+                                                    value={formData.maxDelay}
+                                                    onChange={(val) => setFormData({ ...formData, maxDelay: val })}
+                                                    min={formData.minDelay + 1}
+                                                    max={300}
+                                                />
                                             </div>
 
                                             {/* Batch/Rest Period */}
-                                            <div className="pt-2 border-t border-zinc-800/50">
-                                                <div className="flex items-center gap-2 mb-4">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-3">
                                                     <Coffee size={14} className="text-blue-400" />
                                                     <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">Rest Period</h4>
                                                 </div>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1.5 block tracking-wider">Rest After (Messages)</label>
-                                                        <input
-                                                            type="number"
-                                                            min="1"
-                                                            value={formData.batchSize}
-                                                            onChange={e => setFormData({ ...formData, batchSize: Math.max(1, parseInt(e.target.value) || 0) })}
-                                                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
-                                                            placeholder="e.g. 20"
-                                                        />
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div>
-                                                            <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1.5 block tracking-wider">Min Rest (s)</label>
-                                                            <input
-                                                                type="number"
-                                                                min="1"
-                                                                value={formData.batchPauseMin}
-                                                                onChange={e => setFormData({ ...formData, batchPauseMin: Math.max(1, parseInt(e.target.value) || 0) })}
-                                                                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-[10px] text-zinc-500 uppercase font-bold mb-1.5 block tracking-wider">Max Rest (s)</label>
-                                                            <input
-                                                                type="number"
-                                                                min="1"
-                                                                value={formData.batchPauseMax}
-                                                                onChange={e => setFormData({ ...formData, batchPauseMax: Math.max(1, parseInt(e.target.value) || 0) })}
-                                                                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
-                                                            />
-                                                        </div>
-                                                    </div>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <StyledNumberInput
+                                                        label="Rest After (Messages)"
+                                                        value={formData.batchSize}
+                                                        onChange={(val) => setFormData({ ...formData, batchSize: val })}
+                                                        min={1}
+                                                        max={100}
+                                                    />
+                                                    <StyledNumberInput
+                                                        label="Min Rest (s)"
+                                                        value={formData.batchPauseMin}
+                                                        onChange={(val) => setFormData({ ...formData, batchPauseMin: val })}
+                                                        min={1}
+                                                        max={formData.batchPauseMax - 1}
+                                                    />
+                                                    <StyledNumberInput
+                                                        label="Max Rest (s)"
+                                                        value={formData.batchPauseMax}
+                                                        onChange={(val) => setFormData({ ...formData, batchPauseMax: val })}
+                                                        min={formData.batchPauseMin + 1}
+                                                        max={600}
+                                                    />
                                                 </div>
-                                            </div>
-
-                                            <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg flex gap-3">
-                                                <ShieldCheck size={16} className="text-blue-400 shrink-0 mt-0.5" />
-                                                <p className="text-[11px] text-blue-400/80 leading-relaxed font-medium">
-                                                    <span className="text-blue-400 block font-bold mb-0.5">Human-Logic Active:</span>
-                                                    System mimics human typing speed and takes random breaks to evade WhatsApp spam detection.
-                                                </p>
                                             </div>
                                         </div>
                                     )}
@@ -812,7 +777,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
 
                         {/* 4. Scheduling */}
                         <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-zinc-700/50 transition-colors">
-                            <SectionHeader step={4} title="Execution Schedule" desc="When should this broadcast start?" />
+                            <SectionHeader step={4} title="Schedule" desc="" />
                             <div className="space-y-4">
                                 <div className="flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 w-fit">
                                     <button
@@ -832,12 +797,9 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                 </div>
                                 {formData.isScheduled && (
                                     <div className="animate-in fade-in slide-in-from-top-2">
-                                        <label className="block text-xs font-medium text-zinc-400 mb-1">Start Date & Time</label>
-                                        <input
-                                            type="datetime-local"
+                                        <ScheduleDateTimePicker
                                             value={formData.scheduledAt}
-                                            onChange={e => setFormData({ ...formData, scheduledAt: e.target.value })}
-                                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
+                                            onChange={(val) => setFormData({ ...formData, scheduledAt: val })}
                                         />
                                     </div>
                                 )}
@@ -846,7 +808,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
 
                         {/* 5. Message Content */}
                         <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-zinc-700/50 transition-colors mb-20">
-                            <SectionHeader step={5} title="Message Content" desc="Use [variable] for personalized messages." />
+                            <SectionHeader step={5} title="Message Content" desc="" />
 
                             {/* Message editor will go here, media attachment moved below */}
 

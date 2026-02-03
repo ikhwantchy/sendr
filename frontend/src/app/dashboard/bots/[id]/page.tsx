@@ -50,7 +50,16 @@ export default function BotDetailPage() {
     if (!params) return null;
     const botId = params?.id as string
     const { hasModuleAccess, isAdmin } = usePermissions()
-    const [activeTab, setActiveTab] = useState<string>('overview')
+    
+    // Initialize activeTab from hash on first render
+    const [activeTab, setActiveTab] = useState<string>(() => {
+        if (typeof window === 'undefined') return 'overview'
+        const hash = window.location.hash.replace('#', '')
+        if (hash && ['overview', 'rules', 'ai-assistant', 'ai-config', 'ai-mappings', 'campaigns', 'reminders', 'settings'].includes(hash)) {
+            return hash
+        }
+        return 'overview'
+    })
 
     // Modal states
     const [showEditRuleModal, setShowEditRuleModal] = useState(false)
@@ -64,7 +73,8 @@ export default function BotDetailPage() {
     useEffect(() => {
         const handleHashChange = () => {
             const hash = window.location.hash.replace('#', '')
-            if (hash && ['overview', 'rules', 'ai-assistant', 'campaigns', 'reminders', 'settings'].includes(hash)) {
+            // Include AI subtabs
+            if (hash && ['overview', 'rules', 'ai-assistant', 'ai-config', 'ai-mappings', 'campaigns', 'reminders', 'settings'].includes(hash)) {
                 setActiveTab(hash)
             } else {
                 setActiveTab('overview')
@@ -447,6 +457,16 @@ export default function BotDetailPage() {
                                 <div className="hidden lg:block h-5 w-[1px] bg-zinc-700/80 mx-1" />
 
                                 <div className="w-[145px]">
+                                    {/* Show Connect Now button when never connected (no phone number) */}
+                                    {!isConnected && !bot.phone_number && (
+                                        <Link
+                                            href={`/dashboard/bots/${botId}/connect`}
+                                            className="w-full inline-flex items-center justify-center gap-2.5 py-2.5 rounded-xl text-xs font-semibold border transition-all duration-300 bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"
+                                        >
+                                            <Phone className="w-4 h-4" />
+                                            <span className="font-semibold tracking-tight uppercase">CONNECT</span>
+                                        </Link>
+                                    )}
                                     {/* Show Reconnect button when disconnected but has phone number */}
                                     {!isConnected && bot.phone_number && (
                                         <Link
@@ -482,16 +502,6 @@ export default function BotDetailPage() {
                                 </div>
                             </div>
                         </div>
-
-                        {!isConnected && !bot.phone_number && (
-                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-6 mb-6">
-                                <h3 className="text-lg font-semibold text-zinc-100 mb-2 tracking-tight">Connect WhatsApp</h3>
-                                <p className="text-zinc-400 text-sm mb-4">Scan QR code with your WhatsApp to connect this bot</p>
-                                <Link href={`/dashboard/bots/${botId}/connect`} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-all text-sm">
-                                    Connect Now
-                                </Link>
-                            </div>
-                        )}
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6 hover:bg-zinc-900/30 transition-all">
@@ -564,7 +574,19 @@ export default function BotDetailPage() {
 
                 {activeTab === 'ai-assistant' && hasModuleAccess('ai_assistant', botId) && (
                     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                        <AIAssistantPanel botId={botId} />
+                        <AIAssistantPanel botId={botId} subTab="config" />
+                    </div>
+                )}
+
+                {activeTab === 'ai-config' && hasModuleAccess('ai_assistant', botId) && (
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <AIAssistantPanel botId={botId} subTab="config" />
+                    </div>
+                )}
+
+                {activeTab === 'ai-mappings' && hasModuleAccess('ai_assistant', botId) && (
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <AIAssistantPanel botId={botId} subTab="mappings" />
                     </div>
                 )}
 

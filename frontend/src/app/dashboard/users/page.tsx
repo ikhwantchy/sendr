@@ -7,6 +7,7 @@ import Link from 'next/link'
 import CreateUserModal from '@/components/CreateUserModal'
 import EditUserModal from '@/components/EditUserModal'
 import DeleteUserModal from '@/components/DeleteUserModal'
+import AdminGuard from '@/components/AdminGuard'
 import {
     Users as UsersIcon, User, UserPlus, Bot, Plus, X, Settings2,
     RefreshCw, Search, ChevronDown, Shield, Eye, Pencil, Trash2, Loader2
@@ -132,6 +133,7 @@ export default function UsersPage() {
     if (!mounted) return null
 
     return (
+        <AdminGuard>
         <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
             {/* Header - Same style as Analytics */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -432,5 +434,6 @@ export default function UsersPage() {
                 </div>
             )}
         </div>
+        </AdminGuard>
     )
 }

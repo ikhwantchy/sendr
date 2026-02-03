@@ -124,11 +124,16 @@ export default function Sidebar() {
     ]
 
     const bottomNavigation = useMemo(() => {
-        if (!isAdmin) return []
-        return [
-            { name: 'Get API key', href: '/dashboard/api-keys', icon: Key },
-            { name: 'Settings', href: '/dashboard/settings', icon: GearSix },
-        ]
+        const items: Array<{ name: string, href: string, icon: PhosphorIcon }> = []
+        
+        // API Key - admin only
+        if (isAdmin) {
+            items.push({ name: 'Get API Key', href: '/dashboard/api-keys', icon: Key })
+            // Settings - admin only
+            items.push({ name: 'Settings', href: '/dashboard/settings', icon: GearSix })
+        }
+        
+        return items
     }, [isAdmin])
 
     // Animated Icon Component (inline for simplicity)
@@ -327,6 +332,46 @@ export default function Sidebar() {
                         </Link>
                     )
                 })}
+
+                {/* Non-admin: Show theme toggle and sign out directly */}
+                {!isAdmin && (
+                    <>
+                        <button
+                            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                            className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 ease-out active:scale-[0.97] w-full text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/40`}
+                            title={!isExpanded ? (resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode') : undefined}
+                        >
+                            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r-full transition-all duration-300 ease-out h-0 opacity-0 bg-zinc-400 dark:bg-zinc-500 group-hover:h-4 group-hover:opacity-100`} />
+                            <div className="relative flex items-center justify-center">
+                                {resolvedTheme === 'dark' ? (
+                                    <Sun size={20} weight="regular" className="text-zinc-500 dark:text-zinc-400 group-hover:text-amber-500 transition-all duration-300 group-hover:rotate-90 group-hover:scale-110" />
+                                ) : (
+                                    <Moon size={20} weight="regular" className="text-zinc-500 dark:text-zinc-400 group-hover:text-blue-500 transition-all duration-300 group-hover:-rotate-12 group-hover:scale-110" />
+                                )}
+                            </div>
+                            {isExpanded && (
+                                <span className="text-sm font-normal tracking-normal truncate transition-all duration-300 text-zinc-400 group-hover:text-zinc-200">
+                                    {resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                                </span>
+                            )}
+                        </button>
+                        <button
+                            onClick={handleLogout}
+                            className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 ease-out active:scale-[0.97] w-full text-zinc-600 dark:text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10`}
+                            title={!isExpanded ? 'Sign Out' : undefined}
+                        >
+                            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r-full transition-all duration-300 ease-out h-0 opacity-0 bg-red-500 group-hover:h-4 group-hover:opacity-100`} />
+                            <div className="relative flex items-center justify-center">
+                                <SignOut size={20} weight="regular" className="text-zinc-500 dark:text-zinc-400 group-hover:text-red-500 transition-all duration-300 group-hover:-translate-x-1" />
+                            </div>
+                            {isExpanded && (
+                                <span className="text-sm font-normal tracking-normal truncate transition-all duration-300 text-zinc-400 group-hover:text-red-500">
+                                    Sign Out
+                                </span>
+                            )}
+                        </button>
+                    </>
+                )}
             </div>
 
             {
@@ -350,30 +395,32 @@ export default function Sidebar() {
                         </button>
 
                         {showUserMenu && (
-                            <div className="absolute bottom-full left-4 right-4 mb-2 p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg dark:shadow-2xl z-[60] overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+                            <div className={`absolute bottom-full mb-2 p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg dark:shadow-2xl z-[60] overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 ${isExpanded ? 'left-4 right-4' : 'left-1/2 -translate-x-1/2 w-12'}`}>
                                 <button
                                     onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors group"
+                                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors group ${!isExpanded ? 'justify-center' : ''}`}
+                                    title={resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
                                 >
                                     {resolvedTheme === 'dark' ? (
                                         <>
                                             <Sun size={16} weight="light" className="text-amber-500 transition-transform duration-300 group-hover:rotate-90 group-hover:scale-110" />
-                                            <span>Light Mode</span>
+                                            {isExpanded && <span>Light Mode</span>}
                                         </>
                                     ) : (
                                         <>
                                             <Moon size={16} weight="light" className="text-blue-500 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
-                                            <span>Dark Mode</span>
+                                            {isExpanded && <span>Dark Mode</span>}
                                         </>
                                     )}
                                 </button>
                                 <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-1" />
                                 <button
                                     onClick={handleLogout}
-                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors group"
+                                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors group ${!isExpanded ? 'justify-center' : ''}`}
+                                    title="Sign Out"
                                 >
                                     <SignOut size={16} weight="light" className="transition-transform duration-300 group-hover:-translate-x-1" />
-                                    <span>Sign Out</span>
+                                    {isExpanded && <span>Sign Out</span>}
                                 </button>
                             </div>
                         )}

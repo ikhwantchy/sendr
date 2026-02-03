@@ -65,7 +65,15 @@ export const createUser = async (req: Request, res: Response) => {
                  VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
                 [tenantId, `${name}'s Workspace`, uniqueSlug]
             );
-        }
+        } else {
+            // If creating another ADMIN, put them in the default tenant
+            const tenantResult = await query('SELECT id FROM tenants LIMIT 1');
+            if (tenantResult.rows.length === 0) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'No tenant found.'
+                });
+            }
             tenantId = tenantResult.rows[0].id;
         }
 

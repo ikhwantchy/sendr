@@ -7,6 +7,7 @@ import { query } from '../../database/connection';
  */
 export const listUsers = async (req: Request, res: Response) => {
     try {
+        // Show ALL users including current logged-in user
         const result = await query(`
       SELECT 
         u.id,
@@ -17,9 +18,8 @@ export const listUsers = async (req: Request, res: Response) => {
         u.created_at,
         (SELECT COUNT(*) FROM bots b WHERE b.tenant_id = u.tenant_id) as bots_count
       FROM users u
-      WHERE u.id != ?
       ORDER BY u.created_at DESC
-    `, [(req as any).user.id]);
+    `);
 
         res.json({
             success: true,
@@ -59,13 +59,33 @@ export const getUserDetail = async (req: Request, res: Response) => {
             WHERE b.tenant_id = ? OR bp.user_id = ?
         `, [id, user.tenant_id, id]);
 
-        // 3. Get granular permissions
+        // 3. Auto-create missing permissions for bots in user's tenant
+        // This ensures existing bots get permissions records
+        for (const bot of botsResult.rows) {
+            const existingPerm = await query(
+                'SELECT 1 FROM bot_permissions WHERE user_id = ? AND bot_id = ?',
+                [id, bot.id]
+            );
+            
+            if (existingPerm.rows.length === 0) {
+                // Create default full access permissions for bots in user's tenant
+                await query(
+                    `INSERT INTO bot_permissions 
+                    (user_id, bot_id, can_view, can_edit, can_delete, can_create_campaigns, can_create_rules, can_view_analytics, can_use_reminders, can_use_ai, can_manage_contacts, can_manage_datasources)
+                    VALUES (?, ?, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)`,
+                    [id, bot.id]
+                );
+                console.log(`[Users] Auto-created permissions for user ${id} on bot ${bot.id}`);
+            }
+        }
+
+        // 4. Get granular permissions (now includes auto-created ones)
         const permissionsResult = await query(
             'SELECT * FROM bot_permissions WHERE user_id = ?',
             [id]
         );
 
-        // 4. Get aggregated analytics for this user
+        // 5. Get aggregated analytics for this user
         const statsResult = await query(`
             SELECT 
                 COUNT(*) as total_messages,
@@ -140,15 +160,25 @@ export const deleteUser = async (req: Request, res: Response) => {
  */
 export const getUserStats = async (req: Request, res: Response) => {
     try {
+        // Total users should count ALL users (including current user)
         const result = await query(`
       SELECT 
         COUNT(*) as total_users,
         COUNT(CASE WHEN role IN ('ADMIN', 'OWNER') THEN 1 END) as admin_count,
         COUNT(CASE WHEN role = 'USER' THEN 1 END) as user_count
       FROM users
-      WHERE id != ?
-    `, [(req as any).user.id]);
-        res.json({ success: true, data: result.rows[0] });
+    `);
+        
+        // Also get total bots count
+        const botsResult = await query('SELECT COUNT(*) as total_bots FROM bots');
+        
+        res.json({ 
+            success: true, 
+            data: {
+                ...result.rows[0],
+                total_bots: botsResult.rows[0]?.total_bots || 0
+            }
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Failed' });
     }

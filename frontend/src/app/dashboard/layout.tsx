@@ -94,7 +94,7 @@ export default function DashboardLayout({
                 className={`flex-1 flex flex-col pt-20 md:pt-0 transition-all duration-300 overflow-hidden ${isBotDetailPage ? 'md:ml-20' : (sidebarExpanded ? 'md:ml-64' : 'md:ml-20')
                     }`}
             >
-                <header className="h-[89px] flex-shrink-0 flex items-center border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black overflow-hidden sticky top-0 z-40">
+                <header className="h-[89px] flex-shrink-0 flex items-center border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black sticky top-0 z-40">
                     <div className="max-w-[1440px] mx-auto w-full h-full flex items-center px-8">
                         {/* Center: Tabs (Bot Detail Page only) */}
                         {isBotDetailPage ? (

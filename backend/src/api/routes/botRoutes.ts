@@ -121,6 +121,36 @@ router.post('/', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req
             created_by: userId,
         });
 
+        // If bot is created for a different tenant (by admin), create bot_permissions for the tenant owner
+        if (target_tenant_id && (userRole === 'OWNER' || userRole === 'ADMIN')) {
+            // Find the user who owns this tenant
+            const tenantUserResult = await query(
+                `SELECT id FROM users WHERE tenant_id = ? LIMIT 1`,
+                [target_tenant_id]
+            );
+            
+            if (tenantUserResult.rows.length > 0) {
+                const targetUserId = tenantUserResult.rows[0].id;
+                // Create full access permissions for the tenant owner
+                await query(
+                    `INSERT OR REPLACE INTO bot_permissions 
+                    (user_id, bot_id, can_view, can_edit, can_delete, can_create_campaigns, can_create_rules, can_view_analytics, can_use_reminders, can_use_ai, can_manage_contacts, can_manage_datasources)
+                    VALUES (?, ?, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)`,
+                    [targetUserId, bot.id]
+                );
+                logger.info('Created bot permissions for tenant user', { targetUserId, botId: bot.id });
+            }
+        } else {
+            // Bot created by the user themselves - give them full access
+            await query(
+                `INSERT OR REPLACE INTO bot_permissions 
+                (user_id, bot_id, can_view, can_edit, can_delete, can_create_campaigns, can_create_rules, can_view_analytics, can_use_reminders, can_use_ai, can_manage_contacts, can_manage_datasources)
+                VALUES (?, ?, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)`,
+                [userId, bot.id]
+            );
+            logger.info('Created bot permissions for creator', { userId, botId: bot.id });
+        }
+
         res.status(201).json({
             success: true,
             data: bot,

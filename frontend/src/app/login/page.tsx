@@ -24,12 +24,9 @@ export default function LoginPage() {
                 localStorage.setItem('user', JSON.stringify(response.data.data.user))
                 toast.success('Welcome back')
 
-                // Redirect based on user role
-                const userRole = response.data.data.user?.role?.toLowerCase()
-                const redirectPath = (userRole === 'owner' || userRole === 'admin') ? '/dashboard' : '/user'
-                
+                // All users go to /dashboard - sidebar will adjust based on role
                 setTimeout(() => {
-                    window.location.replace(redirectPath)
+                    window.location.replace('/dashboard')
                 }, 800)
             }
         } catch (error: any) {
