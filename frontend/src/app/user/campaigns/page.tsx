@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -126,7 +126,7 @@ export default function UserCampaignsPage() {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/campaigns/${id}/start`, {
+            const response = await fetch(`${API_URL}/api/campaigns/${id}/start`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -148,7 +148,7 @@ export default function UserCampaignsPage() {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/campaigns/${id}/pause`, {
+            const response = await fetch(`${API_URL}/api/campaigns/${id}/pause`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -169,7 +169,7 @@ export default function UserCampaignsPage() {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/campaigns/${id}/resume`, {
+            const response = await fetch(`${API_URL}/api/campaigns/${id}/resume`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import { toast } from 'sonner'
 import { Megaphone, Trash2, ChevronDown, Circle, Check, X, Calendar, Users, Send, Play, Pause, RefreshCw, Eye, Plus } from 'lucide-react'
 import CampaignDetailModal from '@/components/modals/CampaignDetailModal'
@@ -131,7 +131,7 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            await fetch(`http://localhost:3001/api/campaigns/${id}/start`, {
+            await fetch(`${API_URL}/api/campaigns/${id}/start`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -148,7 +148,7 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            await fetch(`http://localhost:3001/api/campaigns/${id}/pause`, {
+            await fetch(`${API_URL}/api/campaigns/${id}/pause`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -165,7 +165,7 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            await fetch(`http://localhost:3001/api/campaigns/${id}/resume`, {
+            await fetch(`${API_URL}/api/campaigns/${id}/resume`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })

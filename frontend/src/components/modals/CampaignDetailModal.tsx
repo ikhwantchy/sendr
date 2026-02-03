@@ -8,6 +8,7 @@ import {
     Send, Pause, RefreshCw, ChevronLeft, ChevronRight,
     Phone, User, CheckCircle2, XCircle, Loader2
 } from 'lucide-react'
+import { API_URL } from '@/lib/api'
 
 interface Recipient {
     id: string
@@ -62,7 +63,7 @@ export default function CampaignDetailModal({
         queryFn: async () => {
             if (!campaign?.id) return null
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/campaigns/${campaign.id}`, {
+            const response = await fetch(`${API_URL}/api/campaigns/${campaign.id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             return response.json()
@@ -85,7 +86,7 @@ export default function CampaignDetailModal({
             const token = localStorage.getItem('token')
             const statusParam = statusFilter !== 'all' ? `&status=${statusFilter}` : ''
             const response = await fetch(
-                `http://localhost:3001/api/campaigns/${campaign.id}/recipients?limit=${limit}&offset=${page * limit}${statusParam}`,
+                `${API_URL}/api/campaigns/${campaign.id}/recipients?limit=${limit}&offset=${page * limit}${statusParam}`,
                 {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }

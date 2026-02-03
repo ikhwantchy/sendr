@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -31,7 +31,7 @@ export default function UserReminderDetailPage() {
         queryKey: ['reminder', reminderId],
         queryFn: async () => {
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/reminders/${reminderId}`, {
+            const response = await fetch(`${API_URL}/api/reminders/${reminderId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             const data = await response.json()

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Clock, Users, Play, Pause, Edit, Trash2, TestTube, RefreshCw, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { API_URL } from '@/lib/api'
 
 interface Reminder {
     id: string
@@ -37,9 +38,9 @@ export default function RemindersPage() {
             const urlParams = new URLSearchParams(window.location.search);
             const botId = urlParams.get('botId');
 
-            let url = 'http://localhost:3001/api/reminders';
+            let url = `${API_URL}/api/reminders`;
             if (botId) {
-                url = `http://localhost:3001/api/reminders/bot/${botId}`;
+                url = `${API_URL}/api/reminders/bot/${botId}`;
             }
 
             const response = await fetch(url, {
@@ -99,7 +100,7 @@ export default function RemindersPage() {
     const toggleActive = async (id: string) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:3001/api/reminders/${id}/toggle`, {
+            const response = await fetch(`${API_URL}/api/reminders/${id}/toggle`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -122,7 +123,7 @@ export default function RemindersPage() {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:3001/api/reminders/${id}`, {
+            const response = await fetch(`${API_URL}/api/reminders/${id}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`

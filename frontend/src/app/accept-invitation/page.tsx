@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useMutation } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import { toast } from 'sonner'
 
 function InvitationContent() {
@@ -36,7 +36,7 @@ function InvitationContent() {
         const validateToken = async () => {
             try {
                 // Use relative URL or env var in production ideally, but keeping localhost as per original
-                const response = await fetch(`http://localhost:3001/api/invitations/validate/${token}`)
+                const response = await fetch(`${API_URL}/api/invitations/validate/${token}`)
                 const data = await response.json()
 
                 if (!data.success) {
@@ -58,7 +58,7 @@ function InvitationContent() {
 
     const registerMutation = useMutation({
         mutationFn: async (data: any) => {
-            const response = await fetch('http://localhost:3001/api/invitations/accept', {
+            const response = await fetch(`${API_URL}/api/invitations/accept`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

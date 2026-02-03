@@ -12,7 +12,7 @@ import {
     Cat, Coffee, Dumbbell, Car, Lightbulb, Heart, Hand, ChevronLeft, ExternalLink, Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 import AdvancedFilters from './AdvancedFilters'
 import ContactTable, { ContactRow, ContactColumn, contactTableToParsedContacts, getContactTableVariables } from '@/components/ContactTable'
@@ -182,7 +182,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         const loadReminderData = async () => {
             try {
                 const token = localStorage.getItem('token')
-                const response = await fetch(`http://localhost:3001/api/reminders/${reminderId}`, {
+                const response = await fetch(`${API_URL}/api/reminders/${reminderId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 })
                 const data = await response.json()
@@ -432,7 +432,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
             setIsPreviewLoading(true)
             try {
-                const response = await fetch('http://localhost:3001/api/sheets/preview-digest', {
+                const response = await fetch(`${API_URL}/api/sheets/preview-digest`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -558,7 +558,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
             if (reminderId) {
                 console.log('[EDIT MODE] Updating reminder:', reminderId, 'with payload:', payload)
                 const token = localStorage.getItem('token')
-                const response = await fetch(`http://localhost:3001/api/reminders/${reminderId}`, {
+                const response = await fetch(`${API_URL}/api/reminders/${reminderId}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',

@@ -2,7 +2,7 @@
 
 import { use, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -88,7 +88,7 @@ export default function UserBotDetailPage({ params }: { params: Promise<{ id: st
     const startCampaign = async (id: string) => {
         try {
             const token = localStorage.getItem('token')
-            await fetch(`http://localhost:3001/api/campaigns/${id}/start`, {
+            await fetch(`${API_URL}/api/campaigns/${id}/start`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })

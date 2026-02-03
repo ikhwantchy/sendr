@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import CampaignDetailModal from '@/components/modals/CampaignDetailModal'
+import { API_URL } from '@/lib/api'
 
 interface Campaign {
     id: string
@@ -74,9 +75,9 @@ export default function CampaignsPage() {
             const urlParams = new URLSearchParams(window.location.search)
             const botId = urlParams.get('botId')
 
-            let url = 'http://localhost:3001/api/campaigns'
+            let url = `${API_URL}/api/campaigns`
             if (botId) {
-                url = `http://localhost:3001/api/campaigns/bot/${botId}`
+                url = `${API_URL}/api/campaigns/bot/${botId}`
             }
 
             const response = await fetch(url, {
@@ -104,7 +105,7 @@ export default function CampaignsPage() {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/campaigns/${id}/start`, {
+            const response = await fetch(`${API_URL}/api/campaigns/${id}/start`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -126,7 +127,7 @@ export default function CampaignsPage() {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/campaigns/${id}/pause`, {
+            const response = await fetch(`${API_URL}/api/campaigns/${id}/pause`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -147,7 +148,7 @@ export default function CampaignsPage() {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/campaigns/${id}/resume`, {
+            const response = await fetch(`${API_URL}/api/campaigns/${id}/resume`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -169,7 +170,7 @@ export default function CampaignsPage() {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/campaigns/${id}/cancel`, {
+            const response = await fetch(`${API_URL}/api/campaigns/${id}/cancel`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -190,7 +191,7 @@ export default function CampaignsPage() {
         setActionLoading(id)
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/campaigns/${id}/retry-failed`, {
+            const response = await fetch(`${API_URL}/api/campaigns/${id}/retry-failed`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             })
@@ -212,7 +213,7 @@ export default function CampaignsPage() {
         if (!confirm(`Are you sure you want to delete "${name}"?`)) return
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:3001/api/campaigns/${id}`, {
+            const response = await fetch(`${API_URL}/api/campaigns/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             })

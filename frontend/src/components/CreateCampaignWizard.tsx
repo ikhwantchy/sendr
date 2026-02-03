@@ -12,7 +12,7 @@ import {
     ChevronLeft, ShieldCheck, Zap, Activity, Edit, Maximize2, Minimize2
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { api } from '@/lib/api'
+import { api, API_URL } from '@/lib/api'
 import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 import ContactTable, { ContactRow, ContactColumn, contactTableToParsedContacts, getContactTableVariables } from '@/components/ContactTable'
 import Link from 'next/link'
@@ -273,7 +273,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
         if (!url || !tab) return
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch('http://localhost:3001/api/campaigns/preview-contacts', {
+            const response = await fetch(`${API_URL}/api/campaigns/preview-contacts`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -312,7 +312,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
         try {
             toast.loading('Importing contacts from sheet...', { id: 'sheet-import' });
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:3001/api/campaigns/preview-contacts', {
+            const response = await fetch(`${API_URL}/api/campaigns/preview-contacts`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -419,7 +419,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
             }
 
             const token = localStorage.getItem('token')
-            const response = await fetch('http://localhost:3001/api/campaigns', {
+            const response = await fetch(`${API_URL}/api/campaigns`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
