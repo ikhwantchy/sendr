@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import systemSettingsService from '../../services/systemSettingsService';
 import auditLogService from '../../services/auditLogService';
 import userInviteService from '../../services/userInviteService';
-import { query } from '../../database/connection';
+import { query } from '../../database/connection-sqlite';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -57,21 +57,15 @@ export const createUser = async (req: Request, res: Response) => {
         // If creating a USER (Client), create a new tenant for them
         if (role === 'USER') {
             tenantId = uuidv4();
-            const slug = email.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            // Create unique slug with timestamp
+            const baseSlug = email.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            const uniqueSlug = `${baseSlug}-${Date.now()}`;
             await query(
                 `INSERT INTO tenants (id, name, slug, created_at, updated_at)
                  VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
-                [tenantId, `${name}'s Workspace`, slug]
+                [tenantId, `${name}'s Workspace`, uniqueSlug]
             );
-        } else {
-            // If creating another ADMIN, put them in the default tenant (or the creator's tenant)
-            const tenantResult = await query('SELECT id FROM tenants LIMIT 1');
-            if (tenantResult.rows.length === 0) {
-                return res.status(500).json({
-                    success: false,
-                    message: 'No tenant found.'
-                });
-            }
+        }
             tenantId = tenantResult.rows[0].id;
         }
 

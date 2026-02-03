@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { query } from '../database/connection';
+import { query } from '../database/connection-sqlite';
 
 /**
  * Audit Log Service

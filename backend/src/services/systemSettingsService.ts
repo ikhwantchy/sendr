@@ -1,4 +1,4 @@
-import { query } from '../database/connection';
+import { query } from '../database/connection-sqlite';
 import auditLogService from './auditLogService';
 
 /**

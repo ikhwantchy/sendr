@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { query } from '../../database/connection';
+import { query } from '../../database/connection-sqlite';
 import auditLogService from '../../services/auditLogService';
 import systemSettingsService from '../../services/systemSettingsService';
 import { exec } from 'child_process';
