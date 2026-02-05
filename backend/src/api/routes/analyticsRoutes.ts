@@ -349,6 +349,7 @@ router.get('/full', async (req, res) => {
     try {
         const timeRange = (req.query.timeRange as '24h' | '7d' | '30d') || '24h';
         const botId = req.query.botId as string;
+        const timezone = (req.query.timezone as string) || 'Asia/Jakarta';
         const tenantId = req.user?.tenant_id;
         const userRole = req.user?.role;
         const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
@@ -361,7 +362,8 @@ router.get('/full', async (req, res) => {
         const data = await AnalyticsController.getAnalyticsData({ 
             timeRange, 
             tenantId: isAdmin ? null : tenantId, // null = all tenants
-            botId 
+            botId,
+            timezone
         });
 
         res.json({

@@ -6,6 +6,39 @@ interface AnalyticsFilter {
     timeRange: TimeRange;
     tenantId: string | null; // null = all tenants (for OWNER/ADMIN)
     botId?: string;
+    timezone?: string; // User's timezone (default: Asia/Jakarta)
+}
+
+/**
+ * Format a Date to a specific timezone string
+ */
+function formatInTimezone(date: Date, timezone: string, format: 'hour' | 'minute' | 'day'): string {
+    const options: Intl.DateTimeFormatOptions = {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    };
+    
+    const parts = new Intl.DateTimeFormat('en-CA', options).formatToParts(date);
+    const get = (type: string) => parts.find(p => p.type === type)?.value || '00';
+    
+    const year = get('year');
+    const month = get('month');
+    const day = get('day');
+    const hour = get('hour');
+    const minute = get('minute');
+    
+    if (format === 'day') {
+        return `${year}-${month}-${day}`;
+    } else if (format === 'hour') {
+        return `${year}-${month}-${day} ${hour}:00`;
+    } else {
+        return `${year}-${month}-${day} ${hour}:${minute}`;
+    }
 }
 
 export class AnalyticsController {
@@ -13,7 +46,7 @@ export class AnalyticsController {
      * Get comprehensive analytics data
      */
     static async getAnalyticsData(filter: AnalyticsFilter) {
-        const { timeRange, tenantId, botId } = filter;
+        const { timeRange, tenantId, botId, timezone = 'Asia/Jakarta' } = filter;
 
         // 1. Calculate Date Ranges
         const now = new Date();
@@ -146,21 +179,21 @@ export class AnalyticsController {
 
         let trafficChart = trafficResult.rows;
 
-        // Generate empty buckets to ensure full time range is displayed
+        // Generate empty buckets to ensure full time range is displayed (in user's timezone)
         const buckets: any[] = [];
 
         if (timeRange === '30m') {
             // 30 Minutes: Minute intervals
             for (let i = 30; i >= 0; i--) {
                 const d = new Date(now.getTime() - i * 60 * 1000);
-                const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                const timeStr = formatInTimezone(d, timezone, 'minute');
                 buckets.push({ date: timeStr, auto_replies: 0, campaigns: 0, reminders: 0, received: 0 });
             }
         } else if (timeRange === '24h') {
             // 24 Hours: Hourly intervals (Clean chart style)
             for (let i = 24; i >= 0; i--) {
                 const d = new Date(now.getTime() - i * 60 * 60 * 1000);
-                const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:00`;
+                const timeStr = formatInTimezone(d, timezone, 'hour');
                 buckets.push({ date: timeStr, auto_replies: 0, campaigns: 0, reminders: 0, received: 0 });
             }
         } else if (timeRange === '7d' || timeRange === '30d') {
@@ -168,7 +201,7 @@ export class AnalyticsController {
             const days = timeRange === '7d' ? 7 : 30;
             for (let i = days; i >= 0; i--) {
                 const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-                const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                const timeStr = formatInTimezone(d, timezone, 'day');
                 buckets.push({ date: timeStr, auto_replies: 0, campaigns: 0, reminders: 0, received: 0 });
             }
         }

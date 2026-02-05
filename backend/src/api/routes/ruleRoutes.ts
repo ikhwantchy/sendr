@@ -8,7 +8,8 @@ router.use(authenticate);
 // GET /api/rules - List rules
 router.get('/', async (req, res) => {
     try {
-        const rules = await keywordRuleRepository.findByTenant(req.user!.tenant_id);
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
+        const rules = await keywordRuleRepository.findByTenant(isAdmin ? undefined : req.user!.tenant_id);
         res.json({ success: true, data: rules });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
@@ -32,7 +33,8 @@ router.get('/bot/:botId', async (req, res) => {
 // GET /api/rules/:id - Get rule by ID
 router.get('/:id', async (req, res) => {
     try {
-        const rule = await keywordRuleRepository.findById(req.params.id, req.user!.tenant_id);
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
+        const rule = await keywordRuleRepository.findById(req.params.id, isAdmin ? undefined : req.user!.tenant_id);
         if (!rule) {
             return res.status(404).json({ success: false, error: 'Rule not found' });
         }
@@ -45,9 +47,11 @@ router.get('/:id', async (req, res) => {
 // POST /api/rules - Create rule
 router.post('/', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
+        // For OWNER/ADMIN, use tenant_id from the bot being assigned
+        // For regular users, use their own tenant_id
         const rule = await keywordRuleRepository.create({
             ...req.body,
-            tenant_id: req.user!.tenant_id,
+            tenant_id: req.body.tenant_id || req.user!.tenant_id,
             created_by: req.user!.id,
         });
         res.status(201).json({ success: true, data: rule });
@@ -59,7 +63,8 @@ router.post('/', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) =>
 // PUT /api/rules/:id - Update rule
 router.put('/:id', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
-        const rule = await keywordRuleRepository.update(req.params.id, req.user!.tenant_id, req.body);
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
+        const rule = await keywordRuleRepository.update(req.params.id, isAdmin ? undefined : req.user!.tenant_id, req.body);
         res.json({ success: true, data: rule });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
@@ -69,14 +74,15 @@ router.put('/:id', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) 
 // PATCH /api/rules/:id/toggle - Toggle rule active status
 router.patch('/:id/toggle', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
         // Get current rule
-        const currentRule = await keywordRuleRepository.findById(req.params.id, req.user!.tenant_id);
+        const currentRule = await keywordRuleRepository.findById(req.params.id, isAdmin ? undefined : req.user!.tenant_id);
         if (!currentRule) {
             return res.status(404).json({ success: false, error: 'Rule not found' });
         }
 
         // Toggle is_active
-        const updatedRule = await keywordRuleRepository.update(req.params.id, req.user!.tenant_id, {
+        const updatedRule = await keywordRuleRepository.update(req.params.id, isAdmin ? undefined : req.user!.tenant_id, {
             is_active: !currentRule.is_active
         });
 
@@ -89,7 +95,8 @@ router.patch('/:id/toggle', requireRole(['OWNER', 'OPERATOR', 'USER']), async (r
 // DELETE /api/rules/:id - Delete rule
 router.delete('/:id', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
-        await keywordRuleRepository.delete(req.params.id, req.user!.tenant_id);
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
+        await keywordRuleRepository.delete(req.params.id, isAdmin ? undefined : req.user!.tenant_id);
         res.json({ success: true, message: 'Rule deleted' });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });

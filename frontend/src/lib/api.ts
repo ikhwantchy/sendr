@@ -130,7 +130,9 @@ export const api = {
     analytics: {
         get: () => apiClient.get('/analytics'),
         getFull: (timeRange: string, botId?: string) => {
-            let url = `/analytics/full?timeRange=${timeRange}`;
+            // Get user's timezone for accurate chart display
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Jakarta';
+            let url = `/analytics/full?timeRange=${timeRange}&timezone=${encodeURIComponent(timezone)}`;
             if (botId) url += `&botId=${botId}`;
             return apiClient.get(url);
         },

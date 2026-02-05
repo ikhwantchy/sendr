@@ -78,11 +78,13 @@ class KeywordRuleRepository {
         return result.rows.map(rule => this.parseRule(rule));
     }
 
-    async findByTenant(tenantId: string): Promise<KeywordRule[]> {
-        const result = await query(
-            'SELECT * FROM keyword_rules WHERE tenant_id = ? ORDER BY created_at DESC',
-            [tenantId]
-        );
+    async findByTenant(tenantId?: string): Promise<KeywordRule[]> {
+        const sql = tenantId
+            ? 'SELECT * FROM keyword_rules WHERE tenant_id = ? ORDER BY created_at DESC'
+            : 'SELECT * FROM keyword_rules ORDER BY created_at DESC';
+
+        const params = tenantId ? [tenantId] : [];
+        const result = await query(sql, params);
 
         return result.rows.map(rule => this.parseRule(rule));
     }
@@ -129,7 +131,7 @@ class KeywordRuleRepository {
         return rule;
     }
 
-    async update(id: string, tenantId: string, data: Partial<KeywordRule>): Promise<KeywordRule> {
+    async update(id: string, tenantId: string | undefined, data: Partial<KeywordRule>): Promise<KeywordRule> {
         const fields: string[] = [];
         const values: any[] = [];
 
@@ -148,13 +150,17 @@ class KeywordRuleRepository {
 
         if (fields.length === 0) return await this.findById(id, tenantId) as KeywordRule;
 
-        values.push(id, tenantId);
+        const sql = tenantId
+            ? `UPDATE keyword_rules SET ${fields.join(', ')} WHERE id = ? AND tenant_id = ?`
+            : `UPDATE keyword_rules SET ${fields.join(', ')} WHERE id = ?`;
 
-        await query(
-            `UPDATE keyword_rules SET ${fields.join(', ')} 
-             WHERE id = ? AND tenant_id = ?`,
-            values
-        );
+        if (tenantId) {
+            values.push(id, tenantId);
+        } else {
+            values.push(id);
+        }
+
+        await query(sql, values);
 
         const rule = await this.findById(id, tenantId);
         if (!rule) {
@@ -171,11 +177,13 @@ class KeywordRuleRepository {
         });
     }
 
-    async delete(id: string, tenantId: string): Promise<void> {
-        await query(
-            'DELETE FROM keyword_rules WHERE id = ? AND tenant_id = ?',
-            [id, tenantId]
-        );
+    async delete(id: string, tenantId?: string): Promise<void> {
+        const sql = tenantId
+            ? 'DELETE FROM keyword_rules WHERE id = ? AND tenant_id = ?'
+            : 'DELETE FROM keyword_rules WHERE id = ?';
+
+        const params = tenantId ? [id, tenantId] : [id];
+        await query(sql, params);
     }
 }
 

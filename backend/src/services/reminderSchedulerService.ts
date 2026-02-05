@@ -509,8 +509,11 @@ class ReminderSchedulerService {
             `, [require('uuid').v4(), reminderId, status, details]);
 
             // Get reminder info to check if it's a "Once" type
-            const reminderResult = await query('SELECT schedule FROM reminders WHERE id = ?', [reminderId]);
-            const isOnceReminder = reminderResult.rows.length > 0 && this.isOnceCron(reminderResult.rows[0].schedule);
+            const reminderResult = await query('SELECT schedule, timezone FROM reminders WHERE id = ?', [reminderId]);
+            if (reminderResult.rows.length === 0) return;
+
+            const reminder = reminderResult.rows[0];
+            const isOnceReminder = this.isOnceCron(reminder.schedule);
 
             // Update reminder's last_run_at
             // For "Once" reminders, clear next_run_at after execution
@@ -522,11 +525,29 @@ class ReminderSchedulerService {
                 `, [status, reminderId]);
                 console.log(`📭 Cleared next_run_at for "Once" reminder: ${reminderId}`);
             } else {
+                // For recurring reminders, calculate and update next_run_at
+                let nextRunAt: string | null = null;
+                try {
+                    const cp = require('cron-parser');
+                    const parser = cp.default || cp;
+                    const parseFn = parser.parseExpression || parser.parse;
+
+                    if (typeof parseFn === 'function') {
+                        const interval = parseFn.call(parser, reminder.schedule, {
+                            tz: reminder.timezone || 'Asia/Jakarta'
+                        });
+                        nextRunAt = interval.next().toISOString();
+                        console.log(`📅 Updated next_run_at for "${reminderId}": ${nextRunAt}`);
+                    }
+                } catch (err) {
+                    console.error('Error calculating next run after execution:', err);
+                }
+
                 await query(`
                     UPDATE reminders 
-                    SET last_run_at = CURRENT_TIMESTAMP, last_status = ?, run_count = run_count + 1
+                    SET last_run_at = CURRENT_TIMESTAMP, last_status = ?, run_count = run_count + 1, next_run_at = ?
                     WHERE id = ?
-                `, [status, reminderId]);
+                `, [status, nextRunAt, reminderId]);
             }
         } catch (error) {
             console.error('Error logging execution:', error);
