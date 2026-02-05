@@ -159,7 +159,11 @@ router.get('/activity-logs', async (req, res) => {
         };
 
         // Helper for bot access - admins see all tenant bots, users see only permitted bots
+        // If botId is specified, skip tenant filter (user is viewing a specific bot they have access to)
         const getBotAccessFilter = (tableAlias: string, params: any[]) => {
+            // If specific botId is requested, skip access filter (already authorized by viewing the page)
+            if (botId) return '';
+            
             if (isAdmin) {
                 // Admin sees all bots in their tenant
                 params.push(tenantId);
