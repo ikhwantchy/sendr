@@ -70,8 +70,8 @@ export default function RulesTable({ botId }: RulesTableProps) {
     const totalPages = Math.ceil((rules || []).length / itemsPerPage)
 
     const toggleMutation = useMutation({
-        mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-            return await api.rules.update(id, { is_active })
+        mutationFn: async ({ id }: { id: string; is_active: boolean }) => {
+            return await api.rules.toggle(id)
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['rules', botId] })
