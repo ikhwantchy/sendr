@@ -16,12 +16,15 @@ router.use(authenticate);
 
 /**
  * GET /api/sheet-updater/status
- * Check if sheet write service is ready
+ * Check if sheet write service is ready (checks tenant-specific first, then global fallback)
  */
 router.get('/status', async (req: Request, res: Response) => {
     try {
-        const isReady = googleSheetsWriteService.isReady();
-        const serviceEmail = googleSheetsWriteService.getServiceAccountEmail();
+        const tenantId = req.user?.tenant_id;
+        
+        // Check tenant-specific credentials first
+        const isReady = await googleSheetsWriteService.isReadyForTenant(tenantId);
+        const serviceEmail = await googleSheetsWriteService.getServiceAccountEmailForTenant(tenantId);
 
         res.json({
             success: true,
@@ -30,7 +33,7 @@ router.get('/status', async (req: Request, res: Response) => {
                 serviceAccountEmail: serviceEmail,
                 message: isReady 
                     ? 'Service is ready. Share your spreadsheet with the service account email.'
-                    : 'Service account not configured. Please set GOOGLE_SERVICE_ACCOUNT_KEY in .env'
+                    : 'Google Service Account not configured. Go to Settings > Integrations to set up.'
             }
         });
     } catch (error: any) {

@@ -2,16 +2,15 @@
  * Google Sheets Write Service
  * Uses Service Account for read/write access to Google Sheets
  * 
- * SETUP:
- * 1. Create Service Account di Google Cloud Console
- * 2. Download JSON key file
- * 3. Set GOOGLE_SERVICE_ACCOUNT_KEY di .env (base64 encoded) atau path ke file
- * 4. Share spreadsheet ke email service account
+ * SETUP (Two Options):
+ * A) Per-Tenant (Recommended): Configure via Dashboard > Settings > Integrations
+ * B) Global Fallback: Set GOOGLE_SERVICE_ACCOUNT_KEY in .env (base64 encoded)
  */
 
 import { google, sheets_v4 } from 'googleapis';
 import { JWT } from 'google-auth-library';
 import { logger } from '../utils/logger';
+import { query } from '../database/connection';
 import path from 'path';
 import fs from 'fs';
 
@@ -34,12 +33,23 @@ interface FindRowResult {
     rowData?: string[];
 }
 
+interface TenantClient {
+    sheets: sheets_v4.Sheets;
+    credentials: ServiceAccountCredentials;
+    createdAt: number;
+}
+
 class GoogleSheetsWriteService {
+    // Global/fallback client
     private sheets: sheets_v4.Sheets | null = null;
     private authClient: JWT | null = null;
     private initialized: boolean = false;
     private initAttempted: boolean = false;
     private credentials: ServiceAccountCredentials | null = null;
+    
+    // Per-tenant client cache
+    private tenantClients: Map<string, TenantClient> = new Map();
+    private readonly CLIENT_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
     constructor() {
         // Don't initialize in constructor - wait for first use
@@ -56,14 +66,14 @@ class GoogleSheetsWriteService {
     }
 
     /**
-     * Synchronous initialization
+     * Synchronous initialization for global/fallback credentials
      */
     private initSync(): void {
         try {
-            this.credentials = this.getCredentials();
+            this.credentials = this.getCredentialsFromEnv();
             
             if (!this.credentials) {
-                logger.warn('[SheetsWrite] No service account credentials found. Write features disabled.');
+                logger.warn('[SheetsWrite] No global service account credentials found. Per-tenant credentials will be used.');
                 return;
             }
 
@@ -76,14 +86,98 @@ class GoogleSheetsWriteService {
             this.sheets = google.sheets({ version: 'v4', auth: this.authClient });
             this.initialized = true;
             
-            logger.info('[SheetsWrite] ✅ Service initialized with service account:', this.credentials.client_email);
+            logger.info('[SheetsWrite] ✅ Global service initialized with:', this.credentials.client_email);
         } catch (error: any) {
             logger.error('[SheetsWrite] Failed to initialize:', error.message);
         }
     }
 
     /**
+     * Get or create a Sheets client for a specific tenant
+     */
+    async getClientForTenant(tenantId: string): Promise<{ sheets: sheets_v4.Sheets; email: string } | null> {
+        // Check cache first
+        const cached = this.tenantClients.get(tenantId);
+        if (cached && (Date.now() - cached.createdAt) < this.CLIENT_CACHE_TTL) {
+            return { sheets: cached.sheets, email: cached.credentials.client_email };
+        }
+
+        try {
+            // Fetch tenant's service account from database
+            const result = await query(
+                'SELECT google_service_account FROM tenants WHERE id = ?',
+                [tenantId]
+            );
+
+            if (result.rows.length === 0 || !result.rows[0].google_service_account) {
+                logger.debug(`[SheetsWrite] No tenant-specific credentials for ${tenantId}, using global fallback`);
+                return null;
+            }
+
+            const credentials: ServiceAccountCredentials = JSON.parse(result.rows[0].google_service_account);
+            
+            if (!credentials.client_email || !credentials.private_key) {
+                logger.warn(`[SheetsWrite] Invalid credentials for tenant ${tenantId}`);
+                return null;
+            }
+
+            // Create new JWT client
+            const authClient = new JWT({
+                email: credentials.client_email,
+                key: credentials.private_key,
+                scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+            });
+
+            const sheets = google.sheets({ version: 'v4', auth: authClient });
+
+            // Cache the client
+            this.tenantClients.set(tenantId, {
+                sheets,
+                credentials,
+                createdAt: Date.now()
+            });
+
+            logger.info(`[SheetsWrite] ✅ Created client for tenant ${tenantId}: ${credentials.client_email}`);
+            
+            return { sheets, email: credentials.client_email };
+        } catch (error: any) {
+            logger.error(`[SheetsWrite] Error creating client for tenant ${tenantId}:`, error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Get the appropriate sheets client (tenant-specific or global fallback)
+     */
+    async getSheetsClient(tenantId?: string): Promise<{ sheets: sheets_v4.Sheets; email: string } | null> {
+        // Try tenant-specific first
+        if (tenantId) {
+            const tenantClient = await this.getClientForTenant(tenantId);
+            if (tenantClient) {
+                return tenantClient;
+            }
+        }
+
+        // Fallback to global
+        this.ensureInitialized();
+        if (this.initialized && this.sheets && this.credentials) {
+            return { sheets: this.sheets, email: this.credentials.client_email };
+        }
+
+        return null;
+    }
+
+    /**
      * Check if service is ready for write operations
+     * @param tenantId Optional tenant ID to check tenant-specific credentials
+     */
+    async isReadyForTenant(tenantId?: string): Promise<boolean> {
+        const client = await this.getSheetsClient(tenantId);
+        return client !== null;
+    }
+
+    /**
+     * Check if service is ready (global fallback only, for backward compatibility)
      */
     isReady(): boolean {
         this.ensureInitialized();
@@ -91,7 +185,15 @@ class GoogleSheetsWriteService {
     }
 
     /**
-     * Get service account email (for sharing instructions)
+     * Get service account email for a tenant
+     */
+    async getServiceAccountEmailForTenant(tenantId?: string): Promise<string | null> {
+        const client = await this.getSheetsClient(tenantId);
+        return client?.email || null;
+    }
+
+    /**
+     * Get service account email (global, for backward compatibility)
      */
     getServiceAccountEmail(): string | null {
         this.ensureInitialized();
@@ -99,9 +201,17 @@ class GoogleSheetsWriteService {
     }
 
     /**
-     * Get service account credentials from env or file
+     * Clear cached client for a tenant (call after credentials are updated)
      */
-    private getCredentials(): ServiceAccountCredentials | null {
+    clearTenantCache(tenantId: string): void {
+        this.tenantClients.delete(tenantId);
+        logger.info(`[SheetsWrite] Cleared cache for tenant ${tenantId}`);
+    }
+
+    /**
+     * Get service account credentials from environment variables
+     */
+    private getCredentialsFromEnv(): ServiceAccountCredentials | null {
         try {
             // Option 1: Base64 encoded JSON in env variable
             const base64Key = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;

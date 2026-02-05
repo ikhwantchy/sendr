@@ -79,4 +79,11 @@ router.get('/system/backups', systemController.getBackups);
 router.post('/system/maintenance/optimize-db', systemController.optimizeDatabase);
 router.post('/system/maintenance/cleanup-logs', systemController.cleanupLogs);
 
+// ============================================
+// GOOGLE SERVICE ACCOUNT (Integrations)
+// ============================================
+router.get('/google-service-account', adminController.getGoogleServiceAccount);
+router.post('/google-service-account', adminController.saveGoogleServiceAccount);
+router.delete('/google-service-account', adminController.deleteGoogleServiceAccount);
+
 export default router;

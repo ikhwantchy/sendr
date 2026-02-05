@@ -682,7 +682,9 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE bot_permissions ADD COLUMN can_manage_contacts INTEGER DEFAULT 0",
     "ALTER TABLE bot_permissions ADD COLUMN can_manage_datasources INTEGER DEFAULT 0",
     "ALTER TABLE bots ADD COLUMN is_paused INTEGER DEFAULT 0",
-    "ALTER TABLE campaign_recipients ADD COLUMN wa_message_id TEXT"
+    "ALTER TABLE campaign_recipients ADD COLUMN wa_message_id TEXT",
+    "ALTER TABLE tenants ADD COLUMN google_service_account TEXT",
+    "ALTER TABLE tenants ADD COLUMN settings TEXT DEFAULT '{}'"
   ];
 
   for (const sql of migrations) {

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Save, Mail, Shield, Settings as SettingsIcon, Zap, Send, User, Lock, ArrowLeft, Loader2, CheckCircle2, XCircle, Key, Eye, Monitor, ChevronRight } from 'lucide-react';
+import { Save, Mail, Shield, Settings as SettingsIcon, Zap, Send, User, Lock, ArrowLeft, Loader2, CheckCircle2, XCircle, Key, Eye, Monitor, ChevronRight, Link2, Upload, Trash2, FileJson } from 'lucide-react';
 import { api } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -55,11 +55,22 @@ export default function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    // Google Service Account state
+    const [googleSA, setGoogleSA] = useState<{
+        configured: boolean;
+        email?: string;
+        projectId?: string;
+    } | null>(null);
+    const [googleSALoading, setGoogleSALoading] = useState(false);
+    const [googleSASaving, setGoogleSASaving] = useState(false);
+
     useEffect(() => {
         if (activeTab === 'profile') {
             fetchProfile();
         } else if (activeTab === 'system' && isAdmin) {
             fetchSystemSettings();
+        } else if (activeTab === 'integrations') {
+            fetchGoogleServiceAccount();
         }
     }, [activeTab, isAdmin]);
 
@@ -102,6 +113,80 @@ export default function SettingsPage() {
             console.error('Failed to fetch settings:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchGoogleServiceAccount = async () => {
+        setGoogleSALoading(true);
+        try {
+            const response = await api.get('/admin/google-service-account');
+            setGoogleSA(response.data.data);
+        } catch (error) {
+            console.error('Failed to fetch Google Service Account:', error);
+            setGoogleSA({ configured: false });
+        } finally {
+            setGoogleSALoading(false);
+        }
+    };
+
+    const handleGoogleSAUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setGoogleSASaving(true);
+        setMessage(null);
+
+        try {
+            const text = await file.text();
+            const json = JSON.parse(text);
+
+            const response = await api.post('/admin/google-service-account', {
+                serviceAccountJson: json
+            });
+
+            if (response.data.success) {
+                setMessage({ type: 'success', text: 'Google Service Account configured successfully!' });
+                setGoogleSA({
+                    configured: true,
+                    email: response.data.data.email,
+                    projectId: response.data.data.projectId
+                });
+            } else {
+                setMessage({ type: 'error', text: response.data.message || 'Failed to save' });
+            }
+        } catch (error: any) {
+            console.error('Failed to upload Google Service Account:', error);
+            if (error.response?.data?.message) {
+                setMessage({ type: 'error', text: error.response.data.message });
+            } else {
+                setMessage({ type: 'error', text: 'Invalid JSON file or upload failed' });
+            }
+        } finally {
+            setGoogleSASaving(false);
+            // Reset file input
+            event.target.value = '';
+        }
+    };
+
+    const handleGoogleSADelete = async () => {
+        if (!confirm('Are you sure you want to remove the Google Service Account? This will disable Google Sheets integration.')) {
+            return;
+        }
+
+        setGoogleSASaving(true);
+        setMessage(null);
+
+        try {
+            const response = await api.delete('/admin/google-service-account');
+            if (response.data.success) {
+                setMessage({ type: 'success', text: 'Google Service Account removed successfully' });
+                setGoogleSA({ configured: false });
+            }
+        } catch (error: any) {
+            console.error('Failed to delete Google Service Account:', error);
+            setMessage({ type: 'error', text: 'Failed to remove Google Service Account' });
+        } finally {
+            setGoogleSASaving(false);
         }
     };
 
@@ -273,6 +358,7 @@ export default function SettingsPage() {
     const tabs = [
         { id: 'profile', label: 'Profile', icon: User },
         { id: 'security', label: 'Security', icon: Lock },
+        { id: 'integrations', label: 'Integrations', icon: Link2 },
         ...(isAdmin ? [{ id: 'system', label: 'System', icon: SettingsIcon }] : []),
     ];
 
@@ -560,6 +646,118 @@ export default function SettingsPage() {
                                 </div>
                                 <ChevronRight className="w-4 h-4 text-zinc-400" />
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Integrations Tab */}
+            {activeTab === 'integrations' && (
+                <div className="space-y-6">
+                    {/* Google Sheets Integration */}
+                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
+                        <div className="flex items-start gap-4 mb-6">
+                            <div className="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-6 h-6 text-green-600 dark:text-green-400" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 11V9h-6V3H7v6H1v2h6v6H1v2h6v6h6v-6h6v-2h-6v-6h6zM9 5h4v4H9V5zm0 14v-4h4v4H9zm4-6H9v-4h4v4z"/>
+                                </svg>
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Google Sheets Integration</h3>
+                                <p className="text-xs text-zinc-500 mt-1">
+                                    Connect a Google Service Account to enable automatic data synchronization with Google Sheets.
+                                    This is used for the Sheet Updater feature in your bots.
+                                </p>
+                            </div>
+                        </div>
+
+                        {googleSALoading ? (
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+                            </div>
+                        ) : googleSA?.configured ? (
+                            <div className="space-y-4">
+                                {/* Configured State */}
+                                <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                    <div className="flex-1">
+                                        <p className="text-sm font-medium text-green-700 dark:text-green-300">Service Account Connected</p>
+                                        <p className="text-xs text-green-600 dark:text-green-400 mt-0.5 font-mono">{googleSA.email}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <label className="cursor-pointer">
+                                        <input
+                                            type="file"
+                                            accept=".json,application/json"
+                                            onChange={handleGoogleSAUpload}
+                                            className="hidden"
+                                            disabled={googleSASaving}
+                                        />
+                                        <span className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white text-sm font-medium rounded-lg transition-colors cursor-pointer">
+                                            <Upload className="h-4 w-4" />
+                                            Replace
+                                        </span>
+                                    </label>
+                                    <button
+                                        onClick={handleGoogleSADelete}
+                                        disabled={googleSASaving}
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                                    >
+                                        {googleSASaving ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="h-4 w-4" />
+                                        )}
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {/* Not Configured State */}
+                                <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                    <XCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                                    <div>
+                                        <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Not Configured</p>
+                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Upload a service account JSON file to enable Google Sheets integration</p>
+                                    </div>
+                                </div>
+
+                                <label className="cursor-pointer inline-block">
+                                    <input
+                                        type="file"
+                                        accept=".json,application/json"
+                                        onChange={handleGoogleSAUpload}
+                                        className="hidden"
+                                        disabled={googleSASaving}
+                                    />
+                                    <span className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer">
+                                        {googleSASaving ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <FileJson className="h-4 w-4" />
+                                        )}
+                                        Upload Service Account JSON
+                                    </span>
+                                </label>
+                            </div>
+                        )}
+
+                        {/* Help Section */}
+                        <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-800">
+                            <h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-3">How to get a Service Account</h4>
+                            <ol className="text-xs text-zinc-500 dark:text-zinc-400 space-y-2 list-decimal list-inside">
+                                <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Google Cloud Console</a></li>
+                                <li>Create or select a project</li>
+                                <li>Enable the <strong>Google Sheets API</strong></li>
+                                <li>Go to <strong>IAM & Admin → Service Accounts</strong></li>
+                                <li>Create a new service account</li>
+                                <li>Create a JSON key and download it</li>
+                                <li>Upload the JSON file here</li>
+                                <li>Share your Google Sheet with the service account email</li>
+                            </ol>
                         </div>
                     </div>
                 </div>
