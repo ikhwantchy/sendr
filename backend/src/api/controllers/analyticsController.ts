@@ -41,6 +41,21 @@ function formatInTimezone(date: Date, timezone: string, format: 'hour' | 'minute
     }
 }
 
+/**
+ * Get timezone offset in hours for SQLite datetime modifier
+ */
+function getTimezoneOffsetHours(timezone: string): number {
+    try {
+        const now = new Date();
+        const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+        const tzDate = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+        return Math.round((tzDate.getTime() - utcDate.getTime()) / (1000 * 60 * 60));
+    } catch {
+        // Default to Asia/Jakarta (+7) if timezone is invalid
+        return 7;
+    }
+}
+
 export class AnalyticsController {
     /**
      * Get comprehensive analytics data
@@ -160,9 +175,13 @@ export class AnalyticsController {
         const activeBots = botsResult.rows[0]?.active || 0;
 
         // 3. Traffic Chart Data - BREAKDOWN BY SOURCE
+        // Calculate timezone offset for SQLite (e.g., 'Asia/Jakarta' = +7 hours)
+        const tzOffsetHours = getTimezoneOffsetHours(timezone);
+        const tzModifier = tzOffsetHours >= 0 ? `+${tzOffsetHours} hours` : `${tzOffsetHours} hours`;
+        
         const trafficResult = await query(`
             SELECT 
-                strftime(?, datetime(m.created_at, 'localtime')) as date,
+                strftime(?, datetime(m.created_at, '${tzModifier}')) as date,
                 SUM(CASE WHEN (m.source = 'auto_reply' OR m.direction = 'outbound') AND (m.source IS NULL OR m.source NOT IN ('campaign', 'reminder')) THEN 1 ELSE 0 END) as auto_replies,
                 SUM(CASE WHEN m.source = 'campaign' THEN 1 ELSE 0 END) as campaigns,
                 SUM(CASE WHEN m.source = 'reminder' THEN 1 ELSE 0 END) as reminders,
