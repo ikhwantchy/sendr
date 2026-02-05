@@ -45,7 +45,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/rules - Create rule
-router.post('/', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
+router.post('/', requireRole(['ADMIN', 'OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         // For OWNER/ADMIN, use tenant_id from the bot being assigned
         // For regular users, use their own tenant_id
@@ -61,7 +61,7 @@ router.post('/', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) =>
 });
 
 // PUT /api/rules/:id - Update rule
-router.put('/:id', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
+router.put('/:id', requireRole(['ADMIN', 'OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
         const rule = await keywordRuleRepository.update(req.params.id, isAdmin ? undefined : req.user!.tenant_id, req.body);
@@ -72,7 +72,7 @@ router.put('/:id', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) 
 });
 
 // PATCH /api/rules/:id/toggle - Toggle rule active status
-router.patch('/:id/toggle', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
+router.patch('/:id/toggle', requireRole(['ADMIN', 'OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
         // Get current rule
@@ -93,7 +93,7 @@ router.patch('/:id/toggle', requireRole(['OWNER', 'OPERATOR', 'USER']), async (r
 });
 
 // DELETE /api/rules/:id - Delete rule
-router.delete('/:id', requireRole(['OWNER', 'OPERATOR', 'USER']), async (req, res) => {
+router.delete('/:id', requireRole(['ADMIN', 'OWNER', 'OPERATOR', 'USER']), async (req, res) => {
     try {
         const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
         await keywordRuleRepository.delete(req.params.id, isAdmin ? undefined : req.user!.tenant_id);
