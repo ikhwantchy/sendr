@@ -1207,8 +1207,8 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                 </div>
                             </section>
 
-                            {/* Data Collection Settings - Show when Silent Collection or Hybrid Mode is enabled */}
-                            {(formData.silent_collection || formData.hybrid_mode) && (
+                            {/* Data Collection Settings - Show for all AI modes (Conversation, Silent, Hybrid) */}
+                            {(formData.conversation_model || formData.silent_collection || formData.hybrid_mode) && (
                                 <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 animate-in fade-in slide-in-from-top-2 duration-300">
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="flex items-center gap-3">

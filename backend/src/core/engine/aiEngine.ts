@@ -44,7 +44,39 @@ class AIEngine {
             // Priority: sender_phone (resolved) > from JID > contact_id
             const senderJid = payload.from || contact_id || '';
             const senderPhone = payload.sender_phone; // Resolved phone from LID
-            await this.processSheetUpdate(bot_id, senderJid, payload.content, payload, senderPhone);
+            const sheetResult = await this.processSheetUpdate(bot_id, senderJid, payload.content, payload, senderPhone);
+
+            // Send confirmation for CREATE mode if configured
+            if (sheetResult?.success && sheetResult.mode === 'create' && sheetResult.extractedData) {
+                // Build a natural confirmation message from extracted data
+                const dataEntries = Object.entries(sheetResult.extractedData)
+                    .filter(([key, value]) => value && !['Phone', 'Timestamp'].includes(key))
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join(', ');
+
+                if (dataEntries) {
+                    const confirmationMessage = `✅ Noted! ${dataEntries}`;
+                    
+                    logger.info('[AIEngine] Sending sheet create confirmation', { bot_id, confirmation: confirmationMessage });
+                    
+                    // Emit event to send confirmation reply
+                    await eventBus.emit(EventType.KEYWORD_MATCHED, context, {
+                        rule_id: `sheet-confirm-${bot_id}`,
+                        rule_name: 'Sheet Create Confirmation',
+                        keyword: '@sheet',
+                        match_type: 'contains',
+                        matched_text: payload.content,
+                        actions: [
+                            {
+                                type: 'SEND_TEXT',
+                                config: {
+                                    message: confirmationMessage
+                                }
+                            }
+                        ]
+                    });
+                }
+            }
 
             // Get bot AI config for other AI features
             const botResult = await query('SELECT ai_config, name FROM bots WHERE id = ?', [bot_id]);
@@ -292,8 +324,9 @@ class AIEngine {
      * Process message for AI Sheet Updater
      * Checks if sender matches any configured sheet and updates accordingly
      * Now supports matching by name if phone not found (for LID cases)
+     * Returns result for optional confirmation reply
      */
-    private async processSheetUpdate(botId: string, senderJid: string, message: string, payload?: MessageReceivedPayload, resolvedPhone?: string): Promise<void> {
+    private async processSheetUpdate(botId: string, senderJid: string, message: string, payload?: MessageReceivedPayload, resolvedPhone?: string): Promise<{ success: boolean; mode?: string; extractedData?: Record<string, string>; message?: string } | null> {
         logger.info('[SheetUpdater] 🔄 Starting processSheetUpdate', { botId, senderJid, message: message?.substring(0, 30), resolvedPhone, senderName: payload?.sender_name });
         
         try {
@@ -334,7 +367,7 @@ class AIEngine {
             
             if (!phone || !message) {
                 logger.warn('[SheetUpdater] Missing phone or message, skipping', { phone, message });
-                return;
+                return null;
             }
 
             logger.info('[SheetUpdater] 🚀 Calling aiSheetUpdaterService.processMessage', { botId, phone, senderName, message: message?.substring(0, 30) });
@@ -354,13 +387,24 @@ class AIEngine {
                     botId,
                     phone,
                     classification: result.classification,
-                    value: result.updatedValue
+                    value: result.updatedValue,
+                    mode: result.mode
                 });
+                
+                return {
+                    success: true,
+                    mode: result.mode,
+                    extractedData: result.extractedData,
+                    message: result.message
+                };
             } else if (result.message !== 'No active sheet updater configs') {
                 logger.debug('[SheetUpdater] No update made', { reason: result.message, phone });
             }
+            
+            return null;
         } catch (error: any) {
             logger.error('AI Sheet Update error', { error: error.message, botId, senderJid });
+            return null;
         }
     }
 }
