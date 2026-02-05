@@ -9,7 +9,7 @@ import {
     Tooltip,
     ResponsiveContainer
 } from 'recharts'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ZoomIn, ZoomOut } from 'lucide-react'
 
 // Mock data if none provided
@@ -29,6 +29,7 @@ interface ActivityChartProps {
     className?: string
     timeRange?: string
     onTimeRangeChange?: (range: string) => void
+    lastUpdated?: number // Timestamp from react-query dataUpdatedAt
 }
 
 // Zoom levels: 30m → 24h → 7d → 30d
@@ -89,10 +90,34 @@ export default function ActivityChart({
     data = defaultData,
     className,
     timeRange = '24h',
-    onTimeRangeChange
+    onTimeRangeChange,
+    lastUpdated
 }: ActivityChartProps) {
     // State for hidden series - using array like Traffic Volume
     const [hiddenSeries, setHiddenSeries] = useState<string[]>([])
+    
+    // State for "ago" timer
+    const [lastUpdatedText, setLastUpdatedText] = useState('just now')
+    
+    // Update "ago" text every second
+    useEffect(() => {
+        if (!lastUpdated) return
+        
+        const updateText = () => {
+            const seconds = Math.floor((Date.now() - lastUpdated) / 1000)
+            if (seconds < 5) {
+                setLastUpdatedText('just now')
+            } else if (seconds < 60) {
+                setLastUpdatedText(`${seconds}s ago`)
+            } else {
+                setLastUpdatedText(`${Math.floor(seconds / 60)}m ago`)
+            }
+        }
+        
+        updateText()
+        const interval = setInterval(updateText, 1000)
+        return () => clearInterval(interval)
+    }, [lastUpdated])
 
     // Toggle series visibility - exactly like Traffic Volume
     const toggleSeries = (key: string) => {
@@ -124,9 +149,21 @@ export default function ActivityChart({
     return (
         <div className={`bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6 ${className || ''}`}>
             <div className="flex items-center justify-between mb-6">
-                {title && (
-                    <h3 className="text-lg font-medium text-zinc-200">{title}</h3>
-                )}
+                <div className="flex items-center gap-3">
+                    {title && (
+                        <h3 className="text-lg font-medium text-zinc-200">{title}</h3>
+                    )}
+                    {/* Real-time indicator */}
+                    {lastUpdated && (
+                        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            <span>{lastUpdatedText}</span>
+                        </div>
+                    )}
+                </div>
 
                 {/* Interactive Legend + Zoom Buttons + Dropdown on the right */}
                 <div className="flex flex-wrap items-center gap-4 text-xs">

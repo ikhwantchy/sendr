@@ -249,15 +249,16 @@ export default function BotDetailPage() {
 
     const [chartTimeRange, setChartTimeRange] = useState('24h')
 
-    // Fetch Chart Data from /analytics/full endpoint
-    const { data: trafficData } = useQuery({
+    // Fetch Chart Data from /analytics/full endpoint (Real-time: 5s refresh)
+    const { data: trafficData, dataUpdatedAt } = useQuery({
         queryKey: ['bot-traffic', botId, chartTimeRange],
         queryFn: async () => {
             const response = await api.analytics.getFull(chartTimeRange, botId)
             return response.data.data?.trafficChart || []
         },
         enabled: !!botId,
-        refetchInterval: 30000, // Refresh every 30 seconds
+        refetchInterval: 5000, // Real-time: Refresh every 5 seconds
+        staleTime: 4000, // Consider data stale after 4 seconds
     })
 
     // Transform trafficChart data to match ActivityChart expected format
@@ -499,7 +500,7 @@ export default function BotDetailPage() {
 
                             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                                 <div className={`${isAdmin ? 'xl:col-span-2' : 'xl:col-span-3'}`}>
-                                    <ActivityChart title="Bot Traffic & Load" data={chartData} timeRange={chartTimeRange} onTimeRangeChange={setChartTimeRange} />
+                                    <ActivityChart title="Bot Traffic & Load" data={chartData} timeRange={chartTimeRange} onTimeRangeChange={setChartTimeRange} lastUpdated={dataUpdatedAt} />
                                 </div>
                                 {isAdmin && (
                                     <div className="xl:col-span-1">
