@@ -249,83 +249,28 @@ export default function BotDetailPage() {
 
     const [chartTimeRange, setChartTimeRange] = useState('24h')
 
-    // Compute Chart Data
+    // Fetch Chart Data from /analytics/full endpoint
+    const { data: trafficData } = useQuery({
+        queryKey: ['bot-traffic', botId, chartTimeRange],
+        queryFn: async () => {
+            const response = await api.analytics.getFull(chartTimeRange, botId)
+            return response.data.data?.trafficChart || []
+        },
+        enabled: !!botId,
+        refetchInterval: 30000, // Refresh every 30 seconds
+    })
+
+    // Transform trafficChart data to match ActivityChart expected format
     const chartData = useMemo(() => {
-        if (!activityLogs.length) return []
-        const buckets = new Map<string, any>()
-        const now = new Date()
-
-        if (chartTimeRange === '30m') {
-            for (let i = 0; i <= 30; i++) {
-                const d = new Date(now.getTime() - (30 - i) * 60 * 1000)
-                const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-                buckets.set(timeStr, { time: timeStr, received: 0, auto_reply: 0, campaign: 0, reminder: 0 })
-            }
-        } else if (chartTimeRange === '24h') {
-            for (let i = 0; i < 24; i++) {
-                const d = new Date(now.getTime() - i * 60 * 60 * 1000)
-                const hour = d.getHours().toString().padStart(2, '0')
-                const timeStr = `${hour}:00`
-                buckets.set(timeStr, { time: timeStr, received: 0, auto_reply: 0, campaign: 0, reminder: 0 })
-            }
-        } else if (chartTimeRange === '7d') {
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
-                const timeStr = `${d.getMonth() + 1}/${d.getDate()}`
-                buckets.set(timeStr, { time: timeStr, received: 0, auto_reply: 0, campaign: 0, reminder: 0 })
-            }
-        } else if (chartTimeRange === '30d') {
-            for (let i = 0; i < 30; i++) {
-                const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
-                const timeStr = `${d.getMonth() + 1}/${d.getDate()}`
-                buckets.set(timeStr, { time: timeStr, received: 0, auto_reply: 0, campaign: 0, reminder: 0 })
-            }
-        }
-
-        activityLogs.forEach((log: any) => {
-            const timeString = log.timestamp.endsWith('Z') ? log.timestamp : `${log.timestamp}Z`
-            const date = new Date(timeString)
-            let timeKey = ''
-
-            if (chartTimeRange === '30m') {
-                if (now.getTime() - date.getTime() < 30 * 60 * 1000) {
-                    timeKey = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
-                }
-            } else if (chartTimeRange === '24h') {
-                if (now.getTime() - date.getTime() < 24 * 60 * 60 * 1000) {
-                    timeKey = `${date.getHours().toString().padStart(2, '0')}:00`
-                }
-            } else if (chartTimeRange === '7d') {
-                if (now.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
-                    timeKey = `${date.getMonth() + 1}/${date.getDate()}`
-                }
-            } else if (chartTimeRange === '30d') {
-                if (now.getTime() - date.getTime() < 30 * 24 * 60 * 60 * 1000) {
-                    timeKey = `${date.getMonth() + 1}/${date.getDate()}`
-                }
-            }
-
-            if (timeKey && buckets.has(timeKey)) {
-                const bucket = buckets.get(timeKey)
-                if (log.type === 'message') {
-                    if (log.direction === 'inbound' || log.message?.startsWith('Received')) {
-                        bucket.received += 1
-                    } else if (log.direction === 'outbound' || log.message?.startsWith('Sent')) {
-                        bucket.auto_reply += 1
-                    }
-                } else if (log.type === 'campaign') {
-                    bucket.campaign += 1
-                } else if (log.type === 'reminder') {
-                    bucket.reminder += 1
-                } else if (log.type === 'rule') {
-                    bucket.auto_reply += 1
-                }
-            }
-        })
-
-        const results = Array.from(buckets.values())
-        return chartTimeRange === '30m' ? results : results.reverse()
-    }, [activityLogs, chartTimeRange])
+        if (!trafficData || !trafficData.length) return []
+        return trafficData.map((item: any) => ({
+            time: item.date,
+            auto_reply: item.auto_replies || 0,
+            campaign: item.campaigns || 0,
+            reminder: item.reminders || 0,
+            received: item.received || 0,
+        }))
+    }, [trafficData])
 
     const [rateLimit, setRateLimit] = useState('Unlimited')
 
