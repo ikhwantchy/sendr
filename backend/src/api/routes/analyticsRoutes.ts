@@ -14,30 +14,34 @@ router.get('/dashboard-stats', async (req, res) => {
         const userRole = (req as any).user.role;
         const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
 
-        // Get total bots (using tenant_id for consistency with analytics)
-        const botsResult = await query(`
-            SELECT COUNT(*) as count 
-            FROM bots 
-            WHERE tenant_id = ?
-        `, [tenantId]);
+        // For OWNER/ADMIN, show all data (no tenant filter)
+        const tenantParams = isAdmin ? [] : [tenantId];
+
+        // Get total bots
+        const botsResult = await query(
+            isAdmin 
+                ? `SELECT COUNT(*) as count FROM bots`
+                : `SELECT COUNT(*) as count FROM bots WHERE tenant_id = ?`,
+            tenantParams
+        );
 
         // Get active rules
-        const rulesResult = await query(`
-            SELECT COUNT(*) as count 
-            FROM keyword_rules r
-            INNER JOIN bots b ON r.bot_id = b.id
-            WHERE b.tenant_id = ? AND r.is_active = 1
-        `, [tenantId]);
+        const rulesResult = await query(
+            isAdmin
+                ? `SELECT COUNT(*) as count FROM keyword_rules r INNER JOIN bots b ON r.bot_id = b.id WHERE r.is_active = 1`
+                : `SELECT COUNT(*) as count FROM keyword_rules r INNER JOIN bots b ON r.bot_id = b.id WHERE b.tenant_id = ? AND r.is_active = 1`,
+            tenantParams
+        );
 
         // Get outbound messages
         let messagesSent = 0;
         try {
-            const messagesResult = await query(`
-                SELECT COUNT(*) as count 
-                FROM messages m
-                INNER JOIN bots b ON m.bot_id = b.id
-                WHERE b.tenant_id = ? AND m.direction = 'outbound'
-            `, [tenantId]);
+            const messagesResult = await query(
+                isAdmin
+                    ? `SELECT COUNT(*) as count FROM messages m INNER JOIN bots b ON m.bot_id = b.id WHERE m.direction = 'outbound'`
+                    : `SELECT COUNT(*) as count FROM messages m INNER JOIN bots b ON m.bot_id = b.id WHERE b.tenant_id = ? AND m.direction = 'outbound'`,
+                tenantParams
+            );
             messagesSent = messagesResult.rows[0]?.count || 0;
         } catch (err) {
             // Check if table exists error?
@@ -46,24 +50,24 @@ router.get('/dashboard-stats', async (req, res) => {
         // Get campaigns
         let campaigns = 0;
         try {
-            const campaignsResult = await query(`
-                SELECT COUNT(*) as count 
-                FROM campaigns c
-                INNER JOIN bots b ON c.bot_id = b.id
-                WHERE b.tenant_id = ?
-            `, [tenantId]);
+            const campaignsResult = await query(
+                isAdmin
+                    ? `SELECT COUNT(*) as count FROM campaigns c INNER JOIN bots b ON c.bot_id = b.id`
+                    : `SELECT COUNT(*) as count FROM campaigns c INNER JOIN bots b ON c.bot_id = b.id WHERE b.tenant_id = ?`,
+                tenantParams
+            );
             campaigns = campaignsResult.rows[0]?.count || 0;
         } catch (err) { }
 
         // Get active reminders
         let activeReminders = 0;
         try {
-            const remindersResult = await query(`
-                SELECT COUNT(*) as count 
-                FROM reminders r
-                INNER JOIN bots b ON r.bot_id = b.id
-                WHERE b.tenant_id = ? AND r.is_active = 1
-            `, [tenantId]);
+            const remindersResult = await query(
+                isAdmin
+                    ? `SELECT COUNT(*) as count FROM reminders r INNER JOIN bots b ON r.bot_id = b.id WHERE r.is_active = 1`
+                    : `SELECT COUNT(*) as count FROM reminders r INNER JOIN bots b ON r.bot_id = b.id WHERE b.tenant_id = ? AND r.is_active = 1`,
+                tenantParams
+            );
             activeReminders = remindersResult.rows[0]?.count || 0;
         } catch (err) { }
 
@@ -346,12 +350,19 @@ router.get('/full', async (req, res) => {
         const timeRange = (req.query.timeRange as '24h' | '7d' | '30d') || '24h';
         const botId = req.query.botId as string;
         const tenantId = req.user?.tenant_id;
+        const userRole = req.user?.role;
+        const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
 
         if (!tenantId) {
             return res.status(400).json({ success: false, message: 'Tenant context missing' });
         }
 
-        const data = await AnalyticsController.getAnalyticsData({ timeRange, tenantId, botId });
+        // OWNER/ADMIN sees all tenants, regular users see only their tenant
+        const data = await AnalyticsController.getAnalyticsData({ 
+            timeRange, 
+            tenantId: isAdmin ? null : tenantId, // null = all tenants
+            botId 
+        });
 
         res.json({
             success: true,
