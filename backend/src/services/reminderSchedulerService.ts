@@ -476,20 +476,34 @@ class ReminderSchedulerService {
             // Import WhatsApp adapter dynamically to avoid circular dependencies
             const { whatsappAdapter } = await import('../adapters/whatsapp/whatsappAdapter.baileys');
 
+            let result;
             if (imageUrl) {
                 // Send with image
-                await whatsappAdapter.sendMessage(botId, targetJid, {
+                result = await whatsappAdapter.sendMessage(botId, targetJid, {
                     type: 'image',
                     media_url: imageUrl,
                     caption: message,
                 });
             } else {
                 // Send text only
-                await whatsappAdapter.sendMessage(botId, targetJid, {
+                result = await whatsappAdapter.sendMessage(botId, targetJid, {
                     type: 'text',
                     content: message,
                 });
             }
+
+            // Log message to database with source = 'reminder'
+            const { v4: uuidv4 } = require('uuid');
+            await query(`
+                INSERT INTO messages (id, bot_id, wa_message_id, direction, source, message_type, content, created_at)
+                VALUES (?, ?, ?, 'outbound', 'reminder', ?, ?, CURRENT_TIMESTAMP)
+            `, [
+                uuidv4(),
+                botId,
+                result?.message_id || `reminder_${Date.now()}`,
+                imageUrl ? 'image' : 'text',
+                message
+            ]);
 
             console.log(`✅ Message sent to ${targetJid}`);
         } catch (error) {
