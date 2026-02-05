@@ -267,13 +267,14 @@ class GoogleSheetsWriteService {
     /**
      * Get all sheet/tab names in a spreadsheet
      */
-    async getSheetNames(spreadsheetId: string): Promise<string[]> {
-        if (!this.isReady()) {
-            throw new Error('Service not initialized. Check service account credentials.');
+    async getSheetNames(spreadsheetId: string, tenantId?: string): Promise<string[]> {
+        const client = await this.getSheetsClient(tenantId);
+        if (!client) {
+            throw new Error('Service not initialized. Configure Google Service Account in Settings > Integrations.');
         }
 
         try {
-            const response = await this.sheets!.spreadsheets.get({
+            const response = await client.sheets.spreadsheets.get({
                 spreadsheetId,
                 fields: 'sheets.properties.title',
             });
@@ -288,13 +289,14 @@ class GoogleSheetsWriteService {
     /**
      * Get headers (first row) of a sheet
      */
-    async getHeaders(spreadsheetId: string, sheetName: string): Promise<string[]> {
-        if (!this.isReady()) {
-            throw new Error('Service not initialized');
+    async getHeaders(spreadsheetId: string, sheetName: string, tenantId?: string): Promise<string[]> {
+        const client = await this.getSheetsClient(tenantId);
+        if (!client) {
+            throw new Error('Service not initialized. Configure Google Service Account in Settings > Integrations.');
         }
 
         try {
-            const response = await this.sheets!.spreadsheets.values.get({
+            const response = await client.sheets.spreadsheets.values.get({
                 spreadsheetId,
                 range: `'${sheetName}'!1:1`,
             });
@@ -309,17 +311,18 @@ class GoogleSheetsWriteService {
     /**
      * Read all data from a sheet
      */
-    async readSheet(spreadsheetId: string, sheetName: string): Promise<{
+    async readSheet(spreadsheetId: string, sheetName: string, tenantId?: string): Promise<{
         headers: string[];
         rows: string[][];
         objects: any[];
     }> {
-        if (!this.isReady()) {
-            throw new Error('Service not initialized');
+        const client = await this.getSheetsClient(tenantId);
+        if (!client) {
+            throw new Error('Service not initialized. Configure Google Service Account in Settings > Integrations.');
         }
 
         try {
-            const response = await this.sheets!.spreadsheets.values.get({
+            const response = await client.sheets.spreadsheets.values.get({
                 spreadsheetId,
                 range: `'${sheetName}'`,
             });
@@ -414,10 +417,12 @@ class GoogleSheetsWriteService {
         sheetName: string,
         row: number,
         column: string | number,
-        value: string
+        value: string,
+        tenantId?: string
     ): Promise<UpdateResult> {
-        if (!this.isReady()) {
-            return { success: false, error: 'Service not initialized' };
+        const client = await this.getSheetsClient(tenantId);
+        if (!client) {
+            return { success: false, error: 'Service not initialized. Configure Google Service Account in Settings > Integrations.' };
         }
 
         try {
@@ -428,7 +433,7 @@ class GoogleSheetsWriteService {
 
             const range = `'${sheetName}'!${columnLetter}${row}`;
 
-            const response = await this.sheets!.spreadsheets.values.update({
+            const response = await client.sheets.spreadsheets.values.update({
                 spreadsheetId,
                 range,
                 valueInputOption: 'USER_ENTERED',
@@ -505,14 +510,16 @@ class GoogleSheetsWriteService {
     async appendRow(
         spreadsheetId: string,
         sheetName: string,
-        values: string[]
+        values: string[],
+        tenantId?: string
     ): Promise<UpdateResult> {
-        if (!this.isReady()) {
-            return { success: false, error: 'Service not initialized' };
+        const client = await this.getSheetsClient(tenantId);
+        if (!client) {
+            return { success: false, error: 'Service not initialized. Configure Google Service Account in Settings > Integrations.' };
         }
 
         try {
-            const response = await this.sheets!.spreadsheets.values.append({
+            const response = await client.sheets.spreadsheets.values.append({
                 spreadsheetId,
                 range: `'${sheetName}'`,
                 valueInputOption: 'USER_ENTERED',
@@ -568,25 +575,26 @@ class GoogleSheetsWriteService {
     /**
      * Validate if spreadsheet is accessible with write permission
      */
-    async validateWriteAccess(spreadsheetId: string): Promise<{
+    async validateWriteAccess(spreadsheetId: string, tenantId?: string): Promise<{
         valid: boolean;
         message: string;
         sheets?: string[];
     }> {
-        if (!this.isReady()) {
+        const client = await this.getSheetsClient(tenantId);
+        if (!client) {
             return {
                 valid: false,
-                message: 'Service account not configured. Please set up Google Service Account credentials.'
+                message: 'Service account not configured. Go to Settings > Integrations to set up Google Service Account.'
             };
         }
 
         try {
-            const sheets = await this.getSheetNames(spreadsheetId);
+            const sheets = await this.getSheetNames(spreadsheetId, tenantId);
             
             if (sheets.length === 0) {
                 return {
                     valid: false,
-                    message: 'No sheets found or access denied. Make sure to share the spreadsheet with: ' + this.getServiceAccountEmail()
+                    message: 'No sheets found or access denied. Make sure to share the spreadsheet with: ' + client.email
                 };
             }
 

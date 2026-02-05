@@ -48,6 +48,7 @@ router.get('/status', async (req: Request, res: Response) => {
 router.post('/validate-sheet', async (req: Request, res: Response) => {
     try {
         const { spreadsheetUrl } = req.body;
+        const tenantId = req.user?.tenant_id;
 
         if (!spreadsheetUrl) {
             return res.status(400).json({ success: false, error: 'spreadsheetUrl is required' });
@@ -58,7 +59,7 @@ router.post('/validate-sheet', async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, error: 'Invalid spreadsheet URL' });
         }
 
-        const validation = await googleSheetsWriteService.validateWriteAccess(spreadsheetId);
+        const validation = await googleSheetsWriteService.validateWriteAccess(spreadsheetId, tenantId);
 
         res.json({
             success: validation.valid,
@@ -76,6 +77,7 @@ router.post('/validate-sheet', async (req: Request, res: Response) => {
 router.get('/sheet-info', async (req: Request, res: Response) => {
     try {
         const { spreadsheetUrl, sheetName } = req.query;
+        const tenantId = req.user?.tenant_id;
 
         if (!spreadsheetUrl) {
             return res.status(400).json({ success: false, error: 'spreadsheetUrl is required' });
@@ -86,13 +88,13 @@ router.get('/sheet-info', async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, error: 'Invalid spreadsheet URL' });
         }
 
-        const sheets = await googleSheetsWriteService.getSheetNames(spreadsheetId);
+        const sheets = await googleSheetsWriteService.getSheetNames(spreadsheetId, tenantId);
         
         let headers: string[] = [];
         if (sheetName && sheets.includes(sheetName as string)) {
-            headers = await googleSheetsWriteService.getHeaders(spreadsheetId, sheetName as string);
+            headers = await googleSheetsWriteService.getHeaders(spreadsheetId, sheetName as string, tenantId);
         } else if (sheets.length > 0) {
-            headers = await googleSheetsWriteService.getHeaders(spreadsheetId, sheets[0]);
+            headers = await googleSheetsWriteService.getHeaders(spreadsheetId, sheets[0], tenantId);
         }
 
         res.json({
