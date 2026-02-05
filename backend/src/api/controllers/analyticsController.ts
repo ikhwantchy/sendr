@@ -52,9 +52,15 @@ export class AnalyticsController {
         // Debug log
         console.log(`[Analytics] TimeRange: ${timeRange}, StartDate: ${startDate.toISOString()}, GroupBy: ${groupByFormat}${botId ? `, BotId: ${botId}` : ''}, TenantId: ${tenantId || 'ALL'}`);
 
-        const startIso = startDate.toISOString();
-        const prevStartIso = prevStartDate.toISOString();
-        const prevEndIso = prevEndDate.toISOString();
+        // Convert to SQLite-friendly format (YYYY-MM-DD HH:MM:SS) - no T, no Z, no milliseconds
+        const toSqliteDate = (d: Date) => d.toISOString().replace('T', ' ').replace('Z', '').split('.')[0];
+        
+        const startIso = toSqliteDate(startDate);
+        const prevStartIso = toSqliteDate(prevStartDate);
+        const prevEndIso = toSqliteDate(prevEndDate);
+
+        // Debug the converted format
+        console.log(`[Analytics] SQLite StartDate: ${startIso}`);
 
         // SQL Helpers - tenantId null means show all tenants (OWNER/ADMIN)
         const tenantFilter = tenantId ? `AND b.tenant_id = ?` : '';
