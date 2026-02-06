@@ -141,7 +141,8 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
             if (!configId) return null
             const res = await api.bots.llmTargets.list(botId)
             const configs = res.data.data || []
-            return configs.find((c: any) => c.id === configId) || null
+            // Use loose equality to handle string/number comparison
+            return configs.find((c: any) => String(c.id) === String(configId)) || null
         },
         enabled: !!botId && !!configId
     })
