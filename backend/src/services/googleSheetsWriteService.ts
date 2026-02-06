@@ -148,6 +148,7 @@ class GoogleSheetsWriteService {
 
     /**
      * Get the appropriate sheets client (tenant-specific or global fallback)
+     * Fallback order: Tenant SA → Default tenant SA → Global .env
      */
     async getSheetsClient(tenantId?: string): Promise<{ sheets: sheets_v4.Sheets; email: string } | null> {
         // Try tenant-specific first
@@ -158,7 +159,16 @@ class GoogleSheetsWriteService {
             }
         }
 
-        // Fallback to global
+        // Fallback to default tenant (where admin configures SA)
+        if (tenantId !== 'default-tenant-id') {
+            const defaultTenantClient = await this.getClientForTenant('default-tenant-id');
+            if (defaultTenantClient) {
+                logger.debug(`[SheetsWrite] Using default tenant SA for tenant ${tenantId}`);
+                return defaultTenantClient;
+            }
+        }
+
+        // Fallback to global (.env)
         this.ensureInitialized();
         if (this.initialized && this.sheets && this.credentials) {
             return { sheets: this.sheets, email: this.credentials.client_email };
