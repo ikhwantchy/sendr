@@ -7,12 +7,13 @@ const router = Router();
 // All routes require authentication
 router.use(authenticate);
 
-// Helper: Verify bot access (OWNER can access all bots)
+// Helper: Verify bot access (OWNER and ADMIN can access all bots)
 async function verifyBotAccess(botId: string, tenantId: string, userRole: string): Promise<boolean> {
-    const botQuery = userRole === 'OWNER' 
+    const isGlobalAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
+    const botQuery = isGlobalAdmin 
         ? 'SELECT * FROM bots WHERE id = ?'
         : 'SELECT * FROM bots WHERE id = ? AND tenant_id = ?';
-    const botParams = userRole === 'OWNER' ? [botId] : [botId, tenantId];
+    const botParams = isGlobalAdmin ? [botId] : [botId, tenantId];
     const botResult = await query(botQuery, botParams);
     return botResult.rows && botResult.rows.length > 0;
 }
@@ -24,11 +25,12 @@ router.get('/:botId/llm-targets', async (req, res) => {
         const tenantId = (req as any).user.tenant_id;
         const userRole = (req as any).user.role;
 
-        // Verify bot ownership (OWNER can access all bots)
-        const botQuery = userRole === 'OWNER' 
+        // Verify bot ownership (OWNER/ADMIN can access all bots)
+        const isGlobalAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
+        const botQuery = isGlobalAdmin 
             ? 'SELECT * FROM bots WHERE id = ?'
             : 'SELECT * FROM bots WHERE id = ? AND tenant_id = ?';
-        const botParams = userRole === 'OWNER' ? [botId] : [botId, tenantId];
+        const botParams = isGlobalAdmin ? [botId] : [botId, tenantId];
         
         const botResult = await query(botQuery, botParams);
         if (!botResult.rows || botResult.rows.length === 0) {
