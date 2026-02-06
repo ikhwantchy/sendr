@@ -8,21 +8,21 @@ import AdminGuard from '@/components/AdminGuard'
 import {
     ArrowLeft, Bot, MessageSquare, Megaphone,
     Bell, Activity, Shield, Zap, CloudLightning, Loader2, Eye,
-    Plus, Trash2, Settings, X, Check, ChevronDown, RefreshCw,
+    Plus, Trash2, X, Check, ChevronDown, ChevronUp, RefreshCw,
     Database, Users as UsersIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
 
 // Permission definitions with descriptions
 const PERMISSION_DEFINITIONS = [
-    { key: 'can_view', label: 'Show Bot', icon: Eye, activeClass: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400', activeBg: 'bg-emerald-500/20', description: 'User can see this bot in their dashboard' },
-    { key: 'can_view_analytics', label: 'Analytics', icon: Activity, activeClass: 'bg-blue-500/10 border-blue-500/30 text-blue-400', activeBg: 'bg-blue-500/20', description: 'View bot analytics and statistics' },
-    { key: 'can_create_rules', label: 'Auto-Reply', icon: Zap, activeClass: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400', activeBg: 'bg-yellow-500/20', description: 'Create and manage auto-reply rules' },
-    { key: 'can_use_reminders', label: 'Reminders', icon: Bell, activeClass: 'bg-purple-500/10 border-purple-500/30 text-purple-400', activeBg: 'bg-purple-500/20', description: 'Create and manage scheduled reminders' },
-    { key: 'can_create_campaigns', label: 'Campaigns', icon: Megaphone, activeClass: 'bg-orange-500/10 border-orange-500/30 text-orange-400', activeBg: 'bg-orange-500/20', description: 'Create and run broadcast campaigns' },
-    { key: 'can_use_ai', label: 'AI Assistant', icon: CloudLightning, activeClass: 'bg-pink-500/10 border-pink-500/30 text-pink-400', activeBg: 'bg-pink-500/20', description: 'Use AI-powered assistant features' },
-    { key: 'can_manage_contacts', label: 'Contacts', icon: UsersIcon, activeClass: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400', activeBg: 'bg-cyan-500/20', description: 'View and manage contacts' },
-    { key: 'can_manage_datasources', label: 'Data Sources', icon: Database, activeClass: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400', activeBg: 'bg-indigo-500/20', description: 'Connect Google Sheets and data sources' },
+    { key: 'can_view', label: 'Show Bot', icon: Eye, description: 'User can see this bot in their dashboard' },
+    { key: 'can_view_analytics', label: 'Analytics', icon: Activity, description: 'View bot analytics and statistics' },
+    { key: 'can_create_rules', label: 'Auto-Reply', icon: Zap, description: 'Create and manage auto-reply rules' },
+    { key: 'can_use_reminders', label: 'Reminders', icon: Bell, description: 'Create and manage scheduled reminders' },
+    { key: 'can_create_campaigns', label: 'Campaigns', icon: Megaphone, description: 'Create and run broadcast campaigns' },
+    { key: 'can_use_ai', label: 'AI Assistant', icon: CloudLightning, description: 'Use AI-powered assistant features' },
+    { key: 'can_manage_contacts', label: 'Contacts', icon: UsersIcon, description: 'View and manage contacts' },
+    { key: 'can_manage_datasources', label: 'Data Sources', icon: Database, description: 'Connect Google Sheets and data sources' },
 ]
 
 export default function UserDetailPage() {
@@ -130,7 +130,7 @@ export default function UserDetailPage() {
                     </button>
                     <div>
                         <div className="flex items-center gap-3 mb-1">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-zinc-700/50 font-medium text-zinc-300">
+                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700 font-medium text-zinc-300">
                                 {(user.name || 'U')[0].toUpperCase()}
                             </div>
                             <div>
@@ -161,68 +161,65 @@ export default function UserDetailPage() {
                 </div>
             </div>
 
-            {/* Quick Stats Grid */}
+            {/* Quick Stats Grid - Analytics Style */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Messages" value={analytics.total_messages} icon={<MessageSquare className="w-4 h-4" />} color="text-blue-500" />
-                <StatCard title="Auto Replies" value={analytics.auto_replies} icon={<Zap className="w-4 h-4" />} color="text-yellow-500" />
-                <StatCard title="Campaigns" value={analytics.campaigns} icon={<Megaphone className="w-4 h-4" />} color="text-orange-500" />
-                <StatCard title="Reminders" value={analytics.reminders} icon={<Bell className="w-4 h-4" />} color="text-purple-500" />
+                <KPICard title="TOTAL MESSAGES" value={analytics.total_messages} icon={<MessageSquare className="w-5 h-5" />} />
+                <KPICard title="AUTO REPLIES" value={analytics.auto_replies} icon={<Zap className="w-5 h-5" />} />
+                <KPICard title="CAMPAIGNS" value={analytics.campaigns} icon={<Megaphone className="w-5 h-5" />} />
+                <KPICard title="REMINDERS" value={analytics.reminders} icon={<Bell className="w-5 h-5" />} />
             </div>
 
-            {/* Bot List Section */}
-            <div className="bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
-                <div className="px-6 py-4 border-b border-zinc-800/50 flex justify-between items-center">
-                    <div>
-                        <h3 className="text-lg font-medium text-zinc-200 flex items-center gap-2">
-                            <Bot className="w-5 h-5 text-zinc-500" />
-                            Assigned Bots
-                        </h3>
-                        <p className="text-xs text-zinc-500 mt-0.5">{bots.length} bot{bots.length !== 1 ? 's' : ''} assigned to this user</p>
+            {/* Assigned Bots Header with Create Button */}
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                    <Bot className="w-5 h-5 text-zinc-500" />
+                    <h3 className="text-lg font-medium text-zinc-200">Assigned Bots</h3>
+                    <span className="text-xs text-zinc-500">{bots.length} bot{bots.length !== 1 ? 's' : ''} assigned to this user</span>
+                </div>
+                <button
+                    onClick={() => setShowCreateBotModal(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all shadow-lg shadow-blue-500/20"
+                >
+                    <Plus className="w-4 h-4" />
+                    Create Bot
+                </button>
+            </div>
+
+            {/* Bot List - Table Style */}
+            {bots.length === 0 ? (
+                <div className="bg-zinc-950 border border-zinc-900 rounded-xl text-center py-16">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-800/50 rounded-2xl mb-4">
+                        <Bot className="w-8 h-8 text-zinc-600" />
                     </div>
+                    <h3 className="text-lg font-semibold text-zinc-100 mb-2">No Bots Assigned</h3>
+                    <p className="text-zinc-400 text-sm mb-4">Create a bot to get started</p>
                     <button
                         onClick={() => setShowCreateBotModal(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-colors"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all shadow-lg shadow-blue-500/20"
                     >
                         <Plus className="w-4 h-4" />
-                        Create Bot
+                        Create First Bot
                     </button>
                 </div>
-
-                {bots.length === 0 ? (
-                    <div className="text-center py-16">
-                        <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-800/50 rounded-2xl mb-4">
-                            <Bot className="w-8 h-8 text-zinc-600" />
-                        </div>
-                        <h3 className="text-lg font-semibold text-zinc-100 mb-2">No Bots Assigned</h3>
-                        <p className="text-zinc-400 text-sm mb-4">Create a bot to get started</p>
-                        <button
-                            onClick={() => setShowCreateBotModal(true)}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-colors"
-                        >
-                            <Plus className="w-4 h-4" />
-                            Create First Bot
-                        </button>
-                    </div>
-                ) : (
-                    <div className="divide-y divide-zinc-800/50">
-                        {bots.map((bot: any) => (
-                            <BotPermissionCard
-                                key={bot.id}
-                                bot={bot}
-                                permissions={permissions}
-                                onUpdate={(data) => updatePermissionMutation.mutate({ botId: bot.id, data })}
-                                onDelete={() => {
-                                    if (confirm(`Are you sure you want to delete "${bot.name}"? This action cannot be undone.`)) {
-                                        deleteBotMutation.mutate(bot.id)
-                                    }
-                                }}
-                                isUpdating={updatePermissionMutation.isPending && updatePermissionMutation.variables?.botId === bot.id}
-                                isDeleting={deleteBotMutation.isPending && deleteBotMutation.variables === bot.id}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
+            ) : (
+                <div className="space-y-3">
+                    {bots.map((bot: any) => (
+                        <BotPermissionRow
+                            key={bot.id}
+                            bot={bot}
+                            permissions={permissions}
+                            onUpdate={(data) => updatePermissionMutation.mutate({ botId: bot.id, data })}
+                            onDelete={() => {
+                                if (confirm(`Are you sure you want to delete "${bot.name}"? This action cannot be undone.`)) {
+                                    deleteBotMutation.mutate(bot.id)
+                                }
+                            }}
+                            isUpdating={updatePermissionMutation.isPending && updatePermissionMutation.variables?.botId === bot.id}
+                            isDeleting={deleteBotMutation.isPending && deleteBotMutation.variables === bot.id}
+                        />
+                    ))}
+                </div>
+            )}
 
             {/* Create Bot Modal */}
             {showCreateBotModal && (
@@ -270,7 +267,7 @@ export default function UserDetailPage() {
                             <button
                                 onClick={handleCreateBot}
                                 disabled={createBotMutation.isPending || !newBotName.trim()}
-                                className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                             >
                                 {createBotMutation.isPending ? (
                                     <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</>
@@ -287,11 +284,11 @@ export default function UserDetailPage() {
     )
 }
 
-function StatCard({ title, value, icon, color }: any) {
+function KPICard({ title, value, icon }: { title: string, value: number, icon: React.ReactNode }) {
     return (
         <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 hover:border-zinc-800 transition-colors">
             <div className="flex items-center gap-2 text-zinc-500 text-xs font-medium uppercase tracking-wider mb-3">
-                <div className={`p-1.5 rounded-lg bg-zinc-900 ${color}`}>{icon}</div>
+                <div className="p-1.5 rounded-lg bg-zinc-900 text-zinc-400">{icon}</div>
                 {title}
             </div>
             <div className="text-3xl font-bold text-white tabular-nums tracking-tight">{(value || 0).toLocaleString()}</div>
@@ -299,7 +296,7 @@ function StatCard({ title, value, icon, color }: any) {
     )
 }
 
-function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, isDeleting }: { bot: any, permissions: any[], onUpdate: (data: any) => void, onDelete: () => void, isUpdating: boolean, isDeleting: boolean }) {
+function BotPermissionRow({ bot, permissions, onUpdate, onDelete, isUpdating, isDeleting }: { bot: any, permissions: any[], onUpdate: (data: any) => void, onDelete: () => void, isUpdating: boolean, isDeleting: boolean }) {
     const initialPerms = useMemo(() => {
         return permissions.find((p: any) => p.bot_id === bot.id) || {
             can_view: 0, can_edit: 0, can_delete: 0, can_view_analytics: 0,
@@ -321,7 +318,7 @@ function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, i
         can_manage_datasources: !!initialPerms.can_manage_datasources,
     }))
 
-    const [expanded, setExpanded] = useState(true)
+    const [expanded, setExpanded] = useState(false)
 
     useEffect(() => {
         if (!isUpdating) {
@@ -348,17 +345,18 @@ function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, i
     }
 
     const activeCount = Object.values(perms).filter(Boolean).length
+    const activePermLabels = PERMISSION_DEFINITIONS.filter(p => perms[p.key as keyof typeof perms]).map(p => p.label)
 
     return (
-        <div className={`transition-all duration-300 ${isUpdating || isDeleting ? 'opacity-70' : ''}`}>
-            {/* Bot Header */}
+        <div className={`bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden transition-all duration-300 ${isUpdating || isDeleting ? 'opacity-70' : ''}`}>
+            {/* Bot Header Row */}
             <div
                 className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-zinc-900/30 transition-colors"
                 onClick={() => setExpanded(!expanded)}
             >
                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-zinc-900 rounded-xl flex items-center justify-center border border-zinc-800">
-                        <Bot className="w-6 h-6 text-zinc-400" />
+                    <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center border border-zinc-800">
+                        <Bot className="w-5 h-5 text-zinc-500" />
                     </div>
                     <div>
                         <div className="flex items-center gap-2">
@@ -368,68 +366,66 @@ function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, i
                                     : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
                                 }`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${bot.status === 'connected' ? 'bg-emerald-500' : 'bg-zinc-500'}`} />
-                                {bot.status}
+                                {bot.status === 'connected' ? 'Connected' : 'Disconnected'}
                             </span>
                         </div>
-                        <p className="text-xs text-zinc-500 font-mono">ID: {bot.id.substring(0, 12)}...</p>
+                        <p className="text-xs text-zinc-600 font-mono">ID: {bot.id.substring(0, 12)}...</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="text-right">
                         <p className="text-sm font-medium text-zinc-300">{activeCount} permissions</p>
-                        <p className="text-xs text-zinc-500">{perms.can_view ? 'Visible to user' : 'Hidden from user'}</p>
+                        <p className="text-xs text-zinc-600">{perms.can_view ? 'Visible to user' : 'Hidden from user'}</p>
                     </div>
                     {(isUpdating || isDeleting) && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
                     <button
                         onClick={(e) => { e.stopPropagation(); onDelete(); }}
                         disabled={isDeleting}
-                        className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
+                        className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
                         title="Delete bot"
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
-                    <ChevronDown className={`w-5 h-5 text-zinc-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                    {expanded ? (
+                        <ChevronUp className="w-5 h-5 text-zinc-600" />
+                    ) : (
+                        <ChevronDown className="w-5 h-5 text-zinc-600" />
+                    )}
                 </div>
             </div>
 
-            {/* Permissions Grid */}
+            {/* Expanded Permissions */}
             {expanded && (
-                <div className="px-6 pb-6">
-                    <div className="p-4 bg-zinc-900/30 border border-zinc-800/50 rounded-xl">
+                <div className="px-6 pb-6 border-t border-zinc-900">
+                    <div className="pt-4">
                         <div className="flex items-center gap-2 mb-4">
-                            <Shield className="w-4 h-4 text-blue-500" />
-                            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Feature Access Control</span>
+                            <Shield className="w-4 h-4 text-zinc-600" />
+                            <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Feature Access Control</span>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        
+                        {/* Permission Badges */}
+                        <div className="flex flex-wrap gap-2 mb-4">
                             {PERMISSION_DEFINITIONS.map((perm) => {
-                                const Icon = perm.icon
                                 const isActive = perms[perm.key as keyof typeof perms]
                                 return (
                                     <button
                                         key={perm.key}
                                         onClick={(e) => { e.stopPropagation(); toggle(perm.key as keyof typeof perms) }}
                                         disabled={isUpdating}
-                                        className={`group relative flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-200 ${isActive
-                                                ? perm.activeClass
-                                                : 'bg-zinc-900/50 border-zinc-800 text-zinc-600 hover:border-zinc-700'
+                                        className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${isActive
+                                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                                : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700'
                                             }`}
                                         title={perm.description}
                                     >
-                                        <div className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${isActive ? perm.activeBg : 'bg-zinc-800'
-                                            }`}>
-                                            <Icon className="w-5 h-5" />
-                                        </div>
-                                        <span className="text-[10px] font-bold uppercase tracking-wider">{perm.label}</span>
-                                        {isActive && (
-                                            <div className="absolute top-2 right-2">
-                                                <Check className="w-3 h-3 text-emerald-400" />
-                                            </div>
-                                        )}
+                                        {perm.label}
                                     </button>
                                 )
                             })}
                         </div>
-                        <div className="mt-4 flex flex-wrap gap-2">
+
+                        {/* Quick Presets */}
+                        <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation()
@@ -460,7 +456,7 @@ function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, i
                                     onUpdate(viewOnly)
                                 }}
                                 disabled={isUpdating}
-                                className="px-3 py-1.5 text-xs font-medium text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg transition-colors disabled:opacity-50"
+                                className="px-3 py-1.5 text-xs font-medium text-zinc-400 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg transition-colors disabled:opacity-50"
                             >
                                 View Only
                             </button>
@@ -477,7 +473,7 @@ function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, i
                                     onUpdate(operator)
                                 }}
                                 disabled={isUpdating}
-                                className="px-3 py-1.5 text-xs font-medium text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg transition-colors disabled:opacity-50"
+                                className="px-3 py-1.5 text-xs font-medium text-zinc-400 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg transition-colors disabled:opacity-50"
                             >
                                 Operator
                             </button>
@@ -494,7 +490,7 @@ function BotPermissionCard({ bot, permissions, onUpdate, onDelete, isUpdating, i
                                     onUpdate(campaignManager)
                                 }}
                                 disabled={isUpdating}
-                                className="px-3 py-1.5 text-xs font-medium text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 rounded-lg transition-colors disabled:opacity-50"
+                                className="px-3 py-1.5 text-xs font-medium text-zinc-400 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg transition-colors disabled:opacity-50"
                             >
                                 Campaign Manager
                             </button>
