@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { usePermissions } from '@/hooks/usePermissions'
-import { Bot, Plus, Trash2, Settings, Phone, Calendar, Circle, Search, ArrowRight, RefreshCw, Loader2, Users, Filter } from 'lucide-react'
+import { Bot, Plus, Trash2, Settings, Phone, Calendar, Circle, Search, ArrowRight, RefreshCw, Loader2, Users, Filter, ChevronDown, Check } from 'lucide-react'
 
 export default function BotsPage() {
     const queryClient = useQueryClient()
@@ -16,9 +16,22 @@ export default function BotsPage() {
     const [mounted, setMounted] = useState(false)
     const [botToDelete, setBotToDelete] = useState<string | null>(null)
     const [filterByUser, setFilterByUser] = useState<string>('all') // Filter state
+    const [showUserDropdown, setShowUserDropdown] = useState(false)
+    const dropdownRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         setMounted(true)
+    }, [])
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setShowUserDropdown(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
     const { filterBots, isAdmin } = usePermissions()
@@ -139,22 +152,59 @@ export default function BotsPage() {
 
                 </div>
                 <div className="flex items-center gap-3">
-                    {/* User Filter - Only for Admin/Owner */}
+                    {/* User Filter Dropdown - Only for Admin/Owner */}
                     {mounted && isAdmin && uniqueOwners.length > 1 && (
-                        <div className="flex items-center gap-2">
-                            <Filter className="w-4 h-4 text-zinc-400" />
-                            <select
-                                value={filterByUser}
-                                onChange={(e) => setFilterByUser(e.target.value)}
-                                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-zinc-700 min-w-[180px]"
+                        <div className="relative" ref={dropdownRef}>
+                            <button
+                                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                                className="flex items-center gap-2 px-3 py-2 bg-zinc-900 dark:bg-zinc-900 border border-zinc-700 dark:border-zinc-800 text-white rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-800 transition-colors"
                             >
-                                <option value="all">All Users ({allBots?.length || 0})</option>
-                                {uniqueOwners.map((owner) => (
-                                    <option key={owner.tenant_id} value={owner.tenant_id}>
-                                        {owner.name} {owner.email ? `(${owner.email})` : ''}
-                                    </option>
-                                ))}
-                            </select>
+                                <Bot className="w-4 h-4 text-blue-400" />
+                                <span>
+                                    {filterByUser === 'all' 
+                                        ? 'All Bots' 
+                                        : uniqueOwners.find(o => o.tenant_id === filterByUser)?.name || 'All Bots'}
+                                </span>
+                                <ChevronDown className={`w-4 h-4 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
+                            </button>
+                            
+                            {showUserDropdown && (
+                                <div className="absolute top-full left-0 mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-50 py-1 max-h-80 overflow-y-auto">
+                                    {/* All Bots option */}
+                                    <button
+                                        onClick={() => {
+                                            setFilterByUser('all')
+                                            setShowUserDropdown(false)
+                                        }}
+                                        className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left hover:bg-zinc-800 transition-colors ${
+                                            filterByUser === 'all' ? 'text-blue-400' : 'text-zinc-300'
+                                        }`}
+                                    >
+                                        <span>All Bots</span>
+                                        {filterByUser === 'all' && <Check className="w-4 h-4" />}
+                                    </button>
+                                    
+                                    {/* Divider */}
+                                    <div className="border-t border-zinc-800 my-1" />
+                                    
+                                    {/* User options */}
+                                    {uniqueOwners.map((owner) => (
+                                        <button
+                                            key={owner.tenant_id}
+                                            onClick={() => {
+                                                setFilterByUser(owner.tenant_id)
+                                                setShowUserDropdown(false)
+                                            }}
+                                            className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left hover:bg-zinc-800 transition-colors ${
+                                                filterByUser === owner.tenant_id ? 'text-blue-400' : 'text-zinc-300'
+                                            }`}
+                                        >
+                                            <span>{owner.name}</span>
+                                            {filterByUser === owner.tenant_id && <Check className="w-4 h-4" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
                     {/* Refresh Button */}
