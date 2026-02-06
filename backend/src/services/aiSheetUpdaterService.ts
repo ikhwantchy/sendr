@@ -568,10 +568,16 @@ Respond with ONLY the classification word (e.g., CONFIRMED, DECLINED, MAYBE, UNK
                 const todayStr = jakartaTime.toISOString().split('T')[0]; // YYYY-MM-DD
                 const dayOfWeek = jakartaTime.toLocaleDateString('id-ID', { weekday: 'long' });
                 
-                // Calculate example dates for clarity
-                const tomorrow = new Date(jakartaTime);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+                // Build explicit day-to-date mapping for next 7 days
+                const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+                const upcomingDays: string[] = [];
+                for (let i = 1; i <= 7; i++) {
+                    const futureDate = new Date(jakartaTime);
+                    futureDate.setDate(futureDate.getDate() + i);
+                    const dayName = dayNames[futureDate.getDay()];
+                    const dateStr = futureDate.toISOString().split('T')[0];
+                    upcomingDays.push(`${dayName} depan = ${dateStr}`);
+                }
 
                 const prompt = `${aiInstructions || 'Extract the following information from the message. Be concise and accurate.'}
 
@@ -590,10 +596,10 @@ Important:
 - Use empty string "" if information is not found
 - Keep values concise (1-3 words when possible)
 - For DATE fields: Convert to YYYY-MM-DD format.
-  TODAY is ${todayStr} (${dayOfWeek}). Tomorrow is ${tomorrowStr}.
-  "senin depan" = next Monday after today, "selasa depan" = next Tuesday, etc.
-  "besok" = ${tomorrowStr}, "lusa" = day after tomorrow.
-  "15 februari" = 2026-02-15 (use current year 2026 if not specified).`;
+  TODAY is ${todayStr} (${dayOfWeek}).
+  Use this exact mapping:
+  ${upcomingDays.join(', ')}
+  "15 februari" = 2026-02-15 (year 2026 if not specified).`;
 
                 try {
                     const aiResponse = await this.quickAIClassify(prompt);
