@@ -40,14 +40,19 @@ class AIEngine {
         logger.info('[AIEngine] handleMessageReceived called', { bot_id, contact_id, from: payload.from, content: payload.content?.substring(0, 30) });
 
         try {
+            // Get bot AI config first to check mode
+            const botResult = await query('SELECT ai_config, name FROM bots WHERE id = ?', [bot_id]);
+            const aiConfig = botResult.rows.length ? JSON.parse(botResult.rows[0].ai_config || '{}') : {};
+            const isSilentMode = aiConfig.mode === 'data_collection';
+
             // ✅ AI Sheet Updater - Process message for auto sheet updates (runs independently)
             // Priority: sender_phone (resolved) > from JID > contact_id
             const senderJid = payload.from || contact_id || '';
             const senderPhone = payload.sender_phone; // Resolved phone from LID
             const sheetResult = await this.processSheetUpdate(bot_id, senderJid, payload.content, payload, senderPhone);
 
-            // Send confirmation for CREATE mode if configured
-            if (sheetResult?.success && sheetResult.mode === 'create' && sheetResult.extractedData) {
+            // Send confirmation for CREATE mode (only if NOT in silent/data_collection mode)
+            if (sheetResult?.success && sheetResult.mode === 'create' && sheetResult.extractedData && !isSilentMode) {
                 // Build a natural confirmation message from extracted data
                 const dataEntries = Object.entries(sheetResult.extractedData)
                     .filter(([key, value]) => value && !['Phone', 'Timestamp'].includes(key))
@@ -78,11 +83,7 @@ class AIEngine {
                 }
             }
 
-            // Get bot AI config for other AI features
-            const botResult = await query('SELECT ai_config, name FROM bots WHERE id = ?', [bot_id]);
             if (!botResult.rows.length) return;
-
-            const aiConfig = JSON.parse(botResult.rows[0].ai_config || '{}');
             if (!aiConfig.enabled) return;
 
             // Mode: data_collection or hybrid -> Extract data silently
