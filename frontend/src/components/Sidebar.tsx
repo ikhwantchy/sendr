@@ -16,9 +16,8 @@ import {
     SignOut,
     List,
     X,
-    CaretLeft,
     CaretDown,
-    CaretRight,
+    SidebarSimple,     // Toggle sidebar icon
     Sun,
     Moon,
     IconProps
@@ -169,8 +168,9 @@ export default function Sidebar() {
                 <button
                     onClick={toggleSidebar}
                     className={`${isExpanded ? 'hidden md:flex' : 'flex'} p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors`}
+                    title={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
                 >
-                    {isExpanded ? <CaretLeft size={16} weight="bold" /> : <CaretRight size={20} weight="bold" />}
+                    <SidebarSimple size={20} weight="regular" className={`transition-transform ${isExpanded ? '' : 'rotate-180'}`} />
                 </button>
 
                 <button
