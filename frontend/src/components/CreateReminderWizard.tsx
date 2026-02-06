@@ -17,6 +17,7 @@ import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 import AdvancedFilters from './AdvancedFilters'
 import ContactTable, { ContactRow, ContactColumn, contactTableToParsedContacts, getContactTableVariables } from '@/components/ContactTable'
 import SharedMessageEditor, { formatWhatsAppText } from '@/components/SharedMessageEditor'
+import ScheduleDateTimePicker from '@/components/pickers/ScheduleDateTimePicker'
 
 // --- Types ---
 type TargetType = 'group' | 'contact'
@@ -1382,28 +1383,17 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                             </button>
                                         </div>
 
-                                        {/* Date & Time */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-medium text-zinc-400 uppercase">{formData.frequency === 'daily' ? 'Start Date' : 'Execution Date'}</label>
-                                                <input
-                                                    type="date"
-                                                    value={formData.startDate}
-                                                    min={today}
-                                                    onChange={e => setFormData({ ...formData, startDate: e.target.value })}
-                                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-medium text-zinc-400 uppercase">Time</label>
-                                                <input
-                                                    type="time"
-                                                    value={formData.time}
-                                                    onChange={e => setFormData({ ...formData, time: e.target.value })}
-                                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs outline-none focus:border-blue-500 transition-colors"
-                                                />
-                                            </div>
-                                        </div>
+                                        {/* Date & Time Picker - Campaign Style */}
+                                        <ScheduleDateTimePicker
+                                            value={`${formData.startDate}T${formData.time}`}
+                                            onChange={(val) => {
+                                                // Parse the datetime string back to separate date and time
+                                                const dt = new Date(val)
+                                                const dateStr = dt.toLocaleDateString('en-CA') // YYYY-MM-DD
+                                                const timeStr = dt.toTimeString().slice(0, 5) // HH:mm
+                                                setFormData({ ...formData, startDate: dateStr, time: timeStr })
+                                            }}
+                                        />
                                     </div>
                                 )}
 
@@ -1438,16 +1428,16 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                             )}
                                         </div>
 
-                                        {/* Time */}
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-medium text-zinc-400 uppercase">Time</label>
-                                            <input
-                                                type="time"
-                                                value={formData.time}
-                                                onChange={e => setFormData({ ...formData, time: e.target.value })}
-                                                className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white outline-none focus:border-purple-500 transition-colors"
-                                            />
-                                        </div>
+                                        {/* Time Picker - Campaign Style */}
+                                        <ScheduleDateTimePicker
+                                            value={`${formData.startDate}T${formData.time}`}
+                                            onChange={(val) => {
+                                                const dt = new Date(val)
+                                                const dateStr = dt.toLocaleDateString('en-CA')
+                                                const timeStr = dt.toTimeString().slice(0, 5)
+                                                setFormData({ ...formData, startDate: dateStr, time: timeStr })
+                                            }}
+                                        />
                                     </div>
                                 )}
                             </div>
