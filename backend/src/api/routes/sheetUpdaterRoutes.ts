@@ -199,12 +199,32 @@ router.post('/configs', async (req: Request, res: Response) => {
     try {
         const config: SheetUpdaterConfig = req.body;
 
-        if (!config.bot_id || !config.name || !config.spreadsheet_url || 
-            !config.sheet_name || !config.match_column || !config.update_column) {
+        // Base required fields
+        if (!config.bot_id || !config.name || !config.spreadsheet_url || !config.sheet_name) {
             return res.status(400).json({ 
                 success: false, 
-                error: 'Missing required fields: bot_id, name, spreadsheet_url, sheet_name, match_column, update_column' 
+                error: 'Missing required fields: bot_id, name, spreadsheet_url, sheet_name' 
             });
+        }
+
+        // Mode-specific validation
+        const isCreateMode = config.mode === 'create';
+        if (isCreateMode) {
+            // CREATE (LOG) mode requires column_schema
+            if (!config.column_schema || config.column_schema.length === 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'LOG mode requires column_schema with at least one column' 
+                });
+            }
+        } else {
+            // UPDATE/SMART mode requires match_column and update_column
+            if (!config.match_column || !config.update_column) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'UPDATE mode requires match_column and update_column' 
+                });
+            }
         }
 
         // Use default mappings if not provided
