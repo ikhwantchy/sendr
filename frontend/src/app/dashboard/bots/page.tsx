@@ -163,7 +163,7 @@ export default function BotsPage() {
                                 <span>
                                     {filterByUser === 'all' 
                                         ? 'All Bots' 
-                                        : uniqueOwners.find(o => o.tenant_id === filterByUser)?.name || 'All Bots'}
+                                        : uniqueOwners.find(o => o.tenant_id === filterByUser)?.email || 'All Bots'}
                                 </span>
                                 <ChevronDown className={`w-4 h-4 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
                             </button>
@@ -199,7 +199,7 @@ export default function BotsPage() {
                                                 filterByUser === owner.tenant_id ? 'text-blue-400' : 'text-zinc-300'
                                             }`}
                                         >
-                                            <span>{owner.name}</span>
+                                            <span>{owner.email || owner.name}</span>
                                             {filterByUser === owner.tenant_id && <Check className="w-4 h-4" />}
                                         </button>
                                     ))}
