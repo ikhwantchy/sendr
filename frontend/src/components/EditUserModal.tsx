@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, Sparkles, Calendar, Megaphone, Bot } from 'lucide-react'
+import { X, User, Mail, Shield, Bot, Check, Loader2, Zap, Bell, Megaphone, Sparkles } from 'lucide-react'
 
 interface EditUserModalProps {
     isOpen: boolean
@@ -25,7 +25,6 @@ export default function EditUserModal({ isOpen, onClose, user }: EditUserModalPr
             can_use_ai: false
         }
     })
-    const [isPermissionsExpanded, setIsPermissionsExpanded] = useState(false)
 
     // Fetch bots
     const { data: bots } = useQuery({
@@ -116,167 +115,188 @@ export default function EditUserModal({ isOpen, onClose, user }: EditUserModalPr
         }))
     }
 
+    const togglePermission = (key: keyof typeof formData.permissions) => {
+        setFormData(prev => ({
+            ...prev,
+            permissions: {
+                ...prev.permissions,
+                [key]: !prev.permissions[key]
+            }
+        }))
+    }
+
     if (!isOpen) return null
 
+    const permissionItems = [
+        { key: 'can_use_auto_reply' as const, label: 'Auto Reply', icon: Zap, color: 'yellow' },
+        { key: 'can_use_reminders' as const, label: 'Reminders', icon: Bell, color: 'purple' },
+        { key: 'can_use_campaigns' as const, label: 'Campaigns', icon: Megaphone, color: 'orange' },
+        { key: 'can_use_ai' as const, label: 'AI Assistant', icon: Sparkles, color: 'pink' },
+    ]
+
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#1a1a1a] rounded-lg border border-zinc-800 max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h2 className="text-xl font-semibold text-zinc-100 mb-1">Edit User</h2>
-                        <p className="text-sm text-zinc-500">Update user details and access</p>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-zinc-950 rounded-2xl border border-zinc-800 w-full max-w-lg overflow-hidden shadow-2xl">
+                {/* Header */}
+                <div className="px-6 py-5 border-b border-zinc-800/50 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-300 font-semibold text-lg">
+                            {(user?.name || 'U')[0].toUpperCase()}
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-semibold text-white">Edit User</h2>
+                            <p className="text-sm text-zinc-500">{user?.email}</p>
+                        </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-zinc-100 transition-colors"
+                        className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all"
                     >
-                        <ChevronUp className="w-4 h-4 rotate-45" />
+                        <X className="w-5 h-5" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Name */}
-                    <div>
-                        <label className="block text-sm text-zinc-400 mb-2 font-medium">FULL NAME</label>
-                        <input
-                            type="text"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-100 focus:outline-none focus:border-zinc-700 transition-colors"
-                        />
-                    </div>
-
-                    {/* Email (Read-only) */}
-                    <div>
-                        <label className="block text-sm text-zinc-400 mb-2 font-medium">EMAIL ADDRESS</label>
-                        <input
-                            type="email"
-                            value={user?.email || ''}
-                            disabled
-                            className="w-full px-4 py-2.5 bg-zinc-900/50 border border-zinc-800/50 rounded-lg text-zinc-500 cursor-not-allowed opacity-60"
-                        />
-                    </div>
-
-                    {/* Role */}
-                    <div>
-                        <label className="block text-sm text-zinc-400 mb-2 font-medium">ROLE</label>
-                        <select
-                            value={formData.role}
-                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                            className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-100 focus:outline-none focus:border-zinc-700 transition-colors"
-                        >
-                            <option value="ADMIN">Admin - Full Access</option>
-                            <option value="USER">User - Limited Access</option>
-                        </select>
-                    </div>
-
-                    {/* Bot Selection - Hidden for Admin roles in this simplified view if needed, but keeping for now */}
-                    <div className="space-y-2">
-                        <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                            ASSIGNED BOTS ({formData.selectedBots.length})
-                        </label>
-                        <div className="space-y-1 max-h-32 overflow-y-auto bg-zinc-900/30 border border-zinc-800 rounded-xl p-2">
-                            {bots?.map((bot: any) => (
-                                <label
-                                    key={bot.id}
-                                    className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${formData.selectedBots.includes(bot.id) ? 'bg-zinc-800/50 text-zinc-100' : 'text-zinc-500 hover:text-zinc-400'}`}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.selectedBots.includes(bot.id)}
-                                        onChange={() => toggleBot(bot.id)}
-                                        className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500/20"
-                                    />
-                                    <span className="text-sm truncate">{bot.name}</span>
-                                </label>
-                            ))}
+                <form onSubmit={handleSubmit}>
+                    <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+                        {/* Name Field */}
+                        <div>
+                            <label className="flex items-center gap-2 text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2">
+                                <User className="w-3.5 h-3.5" />
+                                Full Name
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-zinc-700 transition-colors"
+                                placeholder="Enter full name"
+                            />
                         </div>
-                    </div>
 
-                    {/* Global Module Permissions */}
-                    {formData.role === 'USER' && (
-                        <div className="space-y-2">
-                            <button
-                                type="button"
-                                onClick={() => setIsPermissionsExpanded(!isPermissionsExpanded)}
-                                className="w-full flex items-center justify-between p-3 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors"
-                            >
-                                <span className="text-xs font-bold uppercase tracking-widest">
-                                    MODULE PERMISSIONS
-                                </span>
-                                {isPermissionsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                            </button>
+                        {/* Role Selection */}
+                        <div>
+                            <label className="flex items-center gap-2 text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2">
+                                <Shield className="w-3.5 h-3.5" />
+                                Role
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {[
+                                    { value: 'ADMIN', label: 'Admin', desc: 'Full Access' },
+                                    { value: 'USER', label: 'User', desc: 'Limited Access' }
+                                ].map((role) => (
+                                    <button
+                                        key={role.value}
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, role: role.value })}
+                                        className={`p-4 rounded-xl border text-left transition-all ${formData.role === role.value
+                                            ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                                            }`}
+                                    >
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="font-medium text-sm">{role.label}</span>
+                                            {formData.role === role.value && <Check className="w-4 h-4" />}
+                                        </div>
+                                        <span className="text-xs text-zinc-500">{role.desc}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
-                            {isPermissionsExpanded && (
-                                <div className="space-y-2">
-                                    {[
-                                        { key: 'can_use_auto_reply', label: 'Auto Reply', desc: 'Manage keywords and auto-responses', icon: Sparkles },
-                                        { key: 'can_use_reminders', label: 'Reminders', desc: 'Schedule messages and reminders', icon: Calendar },
-                                        { key: 'can_use_campaigns', label: 'Campaigns', desc: 'Broadcast to multiple contacts', icon: Megaphone },
-                                        { key: 'can_use_ai', label: 'AI Assistant', desc: 'Enable AI-powered conversations', icon: Bot },
-                                    ].map((perm) => {
-                                        const isChecked = formData.permissions[perm.key as keyof typeof formData.permissions];
-                                        const Icon = perm.icon;
+                        {/* Bot Assignment */}
+                        <div>
+                            <label className="flex items-center gap-2 text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2">
+                                <Bot className="w-3.5 h-3.5" />
+                                Assigned Bots
+                                <span className="ml-auto text-zinc-600">{formData.selectedBots.length} selected</span>
+                            </label>
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-2 max-h-40 overflow-y-auto space-y-1">
+                                {bots?.length === 0 ? (
+                                    <div className="text-center py-4 text-zinc-500 text-sm">No bots available</div>
+                                ) : (
+                                    bots?.map((bot: any) => {
+                                        const isSelected = formData.selectedBots.includes(bot.id)
                                         return (
-                                            <label
-                                                key={perm.key}
-                                                className={`flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all border ${isChecked
-                                                    ? 'bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_15px_-5px_rgba(16,185,129,0.1)]'
-                                                    : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+                                            <button
+                                                key={bot.id}
+                                                type="button"
+                                                onClick={() => toggleBot(bot.id)}
+                                                className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${isSelected
+                                                    ? 'bg-emerald-500/10 text-emerald-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800'
                                                     }`}
                                             >
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isChecked ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'
-                                                        }`}>
-                                                        <Icon className="w-5 h-5" />
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-emerald-500/20' : 'bg-zinc-800'}`}>
+                                                        <Bot className="w-4 h-4" />
                                                     </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className={`text-sm font-medium transition-colors ${isChecked ? 'text-zinc-100' : 'text-zinc-400'}`}>
-                                                            {perm.label}
-                                                        </p>
-                                                        <p className="text-xs text-zinc-500 mt-0.5 truncate">
-                                                            {perm.desc}
-                                                        </p>
-                                                    </div>
+                                                    <span className="text-sm font-medium">{bot.name}</span>
                                                 </div>
-                                                <div className="relative inline-flex items-center cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isChecked}
-                                                        onChange={() => setFormData({
-                                                            ...formData,
-                                                            permissions: {
-                                                                ...formData.permissions,
-                                                                [perm.key]: !isChecked
-                                                            }
-                                                        })}
-                                                        className="sr-only peer"
-                                                    />
-                                                    <div className="w-10 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500 peer-checked:after:bg-white"></div>
+                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-700'}`}>
+                                                    {isSelected && <Check className="w-3 h-3 text-white" />}
                                                 </div>
-                                            </label>
-                                        );
+                                            </button>
+                                        )
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Module Permissions - Only for USER role */}
+                        {formData.role === 'USER' && (
+                            <div>
+                                <label className="flex items-center gap-2 text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2">
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    Module Permissions
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {permissionItems.map((perm) => {
+                                        const Icon = perm.icon
+                                        const isEnabled = formData.permissions[perm.key]
+                                        return (
+                                            <button
+                                                key={perm.key}
+                                                type="button"
+                                                onClick={() => togglePermission(perm.key)}
+                                                className={`p-3 rounded-xl border flex items-center gap-3 transition-all ${isEnabled
+                                                    ? 'bg-emerald-500/10 border-emerald-500/30'
+                                                    : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'
+                                                    }`}
+                                            >
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isEnabled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                                                    <Icon className="w-4 h-4" />
+                                                </div>
+                                                <span className={`text-sm font-medium ${isEnabled ? 'text-emerald-400' : 'text-zinc-400'}`}>{perm.label}</span>
+                                            </button>
+                                        )
                                     })}
                                 </div>
-                            )}
-                        </div>
-                    )}
+                            </div>
+                        )}
+                    </div>
 
-                    {/* Actions */}
-                    <div className="flex gap-3 pt-4 border-t border-zinc-800">
+                    {/* Footer */}
+                    <div className="px-6 py-4 border-t border-zinc-800/50 flex gap-3 bg-zinc-900/50">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-4 py-2.5 bg-transparent border border-zinc-800 text-zinc-400 rounded-lg font-medium hover:bg-zinc-900 transition-colors"
+                            className="flex-1 px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-medium text-sm transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={updateMutation.isPending}
-                            className="flex-1 px-4 py-2.5 bg-white text-black rounded-lg font-medium hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                         >
-                            {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                            {updateMutation.isPending ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                'Save Changes'
+                            )}
                         </button>
                     </div>
                 </form>
