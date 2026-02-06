@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { usePermissions } from '@/hooks/usePermissions'
-import { Bot, Plus, Trash2, Settings, Phone, Calendar, Circle, Search, ArrowRight, RefreshCw, Loader2 } from 'lucide-react'
+import { Bot, Plus, Trash2, Settings, Phone, Calendar, Circle, Search, ArrowRight, RefreshCw, Loader2, Users, Filter } from 'lucide-react'
 
 export default function BotsPage() {
     const queryClient = useQueryClient()
@@ -15,6 +15,7 @@ export default function BotsPage() {
     const [targetTenantId, setTargetTenantId] = useState('')
     const [mounted, setMounted] = useState(false)
     const [botToDelete, setBotToDelete] = useState<string | null>(null)
+    const [filterByUser, setFilterByUser] = useState<string>('all') // Filter state
 
     useEffect(() => {
         setMounted(true)
@@ -32,10 +33,33 @@ export default function BotsPage() {
 
     const isRefreshing = isFetching && !isLoading
 
+    // Get unique owners for filter dropdown (only for admin)
+    const uniqueOwners = useMemo(() => {
+        if (!allBots || !isAdmin) return []
+        const owners = new Map<string, { tenant_id: string; name: string; email: string }>()
+        allBots.forEach((bot: any) => {
+            if (bot.tenant_id && !owners.has(bot.tenant_id)) {
+                owners.set(bot.tenant_id, {
+                    tenant_id: bot.tenant_id,
+                    name: bot.owner_name || 'Unknown',
+                    email: bot.owner_email || ''
+                })
+            }
+        })
+        return Array.from(owners.values())
+    }, [allBots, isAdmin])
+
     const bots = useMemo(() => {
         if (!allBots) return []
-        return filterBots(allBots)
-    }, [allBots, filterBots])
+        let filtered = filterBots(allBots)
+        
+        // Apply user filter for admin
+        if (isAdmin && filterByUser !== 'all') {
+            filtered = filtered.filter((bot: any) => bot.tenant_id === filterByUser)
+        }
+        
+        return filtered
+    }, [allBots, filterBots, isAdmin, filterByUser])
 
     // Fetch users for tenant selection (only for Admins)
     const { data: users } = useQuery({
@@ -115,6 +139,24 @@ export default function BotsPage() {
 
                 </div>
                 <div className="flex items-center gap-3">
+                    {/* User Filter - Only for Admin/Owner */}
+                    {mounted && isAdmin && uniqueOwners.length > 1 && (
+                        <div className="flex items-center gap-2">
+                            <Filter className="w-4 h-4 text-zinc-400" />
+                            <select
+                                value={filterByUser}
+                                onChange={(e) => setFilterByUser(e.target.value)}
+                                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-zinc-700 min-w-[180px]"
+                            >
+                                <option value="all">All Users ({allBots?.length || 0})</option>
+                                {uniqueOwners.map((owner) => (
+                                    <option key={owner.tenant_id} value={owner.tenant_id}>
+                                        {owner.name} {owner.email ? `(${owner.email})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                     {/* Refresh Button */}
                     <button
                         onClick={() => refetch()}
@@ -209,6 +251,13 @@ export default function BotsPage() {
                                         <p className="text-zinc-500 text-sm font-mono truncate">
                                             {bot.phone_number ? `+${bot.phone_number}` : 'No number connected'}
                                         </p>
+                                        {/* Show owner for admin */}
+                                        {isAdmin && bot.owner_name && (
+                                            <p className="text-zinc-400 dark:text-zinc-600 text-xs mt-1 flex items-center gap-1">
+                                                <Users className="w-3 h-3" />
+                                                {bot.owner_name}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="mt-auto pt-4 border-t border-zinc-100 dark:border-zinc-800/50 flex items-center justify-between text-xs text-zinc-500">

@@ -60,14 +60,17 @@ class BotRepository {
     }
 
     /**
-     * Find all bots in the system (for admins)
+     * Find all bots in the system (for admins) - includes owner info
      */
     async findAll(): Promise<Bot[]> {
         const result = await query(
-            'SELECT * FROM bots ORDER BY created_at DESC'
+            `SELECT b.*, u.name as owner_name, u.email as owner_email 
+             FROM bots b 
+             LEFT JOIN users u ON b.tenant_id = u.tenant_id 
+             ORDER BY b.created_at DESC`
         );
 
-        return result.rows.map((bot: Bot) => {
+        return result.rows.map((bot: any) => {
             if (bot.config) {
                 try {
                     bot.config = typeof bot.config === 'string' ? JSON.parse(bot.config as any) : bot.config;
