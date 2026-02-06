@@ -553,7 +553,7 @@ class GoogleSheetsWriteService {
     }
 
     /**
-     * Append a row as object (matches headers)
+     * Append a row as object (matches headers - case insensitive)
      */
     async appendRowAsObject(
         spreadsheetId: string,
@@ -562,7 +562,19 @@ class GoogleSheetsWriteService {
     ): Promise<UpdateResult> {
         try {
             const headers = await this.getHeaders(spreadsheetId, sheetName);
-            const values = headers.map(header => data[header] || '');
+            
+            // Create lowercase lookup map for case-insensitive matching
+            const dataLower: Record<string, string> = {};
+            for (const [key, value] of Object.entries(data)) {
+                dataLower[key.toLowerCase().trim()] = value;
+            }
+            
+            // Map headers to values with case-insensitive matching
+            const values = headers.map(header => {
+                const headerLower = header.toLowerCase().trim();
+                return dataLower[headerLower] || data[header] || '';
+            });
+            
             return await this.appendRow(spreadsheetId, sheetName, values);
         } catch (error: any) {
             return { success: false, error: error.message };

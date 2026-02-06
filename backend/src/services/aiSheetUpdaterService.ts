@@ -561,6 +561,11 @@ Respond with ONLY the classification word (e.g., CONFIRMED, DECLINED, MAYBE, UNK
                     `- ${f.name}: ${f.ai_prompt || 'Extract relevant information'}`
                 ).join('\n');
 
+                // Get today's date for relative date conversion
+                const today = new Date();
+                const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+                const dayOfWeek = today.toLocaleDateString('id-ID', { weekday: 'long' });
+
                 const prompt = `${aiInstructions || 'Extract the following information from the message. Be concise and accurate.'}
 
 Message: "${message}"
@@ -576,7 +581,9 @@ ${aiExtractionFields.map(f => `  "${f.name}": "extracted value or empty string i
 Important:
 - Return ONLY valid JSON, no explanation
 - Use empty string "" if information is not found
-- Keep values concise (1-3 words when possible)`;
+- Keep values concise (1-3 words when possible)
+- For DATE fields: Convert to YYYY-MM-DD format. Today is ${todayStr} (${dayOfWeek}).
+  Examples: "selasa depan" → calculate next Tuesday from today, "15 februari" → "2026-02-15", "besok" → tomorrow's date`;
 
                 try {
                     const aiResponse = await this.quickAIClassify(prompt);
