@@ -273,24 +273,6 @@ export default function BotDetailPage() {
         }))
     }, [trafficData])
 
-    const [rateLimit, setRateLimit] = useState('Unlimited')
-
-    const currentLoad = useMemo(() => {
-        if (!activityLogs.length) return 0
-        const now = new Date().getTime()
-        const oneMinuteAgo = now - 60 * 1000
-        const recentCount = activityLogs.filter((log: any) =>
-            (log.type === 'message' || log.type === 'campaign') &&
-            new Date(log.timestamp).getTime() > oneMinuteAgo
-        ).length
-
-        let maxCapacity = 60
-        if (rateLimit === '50 msg/s') maxCapacity = 3000
-        if (rateLimit === '20 msg/s') maxCapacity = 1200
-
-        return Math.min(100, Math.round((recentCount / maxCapacity) * 100))
-    }, [activityLogs, rateLimit])
-
     const pauseMutation = useMutation({
         mutationFn: async () => {
             return await api.bots.pause(botId)
@@ -476,28 +458,6 @@ export default function BotDetailPage() {
                         </div>
 
                         <div className="mt-8 space-y-6">
-                            <div className="bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6">
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                                    <div className="flex-1 space-y-2">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-zinc-400 font-medium">Throttle Status</span>
-                                            <span className={`${currentLoad > 80 ? 'text-red-500' : 'text-emerald-500'} font-mono`}>{currentLoad}% Capacity</span>
-                                        </div>
-                                        <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
-                                            <div className={`h-full rounded-full transition-all duration-500 ${currentLoad > 80 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${currentLoad}%` }}></div>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col gap-1.5 min-w-[200px]">
-                                        <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Rate Limit</label>
-                                        <select value={rateLimit} onChange={(e) => setRateLimit(e.target.value)} className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm rounded-lg px-3 py-2 outline-none focus:border-zinc-700 transition-all">
-                                            <option value="Unlimited">Unlimited</option>
-                                            <option value="50 msg/s">50 msg/s</option>
-                                            <option value="20 msg/s">20 msg/s</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
                             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                                 <div className={`${isAdmin ? 'xl:col-span-2' : 'xl:col-span-3'}`}>
                                     <ActivityChart title="Bot Traffic & Load" data={chartData} timeRange={chartTimeRange} onTimeRangeChange={setChartTimeRange} lastUpdated={dataUpdatedAt} />
