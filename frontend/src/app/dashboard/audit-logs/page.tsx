@@ -40,18 +40,18 @@ interface KPICardProps {
     color?: string;
 }
 
-function KPICard({ title, value, icon, loading, color = 'text-zinc-900 dark:text-zinc-100' }: KPICardProps) {
+function KPICard({ title, value, icon, loading, color = 'text-white' }: KPICardProps) {
     return (
-        <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-6 relative overflow-hidden group hover:border-zinc-300 dark:hover:border-zinc-800 transition-colors shadow-sm dark:shadow-none">
+        <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 relative overflow-hidden group hover:border-zinc-800 transition-colors">
             <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-zinc-700 dark:text-zinc-100 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800 transition-colors">
+                <div className="p-2 bg-zinc-900 rounded-lg text-zinc-400 group-hover:bg-zinc-800 transition-colors">
                     {icon}
                 </div>
             </div>
 
             <div className="space-y-1">
                 {loading ? (
-                    <div className="h-8 w-24 bg-zinc-200 dark:bg-zinc-900 rounded animate-pulse" />
+                    <div className="h-8 w-24 bg-zinc-900 rounded animate-pulse" />
                 ) : (
                     <h3 className={`text-3xl font-bold tracking-tight ${color} transition-all duration-500 ease-out`}>
                         {typeof value === 'number' ? value.toLocaleString() : value}
@@ -96,16 +96,16 @@ function AuditLogDetailModal({ isOpen, onClose, log }: AuditLogDetailModalProps)
             />
 
             {/* Modal */}
-            <div className="relative w-full max-w-2xl mx-4 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl shadow-2xl overflow-hidden">
+            <div className="relative w-full max-w-2xl mx-4 bg-zinc-950 border border-zinc-900 rounded-xl shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800/50">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/50">
                     <div>
-                        <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200">Log Detail</h3>
+                        <h3 className="text-lg font-medium text-zinc-200">Log Detail</h3>
                         <p className="text-xs text-zinc-500">ID: {log.id.slice(0, 8)}...</p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-all"
+                        className="p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 rounded-lg transition-all"
                     >
                         <X size={20} />
                     </button>
@@ -115,7 +115,7 @@ function AuditLogDetailModal({ isOpen, onClose, log }: AuditLogDetailModalProps)
                 <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4">
                     {/* Status & Category */}
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 bg-zinc-100 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800/50">
+                        <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                             <div className="flex items-center gap-2 text-xs text-zinc-500 uppercase tracking-wider mb-2">
                                 <Hash size={12} />
                                 Status
@@ -130,7 +130,7 @@ function AuditLogDetailModal({ isOpen, onClose, log }: AuditLogDetailModalProps)
                                 </span>
                             </div>
                         </div>
-                        <div className="p-4 bg-zinc-100 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800/50">
+                        <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                             <div className="flex items-center gap-2 text-xs text-zinc-500 uppercase tracking-wider mb-2">
                                 <Activity size={12} />
                                 Category
@@ -143,7 +143,7 @@ function AuditLogDetailModal({ isOpen, onClose, log }: AuditLogDetailModalProps)
                     </div>
 
                     {/* Action Type */}
-                    <div className="p-4 bg-zinc-100 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800/50">
+                    <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                         <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Action Type</div>
                         <code className="text-sm text-blue-400 font-mono bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20">
                             {log.action_type}
@@ -151,13 +151,13 @@ function AuditLogDetailModal({ isOpen, onClose, log }: AuditLogDetailModalProps)
                     </div>
 
                     {/* Description */}
-                    <div className="p-4 bg-zinc-100 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800/50">
+                    <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                         <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Description</div>
-                        <p className="text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed">{log.description}</p>
+                        <p className="text-sm text-zinc-200 leading-relaxed">{log.description}</p>
                     </div>
 
                     {/* User Info */}
-                    <div className="p-4 bg-zinc-100 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800/50">
+                    <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                         <div className="flex items-center gap-2 text-xs text-zinc-500 uppercase tracking-wider mb-3">
                             <User size={12} />
                             User Information
@@ -165,17 +165,17 @@ function AuditLogDetailModal({ isOpen, onClose, log }: AuditLogDetailModalProps)
                         <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
                                 <span className="text-zinc-500">Name:</span>
-                                <p className="text-zinc-800 dark:text-zinc-200 font-medium">{log.user_name || 'System'}</p>
+                                <p className="text-zinc-200 font-medium">{log.user_name || 'System'}</p>
                             </div>
                             <div>
                                 <span className="text-zinc-500">Email:</span>
-                                <p className="text-zinc-800 dark:text-zinc-200 font-medium">{log.user_email || '-'}</p>
+                                <p className="text-zinc-200 font-medium">{log.user_email || '-'}</p>
                             </div>
                         </div>
                     </div>
 
                     {/* Technical Details */}
-                    <div className="p-4 bg-zinc-100 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800/50">
+                    <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                         <div className="flex items-center gap-2 text-xs text-zinc-500 uppercase tracking-wider mb-3">
                             <Settings size={12} />
                             Technical Details
@@ -207,7 +207,7 @@ function AuditLogDetailModal({ isOpen, onClose, log }: AuditLogDetailModalProps)
 
                     {/* Metadata */}
                     {log.metadata && Object.keys(log.metadata).length > 0 && (
-                        <div className="p-4 bg-zinc-100 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800/50">
+                        <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                             <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Additional Data</div>
                             <pre className="text-xs text-zinc-400 font-mono bg-zinc-900 p-3 rounded-lg overflow-x-auto">
                                 {JSON.stringify(log.metadata, null, 2)}
@@ -217,10 +217,10 @@ function AuditLogDetailModal({ isOpen, onClose, log }: AuditLogDetailModalProps)
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 border-t border-zinc-200 dark:border-zinc-800/50 flex justify-end">
+                <div className="px-6 py-4 border-t border-zinc-800/50 flex justify-end">
                     <button
                         onClick={onClose}
-                        className="px-5 py-2 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium rounded-lg text-sm transition-colors border border-zinc-200 dark:border-zinc-800"
+                        className="px-5 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-100 font-medium rounded-lg text-sm transition-colors border border-zinc-800"
                     >
                         Close
                     </button>
@@ -475,11 +475,14 @@ export default function AuditLogsPage() {
     if (loading && logs.length === 0) {
         return (
             <AdminGuard>
-            <div className="p-8 min-h-screen bg-zinc-50 dark:bg-black">
+            <div className="p-8 min-h-screen bg-black">
                 <div className="flex items-center justify-center h-64">
                     <div className="flex flex-col items-center gap-3">
-                        <div className="animate-spin rounded-full h-10 w-10 border-2 border-blue-500 border-t-transparent"></div>
-                        <p className="text-zinc-600 text-sm">Loading audit logs...</p>
+                        <div className="relative w-12 h-12">
+                            <div className="absolute inset-0 rounded-full border-2 border-zinc-800"></div>
+                            <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
+                        </div>
+                        <p className="text-zinc-500 text-sm">Loading audit logs...</p>
                     </div>
                 </div>
             </div>
@@ -489,11 +492,11 @@ export default function AuditLogsPage() {
 
     return (
         <AdminGuard>
-        <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
-            {/* Header - Same style as Analytics */}
+        <div className="p-8 space-y-8 min-h-screen bg-black text-zinc-100 font-sans">
+            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-1">
+                    <h1 className="text-2xl font-semibold tracking-tight text-white mb-1">
                         Audit Logs
                     </h1>
 
@@ -517,7 +520,7 @@ export default function AuditLogsPage() {
                                     }
                                 }, 150)
                             }}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-all"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 hover:bg-zinc-800 transition-all"
                         >
                             <Filter className="w-3.5 h-3.5 text-blue-500" />
                             <span>
@@ -528,7 +531,7 @@ export default function AuditLogsPage() {
 
                         <div
                             id="audit-category-dropdown"
-                            className="hidden absolute top-full right-0 mt-2 w-40 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1"
+                            className="hidden absolute top-full right-0 mt-2 w-40 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1"
                         >
                             {[
                                 { label: 'All Categories', value: '' },
@@ -546,7 +549,7 @@ export default function AuditLogsPage() {
                                         setPage(0)
                                         document.getElementById('audit-category-dropdown')?.classList.add('hidden')
                                     }}
-                                    className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${filters.action_category === option.value ? 'text-blue-500 bg-blue-50 dark:bg-blue-400/5' : 'text-zinc-600 dark:text-zinc-400'}`}
+                                    className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-800 transition-colors ${filters.action_category === option.value ? 'text-blue-500 bg-blue-400/5' : 'text-zinc-400'}`}
                                 >
                                     {option.label}
                                 </button>
@@ -571,7 +574,7 @@ export default function AuditLogsPage() {
                                     }
                                 }, 150)
                             }}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-all"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 hover:bg-zinc-800 transition-all"
                         >
                             <span>
                                 {filters.status ? filters.status.charAt(0).toUpperCase() + filters.status.slice(1) : 'All Status'}
@@ -581,7 +584,7 @@ export default function AuditLogsPage() {
 
                         <div
                             id="audit-status-dropdown"
-                            className="hidden absolute top-full right-0 mt-2 w-32 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-lg overflow-hidden z-20"
+                            className="hidden absolute top-full right-0 mt-2 w-32 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1"
                         >
                             {[
                                 { label: 'All Status', value: '' },
@@ -596,10 +599,7 @@ export default function AuditLogsPage() {
                                         setPage(0)
                                         document.getElementById('audit-status-dropdown')?.classList.add('hidden')
                                     }}
-                                    className={`w-full px-4 py-2 text-xs text-left transition-colors ${filters.status === option.value
-                                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
-                                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-200'
-                                        }`}
+                                    className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-800 transition-colors ${filters.status === option.value ? 'text-blue-500 bg-blue-400/5' : 'text-zinc-400'}`}
                                 >
                                     {option.label}
                                 </button>
@@ -611,7 +611,7 @@ export default function AuditLogsPage() {
                     <div className="relative" data-dropdown="time">
                         <button
                             onClick={() => setShowTimeDropdown(!showTimeDropdown)}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-all"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 hover:bg-zinc-800 transition-all"
                         >
                             <Clock className="w-3.5 h-3.5 text-blue-500" />
                             <span>
@@ -625,7 +625,7 @@ export default function AuditLogsPage() {
                         </button>
 
                         {showTimeDropdown && (
-                            <div className="absolute top-full right-0 mt-2 w-36 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                            <div className="absolute top-full right-0 mt-2 w-36 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
                                 {[
                                     { label: 'Last 30m', value: '30m' },
                                     { label: 'Last 24h', value: '24h' },
@@ -643,7 +643,7 @@ export default function AuditLogsPage() {
                                             setShowTimeDropdown(false);
                                             setPage(0);
                                         }}
-                                        className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${timeRange === option.value ? 'text-blue-500 bg-blue-50 dark:bg-blue-400/5' : 'text-zinc-600 dark:text-zinc-400'}`}
+                                        className={`w-full text-left px-4 py-2 text-xs hover:bg-zinc-800 transition-colors ${timeRange === option.value ? 'text-blue-500 bg-blue-400/5' : 'text-zinc-400'}`}
                                     >
                                         {option.label}
                                     </button>
@@ -656,19 +656,19 @@ export default function AuditLogsPage() {
                     <button
                         onClick={() => fetchLogs(true)}
                         disabled={refreshing || isTransitioning}
-                        className={`p-2 bg-white dark:bg-zinc-900 border rounded-lg transition-all duration-300 ${refreshing || isTransitioning
-                            ? 'border-blue-500/50 text-blue-500 dark:text-blue-400'
-                            : 'border-zinc-200 dark:border-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700'
-                            } disabled:cursor-not-allowed`}
+                        className={`p-2 bg-zinc-900 border rounded-lg transition-all ${refreshing || isTransitioning
+                            ? 'border-blue-500/50 text-blue-400'
+                            : 'border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                            }`}
                         title="Refresh logs"
                     >
-                        <RefreshCw className={`w-4 h-4 transition-transform duration-700 ${refreshing || isTransitioning ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`w-4 h-4 ${refreshing || isTransitioning ? 'animate-spin' : ''}`} />
                     </button>
 
                     {/* Export Button */}
                     <button
                         onClick={handleExport}
-                        className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/50 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+                        className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors"
                     >
                         <Download className="w-4 h-4" />
                     </button>
@@ -709,10 +709,10 @@ export default function AuditLogsPage() {
             {/* Search Bar - REMOVED, replaced with time filter in header */}
 
             {/* Logs Table - Same style as Analytics */}
-            <div className={`bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl overflow-hidden shadow-sm dark:shadow-none transition-all duration-300 ease-in-out ${isTransitioning ? 'opacity-40 scale-[0.995]' : 'opacity-100 scale-100'}`}>
-                <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800/50 flex justify-between items-center">
+            <div className={`bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden transition-all duration-300 ease-in-out ${isTransitioning ? 'opacity-40 scale-[0.995]' : 'opacity-100 scale-100'}`}>
+                <div className="px-6 py-4 border-b border-zinc-800/50 flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200">Activity Log</h3>
+                        <h3 className="text-lg font-medium text-zinc-200">Activity Log</h3>
                         {(refreshing || isTransitioning) && (
                             <div className="flex items-center gap-2 text-xs text-blue-400">
                                 <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
@@ -730,7 +730,7 @@ export default function AuditLogsPage() {
                         <div className="p-4 rounded-full bg-zinc-900/50 w-fit mx-auto mb-4">
                             <FileText size={32} className="text-zinc-600" />
                         </div>
-                        <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-300 mb-1">No logs found</h3>
+                        <h3 className="text-lg font-medium text-zinc-300 mb-1">No logs found</h3>
                         <p className="text-zinc-500 text-sm">
                             {hasActiveFilters ? 'Try adjusting your filters' : 'Activity logs will appear here'}
                         </p>
@@ -748,21 +748,21 @@ export default function AuditLogsPage() {
                         <div className="overflow-x-auto">
                             <table className="w-full table-fixed">
                                 <thead>
-                                    <tr className="border-b border-zinc-200 dark:border-zinc-800/50">
-                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-600 dark:text-zinc-400 w-[80px]">Time</th>
-                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-600 dark:text-zinc-400 w-[180px]">User</th>
-                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-600 dark:text-zinc-400 w-[120px]">Action</th>
-                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-600 dark:text-zinc-400 w-[100px]">Category</th>
-                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-600 dark:text-zinc-400">Description</th>
-                                        <th className="text-left py-3 px-4 text-sm font-medium text-zinc-600 dark:text-zinc-400 w-[100px]">Status</th>
-                                        <th className="text-right py-3 px-4 text-sm font-medium text-zinc-600 dark:text-zinc-400 w-[60px]">Details</th>
+                                    <tr className="border-b border-zinc-800/50">
+                                        <th className="text-left py-3 px-4 text-xs font-medium text-zinc-500 uppercase tracking-wider w-[80px]">Time</th>
+                                        <th className="text-left py-3 px-4 text-xs font-medium text-zinc-500 uppercase tracking-wider w-[180px]">User</th>
+                                        <th className="text-left py-3 px-4 text-xs font-medium text-zinc-500 uppercase tracking-wider w-[120px]">Action</th>
+                                        <th className="text-left py-3 px-4 text-xs font-medium text-zinc-500 uppercase tracking-wider w-[100px]">Category</th>
+                                        <th className="text-left py-3 px-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Description</th>
+                                        <th className="text-left py-3 px-4 text-xs font-medium text-zinc-500 uppercase tracking-wider w-[100px]">Status</th>
+                                        <th className="text-right py-3 px-4 text-xs font-medium text-zinc-500 uppercase tracking-wider w-[60px]">Details</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredLogs.map((log, index) => (
                                         <tr
                                             key={log.id}
-                                            className="border-b border-zinc-200 dark:border-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 transition-colors duration-150"
+                                            className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors duration-150"
                                         >
                                             <td className="py-4 px-4 w-[80px]">
                                                 <div className="text-zinc-300 font-mono text-xs">
@@ -779,11 +779,11 @@ export default function AuditLogsPage() {
                                                 </div>
                                             </td>
                                             <td className="py-4 px-4 w-[180px]">
-                                                <p className="font-medium text-zinc-900 dark:text-white truncate">{log.user_name || 'System'}</p>
+                                                <p className="font-medium text-white truncate">{log.user_name || 'System'}</p>
                                                 <p className="text-xs text-zinc-500 truncate">{log.user_email || '-'}</p>
                                             </td>
                                             <td className="py-4 px-4 w-[120px]">
-                                                <code className="text-xs bg-zinc-100 dark:bg-zinc-900 px-2 py-1 rounded text-blue-500 dark:text-blue-400 font-mono truncate block max-w-full">
+                                                <code className="text-xs bg-zinc-900 px-2 py-1 rounded text-blue-400 font-mono truncate block max-w-full">
                                                     {log.action_type}
                                                 </code>
                                             </td>
@@ -794,7 +794,7 @@ export default function AuditLogsPage() {
                                                 </span>
                                             </td>
                                             <td className="py-4 px-4">
-                                                <p className="text-sm text-zinc-700 dark:text-zinc-300 truncate" title={log.description}>
+                                                <p className="text-sm text-zinc-300 truncate" title={log.description}>
                                                     {log.description}
                                                 </p>
                                             </td>
@@ -820,24 +820,24 @@ export default function AuditLogsPage() {
                         </div>
 
                         {/* Pagination */}
-                        <div className="px-6 py-4 border-t border-zinc-200 dark:border-zinc-800/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="px-6 py-4 border-t border-zinc-800/50 bg-zinc-900/50 flex flex-col sm:flex-row items-center justify-between gap-3">
                             <div className="text-sm text-zinc-500">
-                                Showing <span className="font-medium text-zinc-700 dark:text-zinc-300">{page * limit + 1}</span> to{' '}
-                                <span className="font-medium text-zinc-700 dark:text-zinc-300">{Math.min((page + 1) * limit, total)}</span> of{' '}
-                                <span className="font-medium text-zinc-700 dark:text-zinc-300">{total}</span> logs
+                                Showing <span className="font-medium text-zinc-300">{page * limit + 1}</span> to{' '}
+                                <span className="font-medium text-zinc-300">{Math.min((page + 1) * limit, total)}</span> of{' '}
+                                <span className="font-medium text-zinc-300">{total}</span> logs
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setPage(0)}
                                     disabled={page === 0}
-                                    className="px-3 py-1.5 text-xs bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-200 dark:border-zinc-800 transition-colors"
+                                    className="px-3 py-1.5 text-xs bg-zinc-900 text-zinc-300 rounded-lg hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-800 transition-colors"
                                 >
                                     First
                                 </button>
                                 <button
                                     onClick={() => setPage(Math.max(0, page - 1))}
                                     disabled={page === 0}
-                                    className="px-3 py-1.5 text-xs bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-200 dark:border-zinc-800 transition-colors"
+                                    className="px-3 py-1.5 text-xs bg-zinc-900 text-zinc-300 rounded-lg hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-800 transition-colors"
                                 >
                                     Prev
                                 </button>
@@ -847,14 +847,14 @@ export default function AuditLogsPage() {
                                 <button
                                     onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
                                     disabled={page >= totalPages - 1}
-                                    className="px-3 py-1.5 text-xs bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-200 dark:border-zinc-800 transition-colors"
+                                    className="px-3 py-1.5 text-xs bg-zinc-900 text-zinc-300 rounded-lg hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-800 transition-colors"
                                 >
                                     Next
                                 </button>
                                 <button
                                     onClick={() => setPage(totalPages - 1)}
                                     disabled={page >= totalPages - 1}
-                                    className="px-3 py-1.5 text-xs bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-200 dark:border-zinc-800 transition-colors"
+                                    className="px-3 py-1.5 text-xs bg-zinc-900 text-zinc-300 rounded-lg hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-800 transition-colors"
                                 >
                                     Last
                                 </button>
@@ -893,7 +893,7 @@ export default function AuditLogsPage() {
 
                         {/* From Date/Time Section */}
                         <div className="space-y-4 mb-4">
-                            <div className="p-4 bg-zinc-100 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800/50">
+                            <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                                 <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3 font-medium">From</p>
                                 <div className="grid grid-cols-2 gap-3">
                                     {/* Date Picker Button */}
@@ -1031,7 +1031,7 @@ export default function AuditLogsPage() {
                             </div>
 
                             {/* To Date/Time Section */}
-                            <div className="p-4 bg-zinc-100 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800/50">
+                            <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
                                 <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3 font-medium">To</p>
                                 <div className="grid grid-cols-2 gap-3">
                                     {/* Date Picker Button */}
