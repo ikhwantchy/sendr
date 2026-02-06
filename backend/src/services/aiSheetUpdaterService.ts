@@ -561,10 +561,17 @@ Respond with ONLY the classification word (e.g., CONFIRMED, DECLINED, MAYBE, UNK
                     `- ${f.name}: ${f.ai_prompt || 'Extract relevant information'}`
                 ).join('\n');
 
-                // Get today's date for relative date conversion
-                const today = new Date();
-                const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
-                const dayOfWeek = today.toLocaleDateString('id-ID', { weekday: 'long' });
+                // Get today's date in Indonesian timezone (UTC+7) for relative date conversion
+                const now = new Date();
+                const jakartaOffset = 7 * 60; // UTC+7 in minutes
+                const jakartaTime = new Date(now.getTime() + (jakartaOffset + now.getTimezoneOffset()) * 60000);
+                const todayStr = jakartaTime.toISOString().split('T')[0]; // YYYY-MM-DD
+                const dayOfWeek = jakartaTime.toLocaleDateString('id-ID', { weekday: 'long' });
+                
+                // Calculate example dates for clarity
+                const tomorrow = new Date(jakartaTime);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
                 const prompt = `${aiInstructions || 'Extract the following information from the message. Be concise and accurate.'}
 
@@ -582,8 +589,11 @@ Important:
 - Return ONLY valid JSON, no explanation
 - Use empty string "" if information is not found
 - Keep values concise (1-3 words when possible)
-- For DATE fields: Convert to YYYY-MM-DD format. Today is ${todayStr} (${dayOfWeek}).
-  Examples: "selasa depan" → calculate next Tuesday from today, "15 februari" → "2026-02-15", "besok" → tomorrow's date`;
+- For DATE fields: Convert to YYYY-MM-DD format.
+  TODAY is ${todayStr} (${dayOfWeek}). Tomorrow is ${tomorrowStr}.
+  "senin depan" = next Monday after today, "selasa depan" = next Tuesday, etc.
+  "besok" = ${tomorrowStr}, "lusa" = day after tomorrow.
+  "15 februari" = 2026-02-15 (use current year 2026 if not specified).`;
 
                 try {
                     const aiResponse = await this.quickAIClassify(prompt);
