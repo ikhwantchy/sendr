@@ -456,12 +456,9 @@ Respond with ONLY the classification word (e.g., CONFIRMED, DECLINED, MAYBE, UNK
 
     /**
      * Quick AI classification without full conversation context
+     * Uses the appropriate provider based on config (Gemini, Groq, OpenAI, etc.)
      */
     private async quickAIClassify(prompt: string): Promise<string> {
-        // Use Gemini directly for simple classification
-        const { GoogleGeminiProvider } = await import('./llm/providers/google');
-        const provider = new GoogleGeminiProvider();
-
         // Get any available API key from configs
         const keyResult = await query(`
             SELECT llm_config FROM llm_allowed_targets 
@@ -474,14 +471,35 @@ Respond with ONLY the classification word (e.g., CONFIRMED, DECLINED, MAYBE, UNK
         }
 
         const config = JSON.parse(keyResult.rows[0].llm_config);
+        const providerName = config.provider || 'gemini';
+        
+        // Import the appropriate provider based on config
+        let provider: any;
+        
+        switch (providerName.toLowerCase()) {
+            case 'groq':
+                const { GroqProvider } = await import('./llm/providers/groq');
+                provider = new GroqProvider();
+                break;
+            case 'openai':
+                const { OpenAIProvider } = await import('./llm/providers/openai');
+                provider = new OpenAIProvider();
+                break;
+            case 'gemini':
+            default:
+                const { GoogleGeminiProvider } = await import('./llm/providers/google');
+                provider = new GoogleGeminiProvider();
+                break;
+        }
         
         const response = await provider.chat(
             [{ role: 'user', content: prompt }],
             {
-                provider: config.provider || 'gemini',
+                provider: providerName,
                 model: config.model || 'gemini-2.0-flash',
                 apiKey: config.api_key || config.apiKey,
-                maxTokens: 50,
+                baseUrl: config.base_url || config.baseUrl,
+                maxTokens: 100,
                 temperature: 0.1
             }
         );
