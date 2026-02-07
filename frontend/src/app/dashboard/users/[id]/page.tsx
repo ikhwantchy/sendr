@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import ModalPortal from '@/components/ModalPortal'
+import ScheduleDateTimePicker from '@/components/pickers/ScheduleDateTimePicker'
 
 // Permission definitions
 const PERMISSION_DEFINITIONS = [
@@ -44,11 +45,7 @@ export default function UserDetailPage() {
     const [mounted, setMounted] = useState(false)
     const [showCreateBotModal, setShowCreateBotModal] = useState(false)
     const [newBotName, setNewBotName] = useState('')
-    const [newBotExpiresAt, setNewBotExpiresAt] = useState<Date | null>(null)
-    const [showDatePicker, setShowDatePicker] = useState(false)
-    const [datePickerMonth, setDatePickerMonth] = useState(new Date())
-    const [selectedHour, setSelectedHour] = useState(23)
-    const [selectedMinute, setSelectedMinute] = useState(59)
+    const [newBotExpiresAt, setNewBotExpiresAt] = useState<string>('')
     const [isPermissionsExpanded, setIsPermissionsExpanded] = useState(false)
     const [botPermissions, setBotPermissions] = useState({
         can_view: true,
@@ -91,8 +88,7 @@ export default function UserDetailPage() {
             queryClient.invalidateQueries({ queryKey: ['users'] })
             setShowCreateBotModal(false)
             setNewBotName('')
-            setNewBotExpiresAt(null)
-            setShowDatePicker(false)
+            setNewBotExpiresAt('')
             setBotPermissions({
                 can_view: true,
                 can_view_analytics: true,
@@ -132,7 +128,7 @@ export default function UserDetailPage() {
             name: newBotName,
             target_tenant_id: detail?.user?.tenant_id,
             permissions: botPermissions,
-            expires_at: newBotExpiresAt ? newBotExpiresAt.toISOString() : undefined
+            expires_at: newBotExpiresAt ? new Date(newBotExpiresAt).toISOString() : undefined
         })
     }
 
@@ -285,179 +281,16 @@ export default function UserDetailPage() {
                                     />
                                 </div>
 
-                                {/* Expiration Date */}
+                                {/* Expiration Date & Time */}
                                 <div className="space-y-1.5">
                                     <label className="text-[13px] font-semibold text-zinc-400">
                                         EXPIRATION DATE <span className="text-zinc-600 font-normal">(Optional)</span>
                                     </label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowDatePicker(!showDatePicker)}
-                                        className="w-full h-[46px] px-4 bg-[#0a0a0a] border border-zinc-800 rounded-xl text-left flex items-center justify-between hover:border-zinc-700 transition-colors"
-                                    >
-                                        <span className={`text-sm font-medium ${newBotExpiresAt ? 'text-zinc-100' : 'text-zinc-500'}`}>
-                                            {newBotExpiresAt 
-                                                ? `${newBotExpiresAt.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })} at ${String(newBotExpiresAt.getHours()).padStart(2, '0')}:${String(newBotExpiresAt.getMinutes()).padStart(2, '0')}`
-                                                : 'Select date & time...'}
-                                        </span>
-                                        <Calendar className="w-4 h-4 text-zinc-500" />
-                                    </button>
-
-                                    {/* Date & Time Picker - Inline */}
-                                    {showDatePicker && (
-                                        <div className="bg-[#0a0a0a] border border-zinc-800 rounded-xl p-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
-                                            {/* Month Navigation */}
-                                            <div className="flex items-center justify-between mb-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setDatePickerMonth(new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth() - 1))}
-                                                    className="w-7 h-7 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white"
-                                                >
-                                                    <ChevronDown className="w-3.5 h-3.5 rotate-90" />
-                                                </button>
-                                                <div className="text-xs font-semibold text-white">
-                                                    {datePickerMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setDatePickerMonth(new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth() + 1))}
-                                                    className="w-7 h-7 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white"
-                                                >
-                                                    <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
-                                                </button>
-                                            </div>
-
-                                            {/* Day Names */}
-                                            <div className="grid grid-cols-7 gap-0.5 mb-1">
-                                                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                                                    <div key={day} className="text-center text-[9px] font-medium text-zinc-600 py-0.5">
-                                                        {day}
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            {/* Calendar Grid - Compact */}
-                                            <div className="grid grid-cols-7 gap-0.5">
-                                                {(() => {
-                                                    const days = []
-                                                    const firstDay = new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth(), 1).getDay()
-                                                    const daysInMonth = new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth() + 1, 0).getDate()
-                                                    const today = new Date()
-                                                    today.setHours(0, 0, 0, 0)
-
-                                                    // Empty cells
-                                                    for (let i = 0; i < firstDay; i++) {
-                                                        days.push(<div key={`empty-${i}`} className="w-8 h-8" />)
-                                                    }
-
-                                                    // Days
-                                                    for (let day = 1; day <= daysInMonth; day++) {
-                                                        const date = new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth(), day)
-                                                        const isPast = date < today
-                                                        const isSelected = newBotExpiresAt && 
-                                                            date.getDate() === newBotExpiresAt.getDate() && 
-                                                            date.getMonth() === newBotExpiresAt.getMonth() && 
-                                                            date.getFullYear() === newBotExpiresAt.getFullYear()
-                                                        const isToday = date.getTime() === today.getTime()
-
-                                                        days.push(
-                                                            <button
-                                                                key={day}
-                                                                type="button"
-                                                                disabled={isPast}
-                                                                onClick={() => {
-                                                                    const newDate = new Date(date)
-                                                                    newDate.setHours(selectedHour, selectedMinute, 0, 0)
-                                                                    setNewBotExpiresAt(newDate)
-                                                                }}
-                                                                className={`w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-medium transition-all ${
-                                                                    isPast
-                                                                        ? 'text-zinc-700 cursor-not-allowed'
-                                                                        : isSelected
-                                                                            ? 'bg-white text-black'
-                                                                            : isToday
-                                                                                ? 'bg-zinc-800 text-white ring-1 ring-zinc-600'
-                                                                                : 'text-zinc-300 hover:bg-zinc-800'
-                                                                }`}
-                                                            >
-                                                                {day}
-                                                            </button>
-                                                        )
-                                                    }
-
-                                                    return days
-                                                })()}
-                                            </div>
-
-                                            {/* Time Picker */}
-                                            <div className="mt-3 pt-3 border-t border-zinc-800">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[10px] font-medium text-zinc-500 uppercase">Time</span>
-                                                    <div className="flex items-center gap-1">
-                                                        {/* Hour Select */}
-                                                        <select
-                                                            value={selectedHour}
-                                                            onChange={(e) => {
-                                                                const hour = parseInt(e.target.value)
-                                                                setSelectedHour(hour)
-                                                                if (newBotExpiresAt) {
-                                                                    const newDate = new Date(newBotExpiresAt)
-                                                                    newDate.setHours(hour, selectedMinute, 0, 0)
-                                                                    setNewBotExpiresAt(newDate)
-                                                                }
-                                                            }}
-                                                            className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs font-medium text-white appearance-none cursor-pointer hover:border-zinc-600 focus:outline-none focus:border-zinc-500"
-                                                        >
-                                                            {Array.from({ length: 24 }, (_, i) => (
-                                                                <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
-                                                            ))}
-                                                        </select>
-                                                        <span className="text-zinc-500 text-xs font-bold">:</span>
-                                                        {/* Minute Select */}
-                                                        <select
-                                                            value={selectedMinute}
-                                                            onChange={(e) => {
-                                                                const minute = parseInt(e.target.value)
-                                                                setSelectedMinute(minute)
-                                                                if (newBotExpiresAt) {
-                                                                    const newDate = new Date(newBotExpiresAt)
-                                                                    newDate.setHours(selectedHour, minute, 0, 0)
-                                                                    setNewBotExpiresAt(newDate)
-                                                                }
-                                                            }}
-                                                            className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs font-medium text-white appearance-none cursor-pointer hover:border-zinc-600 focus:outline-none focus:border-zinc-500"
-                                                        >
-                                                            {Array.from({ length: 60 }, (_, i) => (
-                                                                <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Action Buttons */}
-                                            <div className="flex gap-2 mt-3">
-                                                {newBotExpiresAt && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setNewBotExpiresAt(null)
-                                                        }}
-                                                        className="flex-1 py-1.5 text-[10px] font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors"
-                                                    >
-                                                        Clear
-                                                    </button>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowDatePicker(false)}
-                                                    className={`${newBotExpiresAt ? 'flex-1' : 'w-full'} py-1.5 text-[10px] font-medium text-white bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors`}
-                                                >
-                                                    Done
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <ScheduleDateTimePicker
+                                        value={newBotExpiresAt}
+                                        onChange={setNewBotExpiresAt}
+                                        compact
+                                    />
                                 </div>
                             </div>
 
