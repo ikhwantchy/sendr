@@ -195,8 +195,8 @@ export default function UserDetailPage() {
                 </div>
             </div>
 
-            {/* Quick Stats Grid - Clean without icons */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Quick Stats Grid - Hidden on mobile */}
+            <div className="hidden sm:grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <KPICard title="TOTAL MESSAGES" value={analytics.total_messages} />
                 <KPICard title="AUTO REPLIES" value={analytics.auto_replies} />
                 <KPICard title="CAMPAIGNS" value={analytics.campaigns} />

@@ -231,8 +231,8 @@ export default function UsersPage() {
                 </div>
             </div>
 
-            {/* KPI Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {/* KPI Grid - Hidden on mobile to save space */}
+            <div className="hidden sm:grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <KPICard
                     title="Total Users"
                     value={stats?.total_users || 0}

@@ -675,8 +675,8 @@ export default function AuditLogsPage() {
                 </div>
             </div>
 
-            {/* KPI Grid - Same style as Analytics */}
-            <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 transition-all duration-300 ease-in-out ${isTransitioning ? 'opacity-40 scale-[0.99]' : 'opacity-100 scale-100'}`}>
+            {/* KPI Grid - Hidden on mobile */}
+            <div className={`hidden sm:grid grid-cols-2 lg:grid-cols-4 gap-4 transition-all duration-300 ease-in-out ${isTransitioning ? 'opacity-40 scale-[0.99]' : 'opacity-100 scale-100'}`}>
                 <KPICard
                     title="Total Logs"
                     value={total}
