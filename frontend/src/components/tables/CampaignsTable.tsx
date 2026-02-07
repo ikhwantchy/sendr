@@ -191,18 +191,41 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
 
     if (!campaigns || campaigns.length === 0) {
         return (
-            <div className="text-center py-48 bg-zinc-900/30 border border-dashed border-zinc-800/50 rounded-2xl min-h-[600px] flex flex-col items-center justify-center">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-zinc-800/50 rounded-3xl mb-6 shadow-xl border border-zinc-700/50">
-                    <Megaphone className="w-10 h-10 text-zinc-500" />
+            <div className="flex flex-col gap-4">
+                {/* Create Button */}
+                <div className="flex justify-end">
+                    <button
+                        onClick={() => router.push(`/dashboard/campaigns/create?bot=${botId}`)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium text-sm transition-all shadow-lg shadow-blue-500/25"
+                    >
+                        <Plus className="w-4 h-4" />
+                        <span>Create Campaign</span>
+                    </button>
                 </div>
-                <h3 className="text-xl font-bold text-zinc-100 mb-3">No Campaigns Yet</h3>
-                <p className="text-zinc-400 text-sm max-w-xs mx-auto leading-relaxed">Create your first broadcast campaign to reach your contacts and grow your business.</p>
+                <div className="text-center py-24 sm:py-48 bg-zinc-900/30 border border-dashed border-zinc-800/50 rounded-2xl min-h-[400px] sm:min-h-[600px] flex flex-col items-center justify-center">
+                    <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-zinc-800/50 rounded-2xl sm:rounded-3xl mb-4 sm:mb-6 shadow-xl border border-zinc-700/50">
+                        <Megaphone className="w-8 h-8 sm:w-10 sm:h-10 text-zinc-500" />
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-bold text-zinc-100 mb-2 sm:mb-3">No Campaigns Yet</h3>
+                    <p className="text-zinc-400 text-xs sm:text-sm max-w-xs mx-auto leading-relaxed px-4">Create your first broadcast campaign to reach your contacts and grow your business.</p>
+                </div>
             </div>
         )
     }
 
     return (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-4">
+            {/* Header with Create Button */}
+            <div className="flex justify-end">
+                <button
+                    onClick={() => router.push(`/dashboard/campaigns/create?bot=${botId}`)}
+                    className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium text-xs sm:text-sm transition-all shadow-lg shadow-blue-500/25"
+                >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Create Campaign</span>
+                    <span className="sm:hidden">New</span>
+                </button>
+            </div>
             {/* Desktop Table View */}
             <div className="hidden md:block">
                 <table className="w-full table-fixed">
