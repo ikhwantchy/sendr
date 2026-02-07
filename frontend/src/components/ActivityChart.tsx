@@ -147,82 +147,87 @@ export default function ActivityChart({
     const canZoomOut = ZOOM_LEVELS.indexOf(timeRange) < ZOOM_LEVELS.length - 1
 
     return (
-        <div className={`bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-6 ${className || ''}`}>
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
+        <div className={`bg-[#0e0e11] border border-zinc-800/50 rounded-xl p-4 sm:p-6 ${className || ''}`}>
+            {/* Header: Title + Controls - Stack on mobile */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
+                {/* Title + Real-time indicator */}
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                     {title && (
-                        <h3 className="text-lg font-medium text-zinc-200">{title}</h3>
+                        <h3 className="text-sm sm:text-lg font-medium text-zinc-200 truncate">{title}</h3>
                     )}
                     {/* Real-time indicator */}
                     {lastUpdated && (
-                        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-                            <span className="relative flex h-2 w-2">
+                        <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-zinc-500 flex-shrink-0">
+                            <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2 bg-emerald-500"></span>
                             </span>
-                            <span>{lastUpdatedText}</span>
+                            <span className="hidden sm:inline">{lastUpdatedText}</span>
                         </div>
                     )}
                 </div>
 
-                {/* Interactive Legend + Zoom Buttons + Dropdown on the right */}
-                <div className="flex flex-wrap items-center gap-4 text-xs">
-                    <LegendItem
-                        color="bg-blue-500"
-                        label="Auto-Replies"
-                        onClick={() => toggleSeries('auto_reply')}
-                        hidden={hiddenSeries.includes('auto_reply')}
-                    />
-                    <LegendItem
-                        color="bg-orange-500"
-                        label="Campaigns"
-                        onClick={() => toggleSeries('campaign')}
-                        hidden={hiddenSeries.includes('campaign')}
-                    />
-                    <LegendItem
-                        color="bg-purple-500"
-                        label="Reminders"
-                        onClick={() => toggleSeries('reminder')}
-                        hidden={hiddenSeries.includes('reminder')}
-                    />
-                    <LegendItem
-                        color="bg-emerald-500"
-                        label="Received"
-                        onClick={() => toggleSeries('received')}
-                        hidden={hiddenSeries.includes('received')}
-                    />
+                {/* Controls Row - Scrollable on mobile */}
+                <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 pb-1 sm:pb-0">
+                    {/* Interactive Legend - Compact on mobile */}
+                    <div className="flex items-center gap-2 sm:gap-4 text-[10px] sm:text-xs flex-shrink-0">
+                        <LegendItem
+                            color="bg-blue-500"
+                            label="Auto-Replies"
+                            onClick={() => toggleSeries('auto_reply')}
+                            hidden={hiddenSeries.includes('auto_reply')}
+                        />
+                        <LegendItem
+                            color="bg-orange-500"
+                            label="Campaigns"
+                            onClick={() => toggleSeries('campaign')}
+                            hidden={hiddenSeries.includes('campaign')}
+                        />
+                        <LegendItem
+                            color="bg-purple-500"
+                            label="Reminders"
+                            onClick={() => toggleSeries('reminder')}
+                            hidden={hiddenSeries.includes('reminder')}
+                        />
+                        <LegendItem
+                            color="bg-emerald-500"
+                            label="Received"
+                            onClick={() => toggleSeries('received')}
+                            hidden={hiddenSeries.includes('received')}
+                        />
+                    </div>
 
                     {/* Zoom Buttons */}
                     {onTimeRangeChange && (
-                        <div className="flex items-center gap-1 ml-2">
+                        <div className="flex items-center gap-1 flex-shrink-0">
                             <button
                                 onClick={handleZoomIn}
                                 disabled={!canZoomIn}
-                                className={`p-1.5 rounded-md transition-all ${canZoomIn
+                                className={`p-1 sm:p-1.5 rounded-md transition-all ${canZoomIn
                                     ? 'bg-zinc-900/80 border border-zinc-800/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80'
                                     : 'bg-zinc-900/30 border border-zinc-800/30 text-zinc-700 cursor-not-allowed'
                                     }`}
                                 title="Zoom In (More Detail)"
                             >
-                                <ZoomIn className="w-3.5 h-3.5" />
+                                <ZoomIn className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                             </button>
                             <button
                                 onClick={handleZoomOut}
                                 disabled={!canZoomOut}
-                                className={`p-1.5 rounded-md transition-all ${canZoomOut
+                                className={`p-1 sm:p-1.5 rounded-md transition-all ${canZoomOut
                                     ? 'bg-zinc-900/80 border border-zinc-800/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80'
                                     : 'bg-zinc-900/30 border border-zinc-800/30 text-zinc-700 cursor-not-allowed'
                                     }`}
                                 title="Zoom Out (Wider View)"
                             >
-                                <ZoomOut className="w-3.5 h-3.5" />
+                                <ZoomOut className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                             </button>
                         </div>
                     )}
 
-                    {/* Time Range Dropdown - After zoom buttons */}
+                    {/* Time Range Dropdown */}
                     {onTimeRangeChange && (
-                        <div className="relative">
+                        <div className="relative flex-shrink-0">
                             <button
                                 onClick={() => {
                                     const dropdown = document.getElementById('chart-time-range-dropdown')
@@ -238,14 +243,14 @@ export default function ActivityChart({
                                         }
                                     }, 150)
                                 }}
-                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900/80 border border-zinc-800/50 rounded-lg text-xs font-medium text-zinc-100 hover:bg-zinc-800/80 transition-all"
+                                className="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-zinc-900/80 border border-zinc-800/50 rounded-lg text-[10px] sm:text-xs font-medium text-zinc-100 hover:bg-zinc-800/80 transition-all"
                             >
                                 <span>
                                     {timeRange === '30m' ? '30M' :
                                         timeRange === '24h' ? '24H' :
                                             timeRange === '7d' ? '7D' : '30D'}
                                 </span>
-                                <svg className="w-3 h-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                 </svg>
                             </button>
@@ -279,7 +284,7 @@ export default function ActivityChart({
                 </div>
             </div>
 
-            <div className="h-[300px] w-full">
+            <div className="h-[200px] sm:h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <defs>

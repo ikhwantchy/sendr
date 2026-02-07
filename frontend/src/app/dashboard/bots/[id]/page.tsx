@@ -347,6 +347,26 @@ export default function BotDetailPage() {
     return (
         <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-black animate-fade-in">
             <div className="space-y-6 sm:space-y-8">
+                    {/* Tab Navigation - Always visible */}
+                <div className="flex items-center gap-1 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
+                    {tabs.map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => {
+                                setActiveTab(tab.id)
+                                window.location.hash = tab.id
+                            }}
+                            className={`flex-shrink-0 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                                activeTab === tab.id
+                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                                    : 'bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 border border-zinc-800/50'
+                            }`}
+                        >
+                            {tab.name}
+                        </button>
+                    ))}
+                </div>
+
                 {activeTab === 'overview' && (
                     <div className="space-y-4 sm:space-y-6">
                         {/* Integrated Hero Section (Overview ONLY) */}

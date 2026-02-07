@@ -375,60 +375,62 @@ export default function UsersPage() {
                             </table>
                         </div>
 
-                        {/* Mobile Card View */}
-                        <div className="md:hidden space-y-3 p-3">
+                        {/* Mobile Compact List View */}
+                        <div className="md:hidden divide-y divide-zinc-800/50">
                             {paginatedUsers.map((user: any) => (
                                 <div
                                     key={user.id}
-                                    className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4 hover:bg-zinc-900/80 transition-all"
+                                    className="flex items-center gap-3 p-3 hover:bg-zinc-900/50 transition-all"
                                 >
-                                    {/* Top: Name + Role */}
-                                    <div className="flex items-start justify-between gap-3 mb-3">
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="text-zinc-100 font-semibold truncate">{user.name || 'N/A'}</h3>
-                                            <p className="text-zinc-500 text-sm truncate">{user.email}</p>
-                                        </div>
-                                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium border flex-shrink-0 ${user.role === 'OWNER'
-                                            ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
-                                            : user.role === 'ADMIN'
-                                                ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                            }`}>
-                                            <Shield className="w-3 h-3" />
-                                            {user.role}
-                                        </span>
+                                    {/* Avatar/Initial */}
+                                    <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 text-xs font-semibold flex-shrink-0">
+                                        {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
                                     </div>
 
-                                    {/* Stats */}
-                                    <div className="flex items-center gap-4 text-xs mb-3">
-                                        <div className="flex items-center gap-1.5 text-zinc-400">
-                                            <Bot className="w-3.5 h-3.5" />
-                                            <span className="font-mono">{user.bots_count || 0} bots</span>
-                                        </div>
+                                    {/* Name + Email */}
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="text-sm font-semibold text-zinc-100 truncate">{user.name || 'N/A'}</h3>
+                                        <p className="text-[10px] text-zinc-500 truncate">{user.email}</p>
+                                    </div>
+
+                                    {/* Role Badge - Compact */}
+                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium border flex-shrink-0 ${user.role === 'OWNER'
+                                        ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                                        : user.role === 'ADMIN'
+                                            ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                            : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                        }`}>
+                                        {user.role}
+                                    </span>
+
+                                    {/* Bots Count */}
+                                    <div className="flex items-center gap-1 text-zinc-500 flex-shrink-0">
+                                        <Bot className="w-3 h-3" />
+                                        <span className="text-[10px] font-mono">{user.bots_count || 0}</span>
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800/50">
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
                                         <Link
                                             href={`/dashboard/users/${user.id}`}
-                                            className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 transition-all flex items-center justify-center text-blue-400"
+                                            className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 transition-all flex items-center justify-center text-blue-400"
                                             title="View Details"
                                         >
-                                            <Eye className="w-4 h-4" />
+                                            <Eye className="w-3.5 h-3.5" />
                                         </Link>
                                         <button
                                             onClick={() => handleEdit(user)}
-                                            className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-amber-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-amber-400"
+                                            className="w-7 h-7 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-amber-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-amber-400"
                                             title="Edit"
                                         >
-                                            <Pencil className="w-4 h-4" />
+                                            <Pencil className="w-3.5 h-3.5" />
                                         </button>
                                         <button
                                             onClick={() => handleDelete(user)}
-                                            className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
+                                            className="w-7 h-7 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
                                             title="Delete"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 </div>
