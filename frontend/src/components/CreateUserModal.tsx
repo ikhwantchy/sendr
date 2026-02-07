@@ -1,15 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { Copy, Check, ChevronDown, ChevronUp, Sparkles, Calendar, Megaphone, Bot, X, BarChart3 } from 'lucide-react'
+import { Copy, Check, ChevronDown, X, Shield, User } from 'lucide-react'
 import { API_URL } from '@/lib/api'
+import ModalPortal from '@/components/ModalPortal'
 
 interface CreateUserModalProps {
     isOpen: boolean
     onClose: () => void
 }
+
+const ROLE_OPTIONS = [
+    { value: 'ADMIN', label: 'Admin', icon: Shield },
+    { value: 'USER', label: 'User', icon: User },
+]
 
 export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProps) {
     const queryClient = useQueryClient()
@@ -18,17 +24,22 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
         email: '',
         password: '',
         role: 'USER',
-        permissions: {
-            can_use_auto_reply: true,
-            can_use_reminders: false,
-            can_use_campaigns: false,
-            can_use_ai: false,
-            can_view_analytics: false
-        }
     })
-    const [isPermissionsExpanded, setIsPermissionsExpanded] = useState(false)
     const [createdUser, setCreatedUser] = useState<any>(null)
     const [copied, setCopied] = useState<string>('')
+    const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false)
+    const roleDropdownRef = useRef<HTMLDivElement>(null)
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
+                setIsRoleDropdownOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
 
     const createMutation = useMutation({
         mutationFn: async (data: any) => {
@@ -71,26 +82,17 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
             email: '',
             password: '',
             role: 'USER',
-            permissions: {
-                can_use_auto_reply: true,
-                can_use_reminders: false,
-                can_use_campaigns: false,
-                can_use_ai: false,
-                can_view_analytics: false
-            }
         })
-        setIsPermissionsExpanded(false)
+        setIsRoleDropdownOpen(false)
         setCreatedUser(null)
         onClose()
     }
 
-    if (!isOpen) return null
-
     // Success screen after user created
     if (createdUser) {
         return (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 overflow-y-auto">
-                <div className="min-h-full flex items-center justify-center p-4 py-8">
+            <ModalPortal isOpen={isOpen}>
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
                     <div className="bg-[#111111] rounded-2xl border border-zinc-800 max-w-md w-full p-6 shadow-2xl">
                         <h2 className="text-xl font-bold text-white mb-2">User Created Successfully</h2>
                         <p className="text-sm text-zinc-400 mb-6 font-medium">User has been added to the system</p>
@@ -134,14 +136,14 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
                         </button>
                     </div>
                 </div>
-            </div>
+            </ModalPortal>
         )
     }
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 overflow-y-auto">
-            <div className="min-h-full flex items-center justify-center p-4 py-8">
-                <div className="bg-[#111111] rounded-2xl border border-zinc-800 max-w-md w-full shadow-2xl">
+        <ModalPortal isOpen={isOpen}>
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+                <div className="bg-[#111111] rounded-2xl border border-zinc-800 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
                     {/* Header */}
                     <div className="p-6 pb-2 flex items-center justify-between">
                         <div>
@@ -206,102 +208,72 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
                             <label className="text-[13px] font-semibold text-zinc-400">
                                 ROLE <span className="text-zinc-600">*</span>
                             </label>
-                            <div className="relative group">
-                                <select
-                                    value={formData.role}
-                                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                    className="w-full h-[46px] px-4 bg-[#0a0a0a] border border-zinc-800 rounded-xl text-zinc-100 focus:outline-none focus:border-zinc-700 transition-all font-medium appearance-none cursor-pointer"
+                            <div className="relative" ref={roleDropdownRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                                    className="w-full h-[46px] px-4 bg-[#0a0a0a] border border-zinc-800 rounded-xl text-zinc-100 focus:outline-none focus:border-zinc-700 transition-all font-medium flex items-center justify-between cursor-pointer hover:border-zinc-700"
                                 >
-                                    <option value="ADMIN">Admin - Full Access</option>
-                                    <option value="USER">User - Limited Access</option>
-                                </select>
-                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none group-focus-within:text-white transition-colors" />
+                                    <div className="flex items-center gap-3">
+                                        {(() => {
+                                            const selected = ROLE_OPTIONS.find(r => r.value === formData.role)
+                                            const Icon = selected?.icon || User
+                                            return (
+                                                <>
+                                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${formData.role === 'ADMIN' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                                        <Icon className="w-3.5 h-3.5" />
+                                                    </div>
+                                                    <span className="text-sm font-medium text-zinc-100">{selected?.label}</span>
+                                                </>
+                                            )
+                                        })()}
+                                    </div>
+                                    <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                
+                                {isRoleDropdownOpen && (
+                                    <div className="absolute top-full left-0 right-0 mt-2 bg-[#0a0a0a] border border-zinc-800 rounded-xl overflow-hidden shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                        {ROLE_OPTIONS.map((option) => {
+                                            const Icon = option.icon
+                                            const isSelected = formData.role === option.value
+                                            return (
+                                                <button
+                                                    key={option.value}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData({ ...formData, role: option.value })
+                                                        setIsRoleDropdownOpen(false)
+                                                    }}
+                                                    className={`w-full px-4 py-3 flex items-center gap-3 transition-all ${isSelected ? 'bg-zinc-800/50' : 'hover:bg-zinc-800/30'}`}
+                                                >
+                                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${option.value === 'ADMIN' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                                        <Icon className="w-3.5 h-3.5" />
+                                                    </div>
+                                                    <span className="text-sm font-medium text-zinc-100 flex-1 text-left">{option.label}</span>
+                                                    {isSelected && (
+                                                        <Check className="w-4 h-4 text-emerald-400" />
+                                                    )}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
-
-                    {/* Permissions Section - Only shown for USER role */}
-                    {formData.role === 'USER' && (
-                        <div className="space-y-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setIsPermissionsExpanded(!isPermissionsExpanded)}
-                                className="w-full flex items-center justify-between pt-4 border-t border-zinc-800/50 group"
-                            >
-                                <span className="text-[13px] font-semibold text-zinc-400 group-hover:text-zinc-200 transition-colors uppercase">
-                                    MODULE PERMISSIONS
-                                </span>
-                                {isPermissionsExpanded ? <ChevronUp className="w-4 h-4 text-zinc-500 group-hover:text-zinc-200" /> : <ChevronDown className="w-4 h-4 text-zinc-500 group-hover:text-zinc-200" />}
-                            </button>
-
-                            {isPermissionsExpanded && (
-                                <div className="space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                                    {[
-                                        { key: 'can_use_auto_reply', label: 'Auto Reply', desc: 'Manage keywords and auto-responses', icon: Sparkles },
-                                        { key: 'can_use_reminders', label: 'Reminders', desc: 'Schedule messages and reminders', icon: Calendar },
-                                        { key: 'can_use_campaigns', label: 'Campaigns', desc: 'Broadcast to multiple contacts', icon: Megaphone },
-                                        { key: 'can_use_ai', label: 'AI Assistant', desc: 'Enable AI-powered conversations', icon: Bot },
-                                        { key: 'can_view_analytics', label: 'View Analytics', desc: 'View performance and usage stats', icon: BarChart3 },
-                                    ].map((perm) => {
-                                        const isChecked = formData.permissions[perm.key as keyof typeof formData.permissions];
-                                        const Icon = perm.icon;
-                                        return (
-                                            <label
-                                                key={perm.key}
-                                                className={`flex items-center justify-between p-4 rounded-xl cursor-pointer transition-all border ${isChecked
-                                                    ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-[inset_0_0_20px_rgba(16,185,129,0.02)]'
-                                                    : 'bg-[#0a0a0a] border-zinc-800/60 hover:border-zinc-700'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800/40 text-zinc-500'
-                                                        }`}>
-                                                        <Icon className="w-5 h-5" />
-                                                    </div>
-                                                    <div>
-                                                        <p className={`text-[14px] font-bold tracking-tight transition-colors ${isChecked ? 'text-zinc-100' : 'text-zinc-400'}`}>
-                                                            {perm.label}
-                                                        </p>
-                                                        <p className="text-[11px] text-zinc-600 font-medium">
-                                                            {perm.desc}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="relative inline-flex items-center cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isChecked}
-                                                        onChange={() => setFormData({
-                                                            ...formData,
-                                                            permissions: {
-                                                                ...formData.permissions,
-                                                                [perm.key]: !isChecked
-                                                            }
-                                                        })}
-                                                        className="sr-only peer"
-                                                    />
-                                                    <div className="w-[42px] h-[22px] bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-[18px] after:w-[18px] after:transition-all peer-checked:bg-emerald-500 peer-checked:after:bg-white shadow-lg"></div>
-                                                </div>
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )}
 
                     <div className="flex gap-3 pt-6">
                         <button
                             type="button"
                             onClick={handleClose}
-                            className="flex-1 h-[48px] bg-[#1a1a1a] text-zinc-400 border border-zinc-800 rounded-xl font-bold text-[15px] hover:bg-zinc-800 hover:text-white transition-all active:scale-[0.98]"
+                            className="flex-1 h-[46px] bg-[#1a1a1a] text-zinc-400 border border-zinc-800 rounded-xl font-semibold text-sm hover:bg-zinc-800 hover:text-white transition-all active:scale-[0.98]"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={createMutation.isPending}
-                            className="flex-2 h-[48px] px-8 bg-white text-black rounded-xl font-bold text-[15px] hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-white/5"
+                            className="flex-1 h-[46px] bg-white text-black rounded-xl font-semibold text-sm hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {createMutation.isPending ? 'Working...' : 'Create User'}
                         </button>
@@ -309,6 +281,6 @@ export default function CreateUserModal({ isOpen, onClose }: CreateUserModalProp
                 </form>
                 </div>
             </div>
-        </div>
+        </ModalPortal>
     )
 }

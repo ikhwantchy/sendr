@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
+import ModalPortal from '@/components/ModalPortal'
 
 interface DeleteUserModalProps {
     isOpen: boolean
@@ -38,8 +39,9 @@ export default function DeleteUserModal({ isOpen, onClose, user }: DeleteUserMod
     if (!isOpen) return null
 
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="glass rounded-2xl max-w-md w-full border border-white/10 p-6">
+        <ModalPortal isOpen={isOpen}>
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+                <div className="glass rounded-2xl max-w-md w-full border border-white/10 p-6">
                 {/* Icon */}
                 <div className="w-16 h-16 bg-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -82,5 +84,6 @@ export default function DeleteUserModal({ isOpen, onClose, user }: DeleteUserMod
                 </div>
             </div>
         </div>
+        </ModalPortal>
     )
 }

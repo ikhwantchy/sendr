@@ -1393,6 +1393,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                 const timeStr = dt.toTimeString().slice(0, 5) // HH:mm
                                                 setFormData({ ...formData, startDate: dateStr, time: timeStr })
                                             }}
+                                            compact={true}
                                         />
                                     </div>
                                 )}
@@ -1437,6 +1438,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                 const timeStr = dt.toTimeString().slice(0, 5)
                                                 setFormData({ ...formData, startDate: dateStr, time: timeStr })
                                             }}
+                                            compact={true}
                                         />
                                     </div>
                                 )}

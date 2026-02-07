@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
+import ModalPortal from '@/components/ModalPortal'
 
 interface InviteUserModalProps {
     isOpen: boolean
@@ -111,8 +112,9 @@ export default function InviteUserModal({ isOpen, onClose }: InviteUserModalProp
     if (!isOpen) return null
 
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="glass rounded-2xl max-w-2xl w-full border border-white/10 max-h-[90vh] overflow-y-auto">
+        <ModalPortal isOpen={isOpen}>
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+                <div className="glass rounded-2xl max-w-2xl w-full border border-white/10 max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="sticky top-0 glass-strong border-b border-white/10 p-6 flex items-center justify-between">
                     <div>
@@ -251,5 +253,6 @@ export default function InviteUserModal({ isOpen, onClose }: InviteUserModalProp
                 </form>
             </div>
         </div>
+        </ModalPortal>
     )
 }

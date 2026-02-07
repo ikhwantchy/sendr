@@ -6,13 +6,16 @@ import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { usePermissions } from '@/hooks/usePermissions'
-import { Bot, Plus, Trash2, Settings, Phone, Calendar, Circle, Search, ArrowRight, RefreshCw, Loader2, Users, Filter, ChevronDown, Check } from 'lucide-react'
+import { Bot, Plus, Trash2, Settings, Phone, Calendar, Circle, Search, ArrowRight, RefreshCw, Loader2, Users, Filter, ChevronDown, Check, Clock, AlertTriangle } from 'lucide-react'
+import DateOnlyPicker from '@/components/pickers/DateOnlyPicker'
 
 export default function BotsPage() {
     const queryClient = useQueryClient()
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [newBotName, setNewBotName] = useState('')
     const [targetTenantId, setTargetTenantId] = useState('')
+    const [expiresAt, setExpiresAt] = useState('') // New: expiration date
+    const [expirationPreset, setExpirationPreset] = useState('') // New: preset options
     const [mounted, setMounted] = useState(false)
     const [botToDelete, setBotToDelete] = useState<string | null>(null)
     const [filterByUser, setFilterByUser] = useState<string>('all') // Filter state
@@ -85,7 +88,7 @@ export default function BotsPage() {
     })
 
     const createMutation = useMutation({
-        mutationFn: async (data: { name: string, target_tenant_id?: string }) => {
+        mutationFn: async (data: { name: string, target_tenant_id?: string, expires_at?: string }) => {
             return await api.bots.create(data)
         },
         onSuccess: () => {
@@ -93,6 +96,8 @@ export default function BotsPage() {
             setShowCreateModal(false)
             setNewBotName('')
             setTargetTenantId('')
+            setExpiresAt('')
+            setExpirationPreset('')
             toast.success('Bot created successfully!')
         },
         onError: (error: any) => {
@@ -115,6 +120,41 @@ export default function BotsPage() {
         },
     })
 
+    // Handle expiration preset change
+    const handleExpirationPreset = (preset: string) => {
+        setExpirationPreset(preset)
+        if (preset === 'none') {
+            setExpiresAt('')
+        } else if (preset === 'custom') {
+            // Keep existing expiresAt or set a default
+            if (!expiresAt) {
+                const defaultDate = new Date()
+                defaultDate.setMonth(defaultDate.getMonth() + 1)
+                setExpiresAt(defaultDate.toISOString().split('T')[0])
+            }
+        } else {
+            const now = new Date()
+            switch (preset) {
+                case '1week':
+                    now.setDate(now.getDate() + 7)
+                    break
+                case '1month':
+                    now.setMonth(now.getMonth() + 1)
+                    break
+                case '3months':
+                    now.setMonth(now.getMonth() + 3)
+                    break
+                case '6months':
+                    now.setMonth(now.getMonth() + 6)
+                    break
+                case '1year':
+                    now.setFullYear(now.getFullYear() + 1)
+                    break
+            }
+            setExpiresAt(now.toISOString().split('T')[0])
+        }
+    }
+
     const handleCreate = () => {
         if (!newBotName.trim()) {
             toast.error('Please enter a bot name')
@@ -122,7 +162,8 @@ export default function BotsPage() {
         }
         createMutation.mutate({
             name: newBotName,
-            target_tenant_id: targetTenantId || undefined
+            target_tenant_id: targetTenantId || undefined,
+            expires_at: expiresAt ? new Date(expiresAt).toISOString() : undefined
         })
     }
 
@@ -311,10 +352,16 @@ export default function BotsPage() {
                                     </div>
 
                                     <div className="mt-auto pt-4 border-t border-zinc-100 dark:border-zinc-800/50 flex items-center justify-between text-xs text-zinc-500">
-                                        <span className="flex items-center gap-1.5">
-                                            <Calendar className="w-3.5 h-3.5" />
-                                            {new Date(bot.created_at).toLocaleDateString()}
-                                        </span>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="flex items-center gap-1.5">
+                                                <Calendar className="w-3.5 h-3.5" />
+                                                {new Date(bot.created_at).toLocaleDateString()}
+                                            </span>
+                                            {/* Expiration status */}
+                                            {bot.expires_at && (
+                                                <ExpirationBadge expiresAt={bot.expires_at} />
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-2 transition-colors">
                                             <span className="text-zinc-500 dark:text-zinc-400 font-medium group-hover:text-blue-600 dark:group-hover:text-blue-400">Configure</span>
                                             <ArrowRight className="w-3.5 h-3.5 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
@@ -392,6 +439,61 @@ export default function BotsPage() {
                                         <p className="text-[10px] text-zinc-500">Leaving this unselected will assign the bot to your admin workspace.</p>
                                     </div>
                                 )}
+
+                                {/* Bot Expiration - Only for Admin */}
+                                {isAdmin && (
+                                    <div className="space-y-3">
+                                        <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide flex items-center gap-2">
+                                            <Clock className="w-3.5 h-3.5" />
+                                            Subscription Period (Optional)
+                                        </label>
+                                        
+                                        {/* Quick Presets */}
+                                        <div className="flex flex-wrap gap-2">
+                                            {[
+                                                { value: 'none', label: 'No Limit' },
+                                                { value: '1month', label: '1 Month' },
+                                                { value: '3months', label: '3 Months' },
+                                                { value: '1year', label: '1 Year' },
+                                            ].map((opt) => (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    onClick={() => handleExpirationPreset(opt.value)}
+                                                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                                                        expirationPreset === opt.value
+                                                            ? 'bg-blue-500/10 border-blue-500/50 text-blue-400'
+                                                            : 'bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
+                                                    }`}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        
+                                        {/* Calendar Picker */}
+                                        <DateOnlyPicker
+                                            value={expiresAt}
+                                            onChange={(val) => {
+                                                setExpiresAt(val)
+                                                setExpirationPreset(val ? 'custom' : 'none')
+                                            }}
+                                            placeholder="Or select custom date..."
+                                        />
+                                        
+                                        {expiresAt && (
+                                            <p className="text-[10px] text-amber-500 flex items-center gap-1">
+                                                <AlertTriangle className="w-3 h-3" />
+                                                Bot will auto-disconnect on {new Date(expiresAt + 'T00:00:00').toLocaleDateString('en-US', { 
+                                                    weekday: 'long',
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric'
+                                                })}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex items-center justify-end gap-3 pt-2">
@@ -437,6 +539,40 @@ function StatusBadge({ status }: { status: string }) {
             {status === 'disconnected' && <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />}
             {status === 'error' && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
             {status}
+        </span>
+    )
+}
+
+function ExpirationBadge({ expiresAt }: { expiresAt: string }) {
+    const expirationDate = new Date(expiresAt)
+    const now = new Date()
+    const daysRemaining = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    
+    const isExpired = daysRemaining <= 0
+    const isExpiringSoon = daysRemaining > 0 && daysRemaining <= 7
+    
+    if (isExpired) {
+        return (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-red-400">
+                <AlertTriangle className="w-3 h-3" />
+                Expired
+            </span>
+        )
+    }
+    
+    if (isExpiringSoon) {
+        return (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-amber-400">
+                <Clock className="w-3 h-3" />
+                Expires in {daysRemaining} day{daysRemaining !== 1 ? 's' : ''}
+            </span>
+        )
+    }
+    
+    return (
+        <span className="flex items-center gap-1 text-[10px] font-medium text-zinc-500">
+            <Clock className="w-3 h-3" />
+            Valid until {expirationDate.toLocaleDateString()}
         </span>
     )
 }

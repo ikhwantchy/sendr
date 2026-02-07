@@ -19,6 +19,8 @@ export interface Bot {
     config: any;
     ai_config: any;
     last_connected_at: string | null;
+    expires_at: string | null; // Bot expiration date (null = no expiration)
+    expired_reason: string | null; // Optional reason shown when expired
     created_by: string | null;
     created_at: string;
     updated_at: string;
@@ -157,6 +159,7 @@ class BotRepository {
         name: string;
         config?: any;
         created_by?: string;
+        expires_at?: string | null;
     }): Promise<Bot> {
         // Generate UUID for the bot
         const botId = this.generateUUID();
@@ -164,9 +167,9 @@ class BotRepository {
 
         // Insert bot with explicit ID
         await query(
-            `INSERT INTO bots (id, tenant_id, name, config, created_by)
-       VALUES (?, ?, ?, ?, ?)`,
-            [botId, data.tenant_id, data.name, configJson, data.created_by]
+            `INSERT INTO bots (id, tenant_id, name, config, created_by, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+            [botId, data.tenant_id, data.name, configJson, data.created_by, data.expires_at || null]
         );
 
         // Fetch the created bot
@@ -255,6 +258,36 @@ class BotRepository {
         const params = tenantId ? ['connected', tenantId] : ['connected'];
         const result = await query(sql, params);
 
+        return result.rows;
+    }
+
+    /**
+     * Find expired bots that are still connected
+     * Used by cron job to auto-disconnect expired bots
+     */
+    async findExpiredConnectedBots(): Promise<Bot[]> {
+        const result = await query(
+            `SELECT * FROM bots 
+             WHERE status = 'connected' 
+             AND expires_at IS NOT NULL 
+             AND expires_at < datetime('now')
+             ORDER BY expires_at ASC`
+        );
+        return result.rows;
+    }
+
+    /**
+     * Find bots expiring soon (within X days)
+     */
+    async findExpiringSoon(days: number = 7): Promise<Bot[]> {
+        const result = await query(
+            `SELECT * FROM bots 
+             WHERE expires_at IS NOT NULL 
+             AND expires_at > datetime('now')
+             AND expires_at < datetime('now', '+' || ? || ' days')
+             ORDER BY expires_at ASC`,
+            [days]
+        );
         return result.rows;
     }
 }

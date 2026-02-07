@@ -7,22 +7,33 @@ import { api } from '@/lib/api'
 import AdminGuard from '@/components/AdminGuard'
 import {
     ArrowLeft, Bot, MessageSquare, Megaphone,
-    Bell, Activity, Shield, Zap, CloudLightning, Loader2, Eye,
+    Bell, Activity, Shield, Zap, CloudLightning, Loader2,
     Plus, Trash2, X, Check, ChevronDown, ChevronUp, RefreshCw,
-    Database, Users as UsersIcon
+    Database, Users as UsersIcon, Sparkles, Calendar, BarChart3
 } from 'lucide-react'
 import { toast } from 'sonner'
+import ModalPortal from '@/components/ModalPortal'
 
-// Permission definitions with descriptions
+// Permission definitions
 const PERMISSION_DEFINITIONS = [
-    { key: 'can_view', label: 'Show Bot', icon: Eye, description: 'User can see this bot in their dashboard' },
-    { key: 'can_view_analytics', label: 'Analytics', icon: Activity, description: 'View bot analytics and statistics' },
-    { key: 'can_create_rules', label: 'Auto-Reply', icon: Zap, description: 'Create and manage auto-reply rules' },
-    { key: 'can_use_reminders', label: 'Reminders', icon: Bell, description: 'Create and manage scheduled reminders' },
-    { key: 'can_create_campaigns', label: 'Campaigns', icon: Megaphone, description: 'Create and run broadcast campaigns' },
-    { key: 'can_use_ai', label: 'AI Assistant', icon: CloudLightning, description: 'Use AI-powered assistant features' },
-    { key: 'can_manage_contacts', label: 'Contacts', icon: UsersIcon, description: 'View and manage contacts' },
-    { key: 'can_manage_datasources', label: 'Data Sources', icon: Database, description: 'Connect Google Sheets and data sources' },
+    { key: 'can_view', label: 'Show Bot' },
+    { key: 'can_view_analytics', label: 'Analytics' },
+    { key: 'can_create_rules', label: 'Auto-Reply' },
+    { key: 'can_use_reminders', label: 'Reminders' },
+    { key: 'can_create_campaigns', label: 'Campaigns' },
+    { key: 'can_use_ai', label: 'AI Assistant' },
+    { key: 'can_manage_contacts', label: 'Contacts' },
+    { key: 'can_manage_datasources', label: 'Data Sources' },
+]
+
+// Module permissions for Create Bot modal
+const BOT_PERMISSIONS = [
+    { key: 'can_view', label: 'Show Bot', icon: Bot },
+    { key: 'can_view_analytics', label: 'Analytics', icon: BarChart3 },
+    { key: 'can_create_rules', label: 'Auto-Reply', icon: Sparkles },
+    { key: 'can_use_reminders', label: 'Reminders', icon: Calendar },
+    { key: 'can_create_campaigns', label: 'Campaigns', icon: Megaphone },
+    { key: 'can_use_ai', label: 'AI Assistant', icon: CloudLightning },
 ]
 
 export default function UserDetailPage() {
@@ -33,6 +44,20 @@ export default function UserDetailPage() {
     const [mounted, setMounted] = useState(false)
     const [showCreateBotModal, setShowCreateBotModal] = useState(false)
     const [newBotName, setNewBotName] = useState('')
+    const [newBotExpiresAt, setNewBotExpiresAt] = useState<Date | null>(null)
+    const [showDatePicker, setShowDatePicker] = useState(false)
+    const [datePickerMonth, setDatePickerMonth] = useState(new Date())
+    const [selectedHour, setSelectedHour] = useState(23)
+    const [selectedMinute, setSelectedMinute] = useState(59)
+    const [isPermissionsExpanded, setIsPermissionsExpanded] = useState(false)
+    const [botPermissions, setBotPermissions] = useState({
+        can_view: true,
+        can_view_analytics: true,
+        can_create_rules: true,
+        can_use_reminders: true,
+        can_create_campaigns: true,
+        can_use_ai: false,
+    })
 
     useEffect(() => { setMounted(true) }, [])
 
@@ -58,7 +83,7 @@ export default function UserDetailPage() {
     })
 
     const createBotMutation = useMutation({
-        mutationFn: async (data: { name: string, target_tenant_id: string }) => {
+        mutationFn: async (data: { name: string, target_tenant_id: string, permissions?: any, expires_at?: string }) => {
             return await api.bots.create(data)
         },
         onSuccess: () => {
@@ -66,6 +91,17 @@ export default function UserDetailPage() {
             queryClient.invalidateQueries({ queryKey: ['users'] })
             setShowCreateBotModal(false)
             setNewBotName('')
+            setNewBotExpiresAt(null)
+            setShowDatePicker(false)
+            setBotPermissions({
+                can_view: true,
+                can_view_analytics: true,
+                can_create_rules: true,
+                can_use_reminders: true,
+                can_create_campaigns: true,
+                can_use_ai: false,
+            })
+            setIsPermissionsExpanded(false)
             toast.success('Bot created successfully!')
         },
         onError: (error: any) => {
@@ -94,7 +130,9 @@ export default function UserDetailPage() {
         }
         createBotMutation.mutate({
             name: newBotName,
-            target_tenant_id: detail?.user?.tenant_id
+            target_tenant_id: detail?.user?.tenant_id,
+            permissions: botPermissions,
+            expires_at: newBotExpiresAt ? newBotExpiresAt.toISOString() : undefined
         })
     }
 
@@ -161,45 +199,36 @@ export default function UserDetailPage() {
                 </div>
             </div>
 
-            {/* Quick Stats Grid - Analytics Style */}
+            {/* Quick Stats Grid - Clean without icons */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KPICard title="TOTAL MESSAGES" value={analytics.total_messages} icon={<MessageSquare className="w-5 h-5" />} />
-                <KPICard title="AUTO REPLIES" value={analytics.auto_replies} icon={<Zap className="w-5 h-5" />} />
-                <KPICard title="CAMPAIGNS" value={analytics.campaigns} icon={<Megaphone className="w-5 h-5" />} />
-                <KPICard title="REMINDERS" value={analytics.reminders} icon={<Bell className="w-5 h-5" />} />
+                <KPICard title="TOTAL MESSAGES" value={analytics.total_messages} />
+                <KPICard title="AUTO REPLIES" value={analytics.auto_replies} />
+                <KPICard title="CAMPAIGNS" value={analytics.campaigns} />
+                <KPICard title="REMINDERS" value={analytics.reminders} />
             </div>
 
             {/* Assigned Bots Header with Create Button */}
             <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                    <Bot className="w-5 h-5 text-zinc-500" />
+                <div className="flex items-center gap-3">
                     <h3 className="text-lg font-medium text-zinc-200">Assigned Bots</h3>
-                    <span className="text-xs text-zinc-500">{bots.length} bot{bots.length !== 1 ? 's' : ''} assigned to this user</span>
+                    <span className="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-400 tabular-nums">
+                        {bots.length}
+                    </span>
                 </div>
                 <button
                     onClick={() => setShowCreateBotModal(true)}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all shadow-lg shadow-blue-500/20"
+                    className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
                 >
                     <Plus className="w-4 h-4" />
                     Create Bot
                 </button>
             </div>
 
-            {/* Bot List - Table Style */}
+            {/* Bot List */}
             {bots.length === 0 ? (
                 <div className="bg-zinc-950 border border-zinc-900 rounded-xl text-center py-16">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-800/50 rounded-2xl mb-4">
-                        <Bot className="w-8 h-8 text-zinc-600" />
-                    </div>
                     <h3 className="text-lg font-semibold text-zinc-100 mb-2">No Bots Assigned</h3>
-                    <p className="text-zinc-400 text-sm mb-4">Create a bot to get started</p>
-                    <button
-                        onClick={() => setShowCreateBotModal(true)}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all shadow-lg shadow-blue-500/20"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Create First Bot
-                    </button>
+                    <p className="text-zinc-500 text-sm">Create a bot to get started</p>
                 </div>
             ) : (
                 <div className="space-y-3">
@@ -221,76 +250,300 @@ export default function UserDetailPage() {
                 </div>
             )}
 
-            {/* Create Bot Modal */}
-            {showCreateBotModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-xl overflow-hidden">
-                        <div className="px-6 py-4 border-b border-zinc-800/50 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-blue-500/10 rounded-lg">
-                                    <Bot className="w-5 h-5 text-blue-400" />
-                                </div>
-                                <div>
-                                    <h3 className="font-medium text-white">Create Bot for User</h3>
-                                    <p className="text-xs text-zinc-500">Will be assigned to {user.name}</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setShowCreateBotModal(false)} className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-all">
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
+            {/* Create Bot Modal - Same style as CreateUserModal */}
+            <ModalPortal isOpen={showCreateBotModal}>
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+                    <div className="bg-[#111111] rounded-2xl border border-zinc-800 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="p-6 pb-2 flex items-center justify-between">
                             <div>
-                                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2 block">Bot Name</label>
-                                <input
-                                    type="text"
-                                    value={newBotName}
-                                    onChange={(e) => setNewBotName(e.target.value)}
-                                    placeholder="e.g., Customer Support Bot"
-                                    className="w-full bg-zinc-900/50 border border-zinc-800/50 text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-zinc-700"
-                                    autoFocus
-                                />
+                                <h2 className="text-[22px] font-bold text-white tracking-tight">Create Bot</h2>
+                                <p className="text-sm text-zinc-500 mt-1 font-medium">Assign to {user.name}</p>
                             </div>
-                            <div className="p-3 bg-zinc-900/30 border border-zinc-800/50 rounded-lg">
-                                <p className="text-xs text-zinc-500">
-                                    After creation, you can configure the bot's permissions to control what features the user can access.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="px-6 py-4 border-t border-zinc-800/50 flex gap-3">
                             <button
                                 onClick={() => setShowCreateBotModal(false)}
-                                className="flex-1 py-2.5 text-zinc-400 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg font-medium text-sm transition-colors"
+                                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-zinc-800/50 text-zinc-500 hover:text-white transition-all"
                             >
-                                Cancel
+                                <X className="w-5 h-5" />
                             </button>
-                            <button
-                                onClick={handleCreateBot}
-                                disabled={createBotMutation.isPending || !newBotName.trim()}
-                                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                            >
-                                {createBotMutation.isPending ? (
-                                    <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</>
-                                ) : (
-                                    <><Plus className="w-4 h-4" /> Create Bot</>
+                        </div>
+
+                        <div className="p-6 pt-2 space-y-5">
+                            <div className="grid gap-4">
+                                {/* Bot Name */}
+                                <div className="space-y-1.5">
+                                    <label className="text-[13px] font-semibold text-zinc-400">
+                                        BOT NAME
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newBotName}
+                                        onChange={(e) => setNewBotName(e.target.value)}
+                                        className="w-full h-[46px] px-4 bg-[#0a0a0a] border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-zinc-700 transition-all font-medium"
+                                        placeholder="e.g., Customer Support Bot"
+                                        autoFocus
+                                    />
+                                </div>
+
+                                {/* Expiration Date */}
+                                <div className="space-y-1.5">
+                                    <label className="text-[13px] font-semibold text-zinc-400">
+                                        EXPIRATION DATE <span className="text-zinc-600 font-normal">(Optional)</span>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDatePicker(!showDatePicker)}
+                                        className="w-full h-[46px] px-4 bg-[#0a0a0a] border border-zinc-800 rounded-xl text-left flex items-center justify-between hover:border-zinc-700 transition-colors"
+                                    >
+                                        <span className={`text-sm font-medium ${newBotExpiresAt ? 'text-zinc-100' : 'text-zinc-500'}`}>
+                                            {newBotExpiresAt 
+                                                ? `${newBotExpiresAt.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })} at ${String(newBotExpiresAt.getHours()).padStart(2, '0')}:${String(newBotExpiresAt.getMinutes()).padStart(2, '0')}`
+                                                : 'Select date & time...'}
+                                        </span>
+                                        <Calendar className="w-4 h-4 text-zinc-500" />
+                                    </button>
+
+                                    {/* Date & Time Picker - Inline */}
+                                    {showDatePicker && (
+                                        <div className="bg-[#0a0a0a] border border-zinc-800 rounded-xl p-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
+                                            {/* Month Navigation */}
+                                            <div className="flex items-center justify-between mb-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDatePickerMonth(new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth() - 1))}
+                                                    className="w-7 h-7 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white"
+                                                >
+                                                    <ChevronDown className="w-3.5 h-3.5 rotate-90" />
+                                                </button>
+                                                <div className="text-xs font-semibold text-white">
+                                                    {datePickerMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDatePickerMonth(new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth() + 1))}
+                                                    className="w-7 h-7 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white"
+                                                >
+                                                    <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
+                                                </button>
+                                            </div>
+
+                                            {/* Day Names */}
+                                            <div className="grid grid-cols-7 gap-0.5 mb-1">
+                                                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                                                    <div key={day} className="text-center text-[9px] font-medium text-zinc-600 py-0.5">
+                                                        {day}
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Calendar Grid - Compact */}
+                                            <div className="grid grid-cols-7 gap-0.5">
+                                                {(() => {
+                                                    const days = []
+                                                    const firstDay = new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth(), 1).getDay()
+                                                    const daysInMonth = new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth() + 1, 0).getDate()
+                                                    const today = new Date()
+                                                    today.setHours(0, 0, 0, 0)
+
+                                                    // Empty cells
+                                                    for (let i = 0; i < firstDay; i++) {
+                                                        days.push(<div key={`empty-${i}`} className="w-8 h-8" />)
+                                                    }
+
+                                                    // Days
+                                                    for (let day = 1; day <= daysInMonth; day++) {
+                                                        const date = new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth(), day)
+                                                        const isPast = date < today
+                                                        const isSelected = newBotExpiresAt && 
+                                                            date.getDate() === newBotExpiresAt.getDate() && 
+                                                            date.getMonth() === newBotExpiresAt.getMonth() && 
+                                                            date.getFullYear() === newBotExpiresAt.getFullYear()
+                                                        const isToday = date.getTime() === today.getTime()
+
+                                                        days.push(
+                                                            <button
+                                                                key={day}
+                                                                type="button"
+                                                                disabled={isPast}
+                                                                onClick={() => {
+                                                                    const newDate = new Date(date)
+                                                                    newDate.setHours(selectedHour, selectedMinute, 0, 0)
+                                                                    setNewBotExpiresAt(newDate)
+                                                                }}
+                                                                className={`w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-medium transition-all ${
+                                                                    isPast
+                                                                        ? 'text-zinc-700 cursor-not-allowed'
+                                                                        : isSelected
+                                                                            ? 'bg-white text-black'
+                                                                            : isToday
+                                                                                ? 'bg-zinc-800 text-white ring-1 ring-zinc-600'
+                                                                                : 'text-zinc-300 hover:bg-zinc-800'
+                                                                }`}
+                                                            >
+                                                                {day}
+                                                            </button>
+                                                        )
+                                                    }
+
+                                                    return days
+                                                })()}
+                                            </div>
+
+                                            {/* Time Picker */}
+                                            <div className="mt-3 pt-3 border-t border-zinc-800">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-medium text-zinc-500 uppercase">Time</span>
+                                                    <div className="flex items-center gap-1">
+                                                        {/* Hour Select */}
+                                                        <select
+                                                            value={selectedHour}
+                                                            onChange={(e) => {
+                                                                const hour = parseInt(e.target.value)
+                                                                setSelectedHour(hour)
+                                                                if (newBotExpiresAt) {
+                                                                    const newDate = new Date(newBotExpiresAt)
+                                                                    newDate.setHours(hour, selectedMinute, 0, 0)
+                                                                    setNewBotExpiresAt(newDate)
+                                                                }
+                                                            }}
+                                                            className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs font-medium text-white appearance-none cursor-pointer hover:border-zinc-600 focus:outline-none focus:border-zinc-500"
+                                                        >
+                                                            {Array.from({ length: 24 }, (_, i) => (
+                                                                <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
+                                                            ))}
+                                                        </select>
+                                                        <span className="text-zinc-500 text-xs font-bold">:</span>
+                                                        {/* Minute Select */}
+                                                        <select
+                                                            value={selectedMinute}
+                                                            onChange={(e) => {
+                                                                const minute = parseInt(e.target.value)
+                                                                setSelectedMinute(minute)
+                                                                if (newBotExpiresAt) {
+                                                                    const newDate = new Date(newBotExpiresAt)
+                                                                    newDate.setHours(selectedHour, minute, 0, 0)
+                                                                    setNewBotExpiresAt(newDate)
+                                                                }
+                                                            }}
+                                                            className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs font-medium text-white appearance-none cursor-pointer hover:border-zinc-600 focus:outline-none focus:border-zinc-500"
+                                                        >
+                                                            {Array.from({ length: 60 }, (_, i) => (
+                                                                <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Action Buttons */}
+                                            <div className="flex gap-2 mt-3">
+                                                {newBotExpiresAt && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setNewBotExpiresAt(null)
+                                                        }}
+                                                        className="flex-1 py-1.5 text-[10px] font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowDatePicker(false)}
+                                                    className={`${newBotExpiresAt ? 'flex-1' : 'w-full'} py-1.5 text-[10px] font-medium text-white bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors`}
+                                                >
+                                                    Done
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Module Permissions */}
+                            <div className="space-y-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPermissionsExpanded(!isPermissionsExpanded)}
+                                    className="w-full flex items-center justify-between group"
+                                >
+                                    <span className="text-[13px] font-semibold text-zinc-400 group-hover:text-zinc-200 transition-colors uppercase">
+                                        MODULE PERMISSIONS
+                                    </span>
+                                    {isPermissionsExpanded ? <ChevronUp className="w-4 h-4 text-zinc-500 group-hover:text-zinc-200" /> : <ChevronDown className="w-4 h-4 text-zinc-500 group-hover:text-zinc-200" />}
+                                </button>
+
+                                {isPermissionsExpanded && (
+                                    <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        {BOT_PERMISSIONS.map((perm) => {
+                                            const isChecked = botPermissions[perm.key as keyof typeof botPermissions];
+                                            const Icon = perm.icon;
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    key={perm.key}
+                                                    onClick={() => setBotPermissions({
+                                                        ...botPermissions,
+                                                        [perm.key]: !isChecked
+                                                    })}
+                                                    className={`w-full flex items-center justify-between h-[46px] px-4 rounded-xl cursor-pointer transition-all border ${isChecked
+                                                        ? 'bg-emerald-500/[0.03] border-emerald-500/20'
+                                                        : 'bg-[#0a0a0a] border-zinc-800 hover:border-zinc-700'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800/40 text-zinc-500'}`}>
+                                                            <Icon className="w-3.5 h-3.5" />
+                                                        </div>
+                                                        <span className={`text-sm font-medium transition-colors ${isChecked ? 'text-zinc-100' : 'text-zinc-400'}`}>
+                                                            {perm.label}
+                                                        </span>
+                                                    </div>
+                                                    {isChecked && (
+                                                        <Check className="w-4 h-4 text-emerald-400" />
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 )}
-                            </button>
+                            </div>
+
+                            {/* Footer Buttons */}
+                            <div className="flex gap-3 pt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreateBotModal(false)}
+                                    className="flex-1 h-[46px] bg-[#1a1a1a] text-zinc-400 border border-zinc-800 rounded-xl font-semibold text-sm hover:bg-zinc-800 hover:text-white transition-all active:scale-[0.98]"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreateBot}
+                                    disabled={createBotMutation.isPending || !newBotName.trim()}
+                                    className="flex-1 h-[46px] bg-white text-black rounded-xl font-semibold text-sm hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {createBotMutation.isPending ? (
+                                        <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</>
+                                    ) : (
+                                        'Create Bot'
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            )}
+            </ModalPortal>
         </div>
         </AdminGuard>
     )
 }
 
-function KPICard({ title, value, icon }: { title: string, value: number, icon: React.ReactNode }) {
+function KPICard({ title, value }: { title: string, value: number }) {
     return (
         <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 hover:border-zinc-800 transition-colors">
-            <div className="flex items-center gap-2 text-zinc-500 text-xs font-medium uppercase tracking-wider mb-3">
-                <div className="p-1.5 rounded-lg bg-zinc-900 text-zinc-400">{icon}</div>
-                {title}
-            </div>
+            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider mb-3">{title}</p>
             <div className="text-3xl font-bold text-white tabular-nums tracking-tight">{(value || 0).toLocaleString()}</div>
         </div>
     )
@@ -416,7 +669,6 @@ function BotPermissionRow({ bot, permissions, onUpdate, onDelete, isUpdating, is
                                                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                                                 : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700'
                                             }`}
-                                        title={perm.description}
                                     >
                                         {perm.label}
                                     </button>

@@ -7,12 +7,14 @@ interface ScheduleDateTimePickerProps {
     value: string // ISO string or YYYY-MM-DDTHH:mm
     onChange: (value: string) => void
     minDate?: Date
+    compact?: boolean // Smaller size for embedded use
 }
 
 export default function ScheduleDateTimePicker({ 
     value, 
     onChange, 
-    minDate = new Date() 
+    minDate = new Date(),
+    compact = false
 }: ScheduleDateTimePickerProps) {
     const [showDatePicker, setShowDatePicker] = useState(false)
     const [showTimePicker, setShowTimePicker] = useState(false)
@@ -154,7 +156,7 @@ export default function ScheduleDateTimePicker({
     const minutes = Array.from({ length: 60 }, (_, i) => i)
 
     return (
-        <div className="flex gap-3">
+        <div className={compact ? "flex gap-2" : "flex gap-3"}>
             {/* Date Picker Field */}
             <div className="relative flex-1" ref={datePickerRef}>
                 <button
@@ -163,47 +165,47 @@ export default function ScheduleDateTimePicker({
                         setShowDatePicker(!showDatePicker)
                         setShowTimePicker(false)
                     }}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 bg-zinc-900 border rounded-lg text-left transition-all hover:border-zinc-600 ${
+                    className={`w-full flex items-center ${compact ? 'gap-2 px-3 py-2' : 'gap-3 px-4 py-2.5'} bg-zinc-900 border rounded-lg text-left transition-all hover:border-zinc-600 ${
                         showDatePicker ? 'border-blue-500 ring-1 ring-blue-500/20' : 'border-zinc-700'
                     }`}
                 >
-                    <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center">
-                        <Calendar size={16} className="text-zinc-400" />
+                    <div className={`${compact ? 'w-6 h-6 rounded-md' : 'w-8 h-8 rounded-lg'} bg-zinc-800 flex items-center justify-center`}>
+                        <Calendar size={compact ? 14 : 16} className="text-zinc-400" />
                     </div>
                     <div className="flex-1">
-                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Date</div>
-                        <div className="text-xs text-white font-semibold">{formatDisplayDate()}</div>
+                        <div className={`${compact ? 'text-[9px]' : 'text-[10px]'} uppercase tracking-wider text-zinc-500 font-medium`}>Date</div>
+                        <div className={`${compact ? 'text-[11px]' : 'text-xs'} text-white font-semibold`}>{formatDisplayDate()}</div>
                     </div>
                 </button>
 
                 {/* Date Picker Dropdown */}
                 {showDatePicker && (
-                    <div className="absolute top-full left-0 mt-2 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 p-4 w-[320px] animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className={`absolute top-full left-0 mt-2 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 ${compact ? 'p-3 w-[280px]' : 'p-4 w-[320px]'} animate-in fade-in slide-in-from-top-2 duration-200`}>
                         {/* Month Navigation */}
-                        <div className="flex items-center justify-between mb-4">
+                        <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
                             <button
                                 type="button"
                                 onClick={previousMonth}
-                                className="w-8 h-8 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white"
+                                className={`${compact ? 'w-7 h-7' : 'w-8 h-8'} rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white`}
                             >
-                                <ChevronLeft size={18} />
+                                <ChevronLeft size={compact ? 16 : 18} />
                             </button>
-                            <div className="text-white font-semibold text-sm">
+                            <div className={`text-white font-semibold ${compact ? 'text-xs' : 'text-sm'}`}>
                                 {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                             </div>
                             <button
                                 type="button"
                                 onClick={nextMonth}
-                                className="w-8 h-8 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white"
+                                className={`${compact ? 'w-7 h-7' : 'w-8 h-8'} rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white`}
                             >
-                                <ChevronRight size={18} />
+                                <ChevronRight size={compact ? 16 : 18} />
                             </button>
                         </div>
 
                         {/* Day Names */}
-                        <div className="grid grid-cols-7 gap-1 mb-2">
+                        <div className={`grid grid-cols-7 gap-1 ${compact ? 'mb-1' : 'mb-2'}`}>
                             {dayNames.map(day => (
-                                <div key={day} className="text-center text-xs font-medium text-zinc-500 py-1">
+                                <div key={day} className={`text-center ${compact ? 'text-[10px]' : 'text-xs'} font-medium text-zinc-500 py-1`}>
                                     {day}
                                 </div>
                             ))}
@@ -228,7 +230,7 @@ export default function ScheduleDateTimePicker({
                                         type="button"
                                         onClick={() => !disabled && handleDateClick(day)}
                                         disabled={disabled}
-                                        className={`aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-all ${
+                                        className={`aspect-square rounded-lg flex items-center justify-center ${compact ? 'text-xs' : 'text-sm'} font-medium transition-all ${
                                             disabled
                                                 ? 'text-zinc-700 cursor-not-allowed'
                                                 : selected
@@ -245,11 +247,11 @@ export default function ScheduleDateTimePicker({
                         </div>
 
                         {/* Clear Button */}
-                        <div className="flex justify-end mt-4 pt-3 border-t border-zinc-800">
+                        <div className={`flex justify-end ${compact ? 'mt-3 pt-2' : 'mt-4 pt-3'} border-t border-zinc-800`}>
                             <button
                                 type="button"
                                 onClick={handleClear}
-                                className="px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                                className={`${compact ? 'px-2 py-1 text-[10px]' : 'px-3 py-1.5 text-xs'} font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors`}
                             >
                                 Clear
                             </button>
@@ -266,31 +268,31 @@ export default function ScheduleDateTimePicker({
                         setShowTimePicker(!showTimePicker)
                         setShowDatePicker(false)
                     }}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 bg-zinc-900 border rounded-lg text-left transition-all hover:border-zinc-600 ${
+                    className={`w-full flex items-center ${compact ? 'gap-2 px-3 py-2' : 'gap-3 px-4 py-2.5'} bg-zinc-900 border rounded-lg text-left transition-all hover:border-zinc-600 ${
                         showTimePicker ? 'border-blue-500 ring-1 ring-blue-500/20' : 'border-zinc-700'
                     }`}
                 >
-                    <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center">
-                        <Clock size={16} className="text-zinc-400" />
+                    <div className={`${compact ? 'w-6 h-6 rounded-md' : 'w-8 h-8 rounded-lg'} bg-zinc-800 flex items-center justify-center`}>
+                        <Clock size={compact ? 14 : 16} className="text-zinc-400" />
                     </div>
                     <div className="flex-1">
-                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Time</div>
-                        <div className="text-xs text-white font-semibold">{formatDisplayTime()}</div>
+                        <div className={`${compact ? 'text-[9px]' : 'text-[10px]'} uppercase tracking-wider text-zinc-500 font-medium`}>Time</div>
+                        <div className={`${compact ? 'text-[11px]' : 'text-xs'} text-white font-semibold`}>{formatDisplayTime()}</div>
                     </div>
                 </button>
 
                 {/* Time Picker Dropdown */}
                 {showTimePicker && (
-                    <div className="absolute top-full right-0 mt-2 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 p-4 w-[320px] animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className={`absolute top-full right-0 mt-2 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 ${compact ? 'p-3 w-[260px]' : 'p-4 w-[320px]'} animate-in fade-in slide-in-from-top-2 duration-200`}>
                         {/* Current Time Display */}
-                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-zinc-800">
-                            <div className="text-lg font-bold text-white">{formatDisplayTime()}</div>
+                        <div className={`flex items-center justify-between ${compact ? 'mb-3 pb-2' : 'mb-4 pb-3'} border-b border-zinc-800`}>
+                            <div className={`${compact ? 'text-base' : 'text-lg'} font-bold text-white`}>{formatDisplayTime()}</div>
                             <button
                                 type="button"
                                 onClick={() => setShowTimePicker(false)}
-                                className="w-7 h-7 rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-500 hover:text-white"
+                                className={`${compact ? 'w-6 h-6' : 'w-7 h-7'} rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-500 hover:text-white`}
                             >
-                                <X size={16} />
+                                <X size={compact ? 14 : 16} />
                             </button>
                         </div>
 
@@ -299,7 +301,7 @@ export default function ScheduleDateTimePicker({
                             {/* Hours Column (1-12) */}
                             <div 
                                 ref={hourScrollRef}
-                                className="flex-1 max-h-[200px] overflow-y-auto rounded-lg bg-zinc-800/50 p-1"
+                                className={`flex-1 ${compact ? 'max-h-[160px]' : 'max-h-[200px]'} overflow-y-auto rounded-lg bg-zinc-800/50 p-1`}
                                 style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}
                             >
                                 {hours12.map(hour => (
@@ -308,7 +310,7 @@ export default function ScheduleDateTimePicker({
                                         type="button"
                                         data-hour={hour}
                                         onClick={() => handleTimeChange(hour, currentMinute, currentPeriod)}
-                                        className={`w-full py-2 px-3 text-sm font-medium rounded-lg transition-all mb-1 text-center ${
+                                        className={`w-full ${compact ? 'py-1.5 px-2 text-xs' : 'py-2 px-3 text-sm'} font-medium rounded-lg transition-all mb-1 text-center ${
                                             currentHour12 === hour
                                                 ? 'bg-blue-600 text-white'
                                                 : 'text-zinc-400 hover:bg-zinc-700 hover:text-white'
@@ -322,7 +324,7 @@ export default function ScheduleDateTimePicker({
                             {/* Minutes Column */}
                             <div 
                                 ref={minuteScrollRef}
-                                className="flex-1 max-h-[200px] overflow-y-auto rounded-lg bg-zinc-800/50 p-1"
+                                className={`flex-1 ${compact ? 'max-h-[160px]' : 'max-h-[200px]'} overflow-y-auto rounded-lg bg-zinc-800/50 p-1`}
                                 style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}
                             >
                                 {minutes.map(minute => (
@@ -331,7 +333,7 @@ export default function ScheduleDateTimePicker({
                                         type="button"
                                         data-minute={minute}
                                         onClick={() => handleTimeChange(currentHour12, minute, currentPeriod)}
-                                        className={`w-full py-2 px-3 text-sm font-medium rounded-lg transition-all mb-1 text-center ${
+                                        className={`w-full ${compact ? 'py-1.5 px-2 text-xs' : 'py-2 px-3 text-sm'} font-medium rounded-lg transition-all mb-1 text-center ${
                                             currentMinute === minute
                                                 ? 'bg-blue-600 text-white'
                                                 : 'text-zinc-400 hover:bg-zinc-700 hover:text-white'
@@ -343,11 +345,11 @@ export default function ScheduleDateTimePicker({
                             </div>
 
                             {/* AM/PM Column */}
-                            <div className="w-16 flex flex-col gap-1 p-1">
+                            <div className={`${compact ? 'w-12' : 'w-16'} flex flex-col gap-1 p-1`}>
                                 <button
                                     type="button"
                                     onClick={() => handleTimeChange(currentHour12, currentMinute, 'AM')}
-                                    className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
+                                    className={`flex-1 ${compact ? 'py-2 text-xs' : 'py-3 text-sm'} font-bold rounded-lg transition-all ${
                                         currentPeriod === 'AM'
                                             ? 'bg-blue-600 text-white'
                                             : 'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white'
@@ -358,7 +360,7 @@ export default function ScheduleDateTimePicker({
                                 <button
                                     type="button"
                                     onClick={() => handleTimeChange(currentHour12, currentMinute, 'PM')}
-                                    className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
+                                    className={`flex-1 ${compact ? 'py-2 text-xs' : 'py-3 text-sm'} font-bold rounded-lg transition-all ${
                                         currentPeriod === 'PM'
                                             ? 'bg-blue-600 text-white'
                                             : 'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white'

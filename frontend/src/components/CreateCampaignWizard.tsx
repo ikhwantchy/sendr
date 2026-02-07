@@ -800,6 +800,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                                         <ScheduleDateTimePicker
                                             value={formData.scheduledAt}
                                             onChange={(val) => setFormData({ ...formData, scheduledAt: val })}
+                                            compact={true}
                                         />
                                     </div>
                                 )}
