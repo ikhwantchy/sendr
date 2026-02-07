@@ -356,19 +356,154 @@ export default function CampaignsPage() {
                     </button>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-                    {campaigns.map((campaign) => {
-                        const statusConfig = getStatusConfig(campaign.status)
-                        const delayInfo = getDelayPresetInfo(campaign.delay_preset)
-                        const progress = getProgress(campaign)
-                        const StatusIcon = statusConfig.icon
-                        const isLoading = actionLoading === campaign.id
+                <>
+                    {/* Mobile List View */}
+                    <div className="lg:hidden space-y-2">
+                        {campaigns.map((campaign) => {
+                            const statusConfig = getStatusConfig(campaign.status)
+                            const progress = getProgress(campaign)
+                            const StatusIcon = statusConfig.icon
+                            const isLoading = actionLoading === campaign.id
 
-                        return (
-                            <div
-                                key={campaign.id}
-                                className="bg-white dark:bg-[#18181b] border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors shadow-sm dark:shadow-none"
-                            >
+                            return (
+                                <div
+                                    key={campaign.id}
+                                    className="bg-white dark:bg-[#18181b] border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+                                >
+                                    {/* Top row: Name + Status */}
+                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white truncate flex-1">
+                                            {campaign.name}
+                                        </h3>
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium flex items-center gap-1 flex-shrink-0 ${statusConfig.color}`}>
+                                            <StatusIcon className="w-2.5 h-2.5" />
+                                            {statusConfig.label}
+                                        </span>
+                                    </div>
+
+                                    {/* Progress bar for running/paused/completed */}
+                                    {(campaign.status === 'running' || campaign.status === 'paused' || campaign.status === 'completed') && (
+                                        <div className="mb-2">
+                                            <div className="h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full transition-all ${campaign.status === 'completed' ? 'bg-green-500' :
+                                                        campaign.status === 'paused' ? 'bg-yellow-500' : 'bg-blue-500'
+                                                        }`}
+                                                    style={{ width: `${progress}%` }}
+                                                />
+                                            </div>
+                                            <div className="flex justify-between text-[10px] text-zinc-500 mt-0.5">
+                                                <span>{campaign.sent_count}/{campaign.total_contacts}</span>
+                                                <span>{progress}%</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Stats row */}
+                                    <div className="flex items-center gap-3 text-[10px] text-zinc-500 mb-2">
+                                        <span className="flex items-center gap-1">
+                                            <Users className="w-3 h-3" />
+                                            {campaign.total_contacts}
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3 text-green-500" />
+                                            {campaign.sent_count}
+                                        </span>
+                                        {campaign.failed_count > 0 && (
+                                            <span className="flex items-center gap-1 text-red-400">
+                                                <XCircle className="w-3 h-3" />
+                                                {campaign.failed_count}
+                                            </span>
+                                        )}
+                                        {campaign.bot_name && (
+                                            <span className="ml-auto truncate">{campaign.bot_name}</span>
+                                        )}
+                                    </div>
+
+                                    {/* Actions row */}
+                                    <div className="flex items-center gap-1.5">
+                                        {campaign.status === 'draft' && (
+                                            <button
+                                                onClick={() => startCampaign(campaign.id)}
+                                                disabled={isLoading}
+                                                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-green-500/10 text-green-600 dark:text-green-500 rounded-lg text-[11px] font-medium disabled:opacity-50"
+                                            >
+                                                {isLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                                                Start
+                                            </button>
+                                        )}
+                                        {campaign.status === 'scheduled' && (
+                                            <button
+                                                onClick={() => startCampaign(campaign.id)}
+                                                disabled={isLoading}
+                                                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-blue-500/10 text-blue-500 rounded-lg text-[11px] font-medium disabled:opacity-50"
+                                            >
+                                                {isLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                                                Start
+                                            </button>
+                                        )}
+                                        {campaign.status === 'running' && (
+                                            <button
+                                                onClick={() => pauseCampaign(campaign.id)}
+                                                disabled={isLoading}
+                                                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-yellow-500/10 text-yellow-500 rounded-lg text-[11px] font-medium disabled:opacity-50"
+                                            >
+                                                {isLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Pause className="w-3 h-3" />}
+                                                Pause
+                                            </button>
+                                        )}
+                                        {campaign.status === 'paused' && (
+                                            <button
+                                                onClick={() => resumeCampaign(campaign.id)}
+                                                disabled={isLoading}
+                                                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-green-500/10 text-green-500 rounded-lg text-[11px] font-medium disabled:opacity-50"
+                                            >
+                                                {isLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                                                Resume
+                                            </button>
+                                        )}
+                                        {(campaign.status === 'completed' || campaign.status === 'failed') && campaign.failed_count > 0 && (
+                                            <button
+                                                onClick={() => retryFailed(campaign.id)}
+                                                disabled={isLoading}
+                                                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-orange-500/10 text-orange-500 rounded-lg text-[11px] font-medium disabled:opacity-50"
+                                            >
+                                                {isLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                                Retry
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setDetailModal({ isOpen: true, campaign })}
+                                            className="p-1.5 bg-blue-500/10 text-blue-500 rounded-lg"
+                                        >
+                                            <Eye className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                            onClick={() => deleteCampaign(campaign.id, campaign.name)}
+                                            className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+
+                    {/* Desktop Card Grid */}
+                    <div className="hidden lg:grid lg:grid-cols-2 gap-4">
+                        {campaigns.map((campaign) => {
+                            const statusConfig = getStatusConfig(campaign.status)
+                            const delayInfo = getDelayPresetInfo(campaign.delay_preset)
+                            const progress = getProgress(campaign)
+                            const StatusIcon = statusConfig.icon
+                            const isLoading = actionLoading === campaign.id
+
+                            return (
+                                <div
+                                    key={campaign.id}
+                                    className="bg-white dark:bg-[#18181b] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors shadow-sm dark:shadow-none"
+                                >
                                 {/* Header - Same as Reminder */}
                                 <div className="flex items-start justify-between mb-3 sm:mb-4">
                                     <div className="flex-1 min-w-0">
@@ -572,7 +707,8 @@ export default function CampaignsPage() {
                             </div>
                         )
                     })}
-                </div>
+                    </div>
+                </>
             )}
             {/* Campaign Detail Modal */}
             <CampaignDetailModal

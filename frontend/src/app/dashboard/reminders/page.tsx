@@ -204,12 +204,92 @@ export default function RemindersPage() {
                     </button>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-                    {reminders.map((reminder) => (
-                        <div
-                            key={reminder.id}
-                            className="bg-[#18181b] border border-zinc-800 rounded-xl p-4 sm:p-6 hover:border-zinc-700 transition-colors"
-                        >
+                <>
+                    {/* Mobile List View */}
+                    <div className="lg:hidden space-y-2">
+                        {reminders.map((reminder) => (
+                            <div
+                                key={reminder.id}
+                                className="bg-[#18181b] border border-zinc-800 rounded-xl p-3 hover:border-zinc-700 transition-colors"
+                            >
+                                {/* Top row: Name + Status */}
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                    <h3 className="text-sm font-semibold text-white truncate flex-1">
+                                        {reminder.name}
+                                    </h3>
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium flex-shrink-0 ${reminder.isActive
+                                        ? 'bg-green-500/10 text-green-500'
+                                        : 'bg-zinc-700 text-zinc-400'
+                                        }`}>
+                                        {reminder.isActive ? 'Active' : 'Paused'}
+                                    </span>
+                                </div>
+
+                                {/* Info row */}
+                                <div className="flex items-center gap-3 text-[10px] text-zinc-500 mb-2">
+                                    <span className="flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        {reminder.scheduleText}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <Users className="w-3 h-3" />
+                                        {reminder.targetName}
+                                    </span>
+                                </div>
+
+                                {/* Last/Next run */}
+                                <div className="flex items-center gap-4 text-[10px] text-zinc-500 mb-2">
+                                    <span>
+                                        Last: {reminder.lastRun ? new Date(reminder.lastRun).toLocaleDateString('id-ID') : 'Never'}
+                                        {reminder.lastStatus === 'success' && <span className="text-green-500 ml-1">✓</span>}
+                                        {reminder.lastStatus === 'failed' && <span className="text-red-500 ml-1">✗</span>}
+                                    </span>
+                                    <span>
+                                        Next: {reminder.nextRun && !isNaN(Date.parse(reminder.nextRun)) 
+                                            ? new Date(reminder.nextRun).toLocaleDateString('id-ID') 
+                                            : '-'}
+                                    </span>
+                                </div>
+
+                                {/* Actions row */}
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        onClick={() => toggleActive(reminder.id)}
+                                        className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${reminder.isActive
+                                            ? 'bg-zinc-800 text-zinc-300'
+                                            : 'bg-green-500/10 text-green-500'
+                                            }`}
+                                    >
+                                        {reminder.isActive ? (
+                                            <><Pause className="w-3 h-3" /> Pause</>
+                                        ) : (
+                                            <><Play className="w-3 h-3" /> Start</>
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={() => router.push(`/dashboard/reminders/${reminder.id}/edit`)}
+                                        className="p-1.5 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 rounded-lg"
+                                    >
+                                        <Edit className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        onClick={() => deleteReminder(reminder.id, reminder.name)}
+                                        className="p-1.5 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Desktop Card Grid */}
+                    <div className="hidden lg:grid lg:grid-cols-2 gap-4">
+                        {reminders.map((reminder) => (
+                            <div
+                                key={reminder.id}
+                                className="bg-[#18181b] border border-zinc-800 rounded-xl p-6 hover:border-zinc-700 transition-colors"
+                            >
                             {/* Header */}
                             <div className="flex items-start justify-between mb-3 sm:mb-4">
                                 <div className="flex-1 min-w-0">
@@ -323,7 +403,8 @@ export default function RemindersPage() {
                             </div>
                         </div>
                     ))}
-                </div>
+                    </div>
+                </>
             )}
         </div>
     )

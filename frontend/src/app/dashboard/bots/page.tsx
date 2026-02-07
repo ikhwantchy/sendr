@@ -275,30 +275,62 @@ export default function BotsPage() {
             {/* List/Grid */}
             {
                 isLoading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="space-y-3 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-6 md:space-y-0">
                         {[1, 2, 3].map(i => (
-                            <div key={i} className="h-48 rounded-xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/50 animate-pulse" />
+                            <div key={i} className="h-20 md:h-48 rounded-xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/50 animate-pulse" />
                         ))}
                     </div>
                 ) : bots.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6">
-                        {bots.map((bot: any) => (
-                            <div
-                                key={bot.id}
-                                className="group relative flex flex-col p-4 sm:p-6 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-sm dark:shadow-none"
-                            >
-                                <div className="flex items-start justify-between mb-3 sm:mb-4">
-                                    <Link
-                                        href={`/dashboard/bots/${bot.id}`}
-                                        className="p-2 sm:p-3 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors"
-                                    >
-                                        <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
-                                    </Link>
-                                    <div className="flex items-center gap-2">
-                                        <StatusBadge status={bot.status} />
+                    <>
+                        {/* Mobile List View - Compact rows */}
+                        <div className="md:hidden space-y-2">
+                            {bots.map((bot: any) => (
+                                <Link
+                                    key={bot.id}
+                                    href={`/dashboard/bots/${bot.id}`}
+                                    className="flex items-center gap-3 p-3 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl hover:border-zinc-300 dark:hover:border-zinc-800 transition-all group"
+                                >
+                                    {/* Status indicator */}
+                                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                        bot.status === 'connected' ? 'bg-emerald-500' :
+                                        bot.status === 'connecting' ? 'bg-amber-500 animate-pulse' :
+                                        'bg-zinc-400'
+                                    }`} />
+                                    
+                                    {/* Bot info */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                                {bot.name}
+                                            </h3>
+                                            {bot.expires_at && (() => {
+                                                const daysRemaining = Math.ceil((new Date(bot.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                                                if (daysRemaining <= 0) {
+                                                    return <span className="px-1.5 py-0.5 bg-red-500/10 text-red-500 text-[9px] font-medium rounded">Expired</span>
+                                                } else if (daysRemaining <= 7) {
+                                                    return <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-500 text-[9px] font-medium rounded">{daysRemaining}d</span>
+                                                }
+                                                return null
+                                            })()}
+                                        </div>
+                                        <p className="text-[11px] text-zinc-500 truncate">
+                                            {bot.phone_number ? `+${bot.phone_number}` : 'No number'}
+                                            {isAdmin && bot.owner_name && ` • ${bot.owner_name}`}
+                                        </p>
+                                    </div>
+
+                                    {/* Right side: Status badge + delete */}
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <span className={`text-[10px] font-medium uppercase ${
+                                            bot.status === 'connected' ? 'text-emerald-500' :
+                                            bot.status === 'connecting' ? 'text-amber-500' :
+                                            'text-zinc-400'
+                                        }`}>
+                                            {bot.status === 'connected' ? 'ON' : bot.status === 'connecting' ? '...' : 'OFF'}
+                                        </span>
                                         {mounted && isAdmin && (
                                             botToDelete === bot.id ? (
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
                                                     <button
                                                         onClick={(e) => {
                                                             e.preventDefault()
@@ -306,9 +338,9 @@ export default function BotsPage() {
                                                             handleConfirmDelete()
                                                         }}
                                                         disabled={deleteMutation.isPending}
-                                                        className="px-3 py-1.5 text-xs font-medium bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors disabled:opacity-50"
+                                                        className="px-2 py-1 text-[10px] font-medium bg-red-500 text-white rounded transition-colors"
                                                     >
-                                                        {deleteMutation.isPending ? 'Deleting...' : 'Confirm'}
+                                                        {deleteMutation.isPending ? '...' : 'Yes'}
                                                     </button>
                                                     <button
                                                         onClick={(e) => {
@@ -316,62 +348,119 @@ export default function BotsPage() {
                                                             e.stopPropagation()
                                                             setBotToDelete(null)
                                                         }}
-                                                        disabled={deleteMutation.isPending}
-                                                        className="px-3 py-1.5 text-xs font-medium bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors disabled:opacity-50"
+                                                        className="px-2 py-1 text-[10px] font-medium bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded"
                                                     >
-                                                        Cancel
+                                                        No
                                                     </button>
                                                 </div>
                                             ) : (
                                                 <button
                                                     onClick={(e) => handleDeleteClick(e, bot.id)}
-                                                    className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                                                    title="Delete bot"
+                                                    className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                                                 >
-                                                    <Trash2 className="w-4 h-4" />
+                                                    <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
                                             )
                                         )}
-                                    </div>
-                                </div>
-
-                                <Link href={`/dashboard/bots/${bot.id}`} className="flex-1">
-                                    <div className="mb-3 sm:mb-4">
-                                        <h3 className="text-base sm:text-lg font-semibold text-zinc-900 dark:text-white tracking-tight mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
-                                            {bot.name}
-                                        </h3>
-                                        <p className="text-zinc-500 text-xs sm:text-sm font-mono truncate">
-                                            {bot.phone_number ? `+${bot.phone_number}` : 'No number connected'}
-                                        </p>
-                                        {/* Show owner for admin */}
-                                        {isAdmin && bot.owner_name && (
-                                            <p className="text-zinc-400 dark:text-zinc-600 text-xs mt-1 flex items-center gap-1">
-                                                <Users className="w-3 h-3" />
-                                                {bot.owner_name}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="mt-auto pt-4 border-t border-zinc-100 dark:border-zinc-800/50 flex items-center justify-between text-xs text-zinc-500">
-                                        <div className="flex flex-col gap-1">
-                                            <span className="flex items-center gap-1.5">
-                                                <Calendar className="w-3.5 h-3.5" />
-                                                {new Date(bot.created_at).toLocaleDateString()}
-                                            </span>
-                                            {/* Expiration status */}
-                                            {bot.expires_at && (
-                                                <ExpirationBadge expiresAt={bot.expires_at} />
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2 transition-colors">
-                                            <span className="text-zinc-500 dark:text-zinc-400 font-medium group-hover:text-blue-600 dark:group-hover:text-blue-400">Configure</span>
-                                            <ArrowRight className="w-3.5 h-3.5 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
-                                        </div>
+                                        <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
                                     </div>
                                 </Link>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+
+                        {/* Desktop Card Grid */}
+                        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+                            {bots.map((bot: any) => (
+                                <div
+                                    key={bot.id}
+                                    className="group relative flex flex-col p-6 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-sm dark:shadow-none"
+                                >
+                                    <div className="flex items-start justify-between mb-4">
+                                        <Link
+                                            href={`/dashboard/bots/${bot.id}`}
+                                            className="p-3 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors"
+                                        >
+                                            <Bot className="w-6 h-6" />
+                                        </Link>
+                                        <div className="flex items-center gap-2">
+                                            <StatusBadge status={bot.status} />
+                                            {mounted && isAdmin && (
+                                                botToDelete === bot.id ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.preventDefault()
+                                                                e.stopPropagation()
+                                                                handleConfirmDelete()
+                                                            }}
+                                                            disabled={deleteMutation.isPending}
+                                                            className="px-3 py-1.5 text-xs font-medium bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors disabled:opacity-50"
+                                                        >
+                                                            {deleteMutation.isPending ? 'Deleting...' : 'Confirm'}
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.preventDefault()
+                                                                e.stopPropagation()
+                                                                setBotToDelete(null)
+                                                            }}
+                                                            disabled={deleteMutation.isPending}
+                                                            className="px-3 py-1.5 text-xs font-medium bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors disabled:opacity-50"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={(e) => handleDeleteClick(e, bot.id)}
+                                                        className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                                        title="Delete bot"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <Link href={`/dashboard/bots/${bot.id}`} className="flex-1">
+                                        <div className="mb-4">
+                                            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white tracking-tight mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
+                                                {bot.name}
+                                            </h3>
+                                            <p className="text-zinc-500 text-sm font-mono truncate">
+                                                {bot.phone_number ? `+${bot.phone_number}` : 'No number connected'}
+                                            </p>
+                                            {/* Show owner for admin */}
+                                            {isAdmin && bot.owner_name && (
+                                                <p className="text-zinc-400 dark:text-zinc-600 text-xs mt-1 flex items-center gap-1">
+                                                    <Users className="w-3 h-3" />
+                                                    {bot.owner_name}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="mt-auto pt-4 border-t border-zinc-100 dark:border-zinc-800/50 flex items-center justify-between text-xs text-zinc-500">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="flex items-center gap-1.5">
+                                                    <Calendar className="w-3.5 h-3.5" />
+                                                    {new Date(bot.created_at).toLocaleDateString()}
+                                                </span>
+                                                {/* Expiration status */}
+                                                {bot.expires_at && (
+                                                    <ExpirationBadge expiresAt={bot.expires_at} />
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2 transition-colors">
+                                                <span className="text-zinc-500 dark:text-zinc-400 font-medium group-hover:text-blue-600 dark:group-hover:text-blue-400">Configure</span>
+                                                <ArrowRight className="w-3.5 h-3.5 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
+                                            </div>
+                                        </div>
+                                    </Link>
+                                </div>
+                            ))}
+                        </div>
+                    </>
                 ) : (
                     <div className="flex flex-col items-center justify-center py-24 text-center border border-dashed border-zinc-300 dark:border-zinc-800 rounded-2xl bg-zinc-100/50 dark:bg-zinc-900/20">
                         <div className="p-4 rounded-full bg-zinc-200 dark:bg-zinc-900/50 mb-4">

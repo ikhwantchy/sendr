@@ -430,6 +430,210 @@ export default function Sidebar() {
         </>
     )
 
+    // Mobile sidebar content - always shows labels
+    const MobileSidebarContent = ({ onClose }: { onClose: () => void }) => (
+        <>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 h-[60px]">
+                <div className="flex items-center">
+                    <img
+                        src="/sendr-logo.png"
+                        alt="Sendr"
+                        className="w-[100px] h-auto object-contain dark:invert-0 invert"
+                    />
+                </div>
+                <button
+                    onClick={onClose}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                >
+                    <X size={18} weight="bold" />
+                </button>
+            </div>
+
+            <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+                {navigation.map((item) => {
+                    const isActive = pathname ? (item.href === '/dashboard'
+                        ? pathname === '/dashboard'
+                        : pathname === item.href || pathname.startsWith(item.href + '/')) : false
+
+                    return (
+                        <Link
+                            key={item.name}
+                            href={item.href}
+                            onClick={onClose}
+                            className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${isActive
+                                ? 'bg-blue-500/10 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
+                                }`}
+                        >
+                            <item.icon
+                                size={20}
+                                weight={isActive ? "fill" : "regular"}
+                                className={isActive ? 'text-blue-500' : 'text-zinc-500 dark:text-zinc-400'}
+                            />
+                            <span className={`text-sm font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`}>
+                                {item.name}
+                            </span>
+                        </Link>
+                    )
+                })}
+
+                {isAdmin && (
+                    <>
+                        <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-2" />
+                        {adminTopNavigation.map((item) => {
+                            const isSecurityActive = item.submenuType === 'security' && pathname?.startsWith('/dashboard/security')
+                            const isSystemActive = item.submenuType === 'system' && pathname?.startsWith('/dashboard/system')
+                            const isActive = pathname === item.href || isSecurityActive || isSystemActive
+
+                            if (item.hasSubmenu) {
+                                const isSecurityMenu = item.submenuType === 'security'
+                                const isThisExpanded = isSecurityMenu ? isSecurityExpanded : isSystemExpanded
+                                const setThisExpanded = isSecurityMenu ? setIsSecurityExpanded : setIsSystemExpanded
+                                const subNavItems = isSecurityMenu ? securitySubNavigation : systemSubNavigation
+                                const basePath = isSecurityMenu ? '/dashboard/security' : '/dashboard/system'
+
+                                return (
+                                    <div key={item.name}>
+                                        <button
+                                            onClick={() => setThisExpanded(!isThisExpanded)}
+                                            className={`group w-full relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${isActive
+                                                ? 'bg-blue-500/10 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
+                                                }`}
+                                        >
+                                            <item.icon
+                                                size={20}
+                                                weight={isActive ? "fill" : "regular"}
+                                                className={isActive ? 'text-blue-500' : 'text-zinc-500 dark:text-zinc-400'}
+                                            />
+                                            <span className={`text-sm font-medium flex-1 text-left ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`}>
+                                                {item.name}
+                                            </span>
+                                            <CaretDown
+                                                size={14}
+                                                weight="bold"
+                                                className={`text-zinc-400 transition-transform duration-200 ${isThisExpanded ? 'rotate-180' : ''}`}
+                                            />
+                                        </button>
+                                        {isThisExpanded && (
+                                            <div className="ml-8 mt-1 space-y-0.5 border-l-2 border-zinc-200 dark:border-zinc-700/50 pl-3">
+                                                {subNavItems.map((subItem) => {
+                                                    const tabValue = subItem.href.split('tab=')[1]
+                                                    const currentTab = searchParams?.get('tab')
+                                                    const isSubActive = pathname === basePath && currentTab === tabValue
+                                                    return (
+                                                        <Link
+                                                            key={subItem.name}
+                                                            href={subItem.href}
+                                                            onClick={onClose}
+                                                            className={`block px-3 py-2 rounded-md text-sm transition-colors ${isSubActive
+                                                                ? 'text-blue-500 font-medium'
+                                                                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'
+                                                                }`}
+                                                        >
+                                                            {subItem.name}
+                                                        </Link>
+                                                    )
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            }
+
+                            return (
+                                <Link
+                                    key={item.name}
+                                    href={item.href}
+                                    onClick={onClose}
+                                    className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${isActive
+                                        ? 'bg-blue-500/10 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
+                                        }`}
+                                >
+                                    <item.icon
+                                        size={20}
+                                        weight={isActive ? "fill" : "regular"}
+                                        className={isActive ? 'text-blue-500' : 'text-zinc-500 dark:text-zinc-400'}
+                                    />
+                                    <span className={`text-sm font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`}>
+                                        {item.name}
+                                    </span>
+                                </Link>
+                            )
+                        })}
+                    </>
+                )}
+            </nav>
+
+            {/* Bottom section */}
+            <div className="px-3 py-3 space-y-0.5 border-t border-zinc-200 dark:border-zinc-800">
+                {bottomNavigation.map((item) => {
+                    const isActive = pathname === item.href
+                    return (
+                        <Link
+                            key={item.name}
+                            href={item.href}
+                            onClick={onClose}
+                            className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${isActive
+                                ? 'bg-blue-500/10 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
+                                }`}
+                        >
+                            <item.icon
+                                size={20}
+                                weight={isActive ? "fill" : "regular"}
+                                className={isActive ? 'text-blue-500' : 'text-zinc-500 dark:text-zinc-400'}
+                            />
+                            <span className={`text-sm font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}`}>
+                                {item.name}
+                            </span>
+                        </Link>
+                    )
+                })}
+
+                {/* Theme toggle */}
+                <button
+                    onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/40 transition-colors"
+                >
+                    {resolvedTheme === 'dark' ? (
+                        <Sun size={20} weight="regular" className="text-amber-500" />
+                    ) : (
+                        <Moon size={20} weight="regular" className="text-blue-500" />
+                    )}
+                    <span className="text-sm font-medium">
+                        {resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                    </span>
+                </button>
+
+                {/* Sign out */}
+                <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                >
+                    <SignOut size={20} weight="regular" className="text-zinc-500 dark:text-zinc-400" />
+                    <span className="text-sm font-medium">Sign Out</span>
+                </button>
+            </div>
+
+            {/* User info */}
+            {user && (
+                <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+                    <div className="flex items-center gap-3 px-2">
+                        <div className="w-9 h-9 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-400 font-bold text-sm uppercase">
+                            {user.name[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{user.name}</p>
+                            <p className="text-xs text-zinc-500 truncate">{user.email}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    )
+
     if (!mounted) return null
 
     return (
@@ -456,11 +660,12 @@ export default function Sidebar() {
                 <SidebarContent />
             </aside>
 
+            {/* Mobile sidebar - always expanded with labels */}
             <aside
-                className={`fixed left-0 top-0 h-full bg-white dark:bg-black z-[60] transition-transform duration-300 ease-in-out flex flex-col w-64 md:hidden ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+                className={`fixed left-0 top-0 h-full bg-white dark:bg-black z-[60] transition-transform duration-300 ease-in-out flex flex-col w-72 md:hidden ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'
                     }`}
             >
-                <SidebarContent />
+                <MobileSidebarContent onClose={() => setIsMobileOpen(false)} />
             </aside>
         </>
     )
