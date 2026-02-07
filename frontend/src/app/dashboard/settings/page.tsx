@@ -379,11 +379,11 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="p-6 max-w-5xl mx-auto min-h-screen bg-zinc-50 dark:bg-black">
+        <div className="p-4 sm:p-6 max-w-5xl mx-auto min-h-screen bg-zinc-50 dark:bg-black">
             {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Settings</h1>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Manage your account settings and preferences</p>
+            <div className="mb-4 sm:mb-6">
+                <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100">Settings</h1>
+                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">Manage your account settings and preferences</p>
             </div>
 
             {/* Alert Message */}
@@ -404,7 +404,7 @@ export default function SettingsPage() {
             )}
 
             {/* Main Tabs */}
-            <div className="flex gap-2 mb-6 border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex gap-1 sm:gap-2 mb-4 sm:mb-6 border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto">
                 {tabs.map((tab) => {
                     const Icon = tab.icon;
                     return (
@@ -414,13 +414,13 @@ export default function SettingsPage() {
                                 setActiveTab(tab.id);
                                 setMessage(null);
                             }}
-                            className={`flex items-center gap-2 px-4 py-2 font-medium transition-colors ${activeTab === tab.id
+                            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 font-medium transition-colors whitespace-nowrap text-sm ${activeTab === tab.id
                                 ? 'text-blue-500 dark:text-blue-400 border-b-2 border-blue-500 dark:border-blue-400'
                                 : 'text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'
                                 }`}
                         >
-                            <Icon size={18} />
-                            {tab.label}
+                            <Icon size={16} className="sm:w-[18px] sm:h-[18px]" />
+                            <span className="hidden sm:inline">{tab.label}</span>
                         </button>
                     );
                 })}
@@ -430,12 +430,12 @@ export default function SettingsPage() {
             {activeTab === 'profile' && (
                 <div className="space-y-6">
                     {/* Profile Card */}
-                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8">
+                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 sm:gap-8">
                             {/* Left Side - Profile Photo */}
-                            <div>
-                                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Profile photo</h3>
-                                <div className="w-20 h-20 rounded-full bg-zinc-100 dark:bg-zinc-800 border-2 border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-600 dark:text-zinc-300 text-2xl font-semibold overflow-hidden mb-3 mx-auto">
+                            <div className="flex flex-col items-center md:items-start">
+                                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white mb-3 sm:mb-4">Profile photo</h3>
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-zinc-100 dark:bg-zinc-800 border-2 border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-600 dark:text-zinc-300 text-xl sm:text-2xl font-semibold overflow-hidden mb-3 mx-auto md:mx-0">
                                     {profile?.name ? (
                                         <span>{profile.name.charAt(0).toUpperCase()}</span>
                                     ) : (
@@ -489,7 +489,7 @@ export default function SettingsPage() {
                                 </div>
 
                                 {/* Name Fields */}
-                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                     <div>
                                         <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-2">First name</label>
                                         <input
@@ -767,10 +767,10 @@ export default function SettingsPage() {
             {activeTab === 'system' && isAdmin && (
                 <div className="space-y-6">
                     {/* System Settings Header */}
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-0">
                         <div>
-                            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">System Settings</h2>
-                            <p className="text-sm text-zinc-500">Configure system-wide settings (Admin only)</p>
+                            <h2 className="text-base sm:text-lg font-semibold text-zinc-900 dark:text-zinc-100">System Settings</h2>
+                            <p className="text-xs sm:text-sm text-zinc-500">Configure system-wide settings (Admin only)</p>
                         </div>
                         <button
                             onClick={handleSaveSystemSettings}
@@ -783,19 +783,19 @@ export default function SettingsPage() {
                     </div>
 
                     {/* System Sub-Tabs */}
-                    <div className="flex gap-2 border-b border-zinc-200 dark:border-zinc-800">
+                    <div className="flex gap-1 sm:gap-2 border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto">
                         {systemTabs.map((tab) => {
                             const Icon = tab.icon;
                             return (
                                 <button
                                     key={tab.id}
                                     onClick={() => setSystemActiveTab(tab.id)}
-                                    className={`flex items-center gap-2 px-4 py-2 font-medium transition-colors text-sm ${systemActiveTab === tab.id
+                                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 font-medium transition-colors text-xs sm:text-sm whitespace-nowrap ${systemActiveTab === tab.id
                                         ? 'text-blue-500 dark:text-blue-400 border-b-2 border-blue-500 dark:border-blue-400'
                                         : 'text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'
                                         }`}
                                 >
-                                    <Icon size={16} />
+                                    <Icon size={14} className="sm:w-4 sm:h-4" />
                                     {tab.label}
                                 </button>
                             );

@@ -718,18 +718,18 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
             <div className="flex-1 flex flex-col h-full border-r border-zinc-800 relative bg-black overflow-hidden">
                 {/* Header */}
                 <div className="shrink-0 bg-black/95 backdrop-blur-sm z-20 border-b border-zinc-800">
-                    <div className="max-w-6xl mx-auto px-6 py-4">
+                    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors group">
-                                    <ChevronLeft size={20} className="transition-transform duration-300 group-hover:-translate-x-1" />
+                            <div className="flex items-center gap-2 sm:gap-4">
+                                <button onClick={onClose} className="p-1.5 sm:p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors group">
+                                    <ChevronLeft size={18} className="sm:w-5 sm:h-5 transition-transform duration-300 group-hover:-translate-x-1" />
                                 </button>
                                 <div>
-                                    <h1 className="text-xl font-semibold text-white">{reminderId ? 'Edit Reminder' : 'Create Reminder'}</h1>
-                                    <p className="text-sm text-zinc-500">Set up automated messages for your contacts</p>
+                                    <h1 className="text-base sm:text-xl font-semibold text-white">{reminderId ? 'Edit Reminder' : 'Create Reminder'}</h1>
+                                    <p className="text-xs sm:text-sm text-zinc-500 hidden sm:block">Set up automated messages for your contacts</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3">
                                 <button
                                     onClick={() => setIsPreviewOpen(!isPreviewOpen)}
                                     className={`hidden lg:flex items-center gap-2 px-4 py-2 text-sm border rounded-lg font-medium transition-all group ${isPreviewOpen
@@ -743,9 +743,9 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                 <button
                                     onClick={() => createMutation.mutate()}
                                     disabled={createMutation.isPending || !formData.name}
-                                    className="flex items-center gap-2 px-5 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg disabled:opacity-50 transition-all group"
+                                    className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 text-xs sm:text-sm bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg disabled:opacity-50 transition-all group"
                                 >
-                                    <Save size={16} className="transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+                                    <Save size={14} className="sm:w-4 sm:h-4 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
                                     {createMutation.isPending ? 'Saving...' : (reminderId ? 'Update' : 'Save')}
                                 </button>
                             </div>
@@ -754,11 +754,11 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                 </div>
 
                 {/* Scrollable Content */}
-                <div className="flex-1 overflow-y-auto px-6 lg:px-12 py-8 pb-24 lg:pb-8">
-                    <div className="max-w-3xl mx-auto space-y-8">
+                <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-12 py-6 sm:py-8 pb-24 lg:pb-8">
+                    <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
 
                         {/* 1. Basic Details */}
-                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 sm:p-6">
                             <SectionHeader step={1} title="Basic Details" desc="Name your reminder to easily identify it later." />
                             <div className="mt-5">
                                 <label className="block text-xs font-medium text-zinc-400 mb-1">Reminder Name <span className="text-red-400">*</span></label>
@@ -774,7 +774,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         </section>
 
                         {/* 2. Target Audience */}
-                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                        <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 sm:p-6">
                             <SectionHeader step={2} title="Target Audience" desc="Who should receive this reminder?" />
 
                             <div className="mt-5 flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 w-fit">

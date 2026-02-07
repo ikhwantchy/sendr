@@ -164,12 +164,12 @@ export default function AnalyticsDashboard() {
     }
 
     return (
-        <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-1">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-1">
                             Analytics Overview
                         </h1>
                         {isRefreshing && (
@@ -308,7 +308,7 @@ export default function AnalyticsDashboard() {
             </div>
 
             {/* KPI Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <KPICard
                     title="Total Messages"
                     value={summary.totalMessages}
@@ -337,12 +337,12 @@ export default function AnalyticsDashboard() {
             </div >
 
             {/* Charts Section */}
-            < div className="grid grid-cols-1 lg:grid-cols-3 gap-6" >
+            < div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6" >
                 {/* Primary Chart: Traffic Volume */}
-                < div className="lg:col-span-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-6" >
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200">Traffic Volume</h3>
-                        <div className="flex flex-wrap items-center gap-4 text-xs">
+                < div className="lg:col-span-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 sm:p-6" >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+                        <h3 className="text-base sm:text-lg font-medium text-zinc-800 dark:text-zinc-200">Traffic Volume</h3>
+                        <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs">
                             <LegendItem
                                 color="bg-blue-500"
                                 label="Auto-Replies"
@@ -370,7 +370,7 @@ export default function AnalyticsDashboard() {
                         </div>
                     </div>
 
-                    <div className="h-[300px] w-full">
+                    <div className="h-[250px] sm:h-[300px] w-full">
                         {loading && !data ? (
                             <div className="h-full w-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-900/30 rounded-lg">
                                 <span className="text-zinc-600 text-sm animate-pulse">Loading data...</span>
@@ -470,8 +470,8 @@ export default function AnalyticsDashboard() {
                 </div >
 
                 {/* Secondary Chart: Distribution */}
-                < div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-6 flex flex-col" >
-                    <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200 mb-6">Message Type</h3>
+                < div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 sm:p-6 flex flex-col" >
+                    <h3 className="text-base sm:text-lg font-medium text-zinc-800 dark:text-zinc-200 mb-4 sm:mb-6">Message Type</h3>
 
                     <div className="flex-1 min-h-[200px]">
                         {loading && !data ? (
@@ -510,12 +510,13 @@ export default function AnalyticsDashboard() {
 
             {/* Leaderboard Table */}
             < div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl overflow-hidden" >
-                <div className="px-6 py-4 border-b border-zinc-800/50 flex justify-between items-center">
-                    <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200">Top Performing Bots</h3>
+                <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-zinc-800/50 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-medium text-zinc-800 dark:text-zinc-200">Top Performing Bots</h3>
                     <div className="text-xs text-zinc-500">Based on processed volume</div>
                 </div>
 
-                <div className="overflow-x-auto">
+                {/* Desktop Table */}
+                <div className="overflow-x-auto hidden sm:block">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-zinc-100 dark:bg-zinc-900/50 text-zinc-600 dark:text-zinc-500 font-medium">
                             <tr>
@@ -567,6 +568,41 @@ export default function AnalyticsDashboard() {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Mobile Card View */}
+                <div className="sm:hidden p-3 space-y-3">
+                    {loading && !data ? (
+                        <div className="py-8 text-center text-zinc-500 text-sm">
+                            Loading leaderboard...
+                        </div>
+                    ) : topBots.length > 0 ? (
+                        topBots.map((bot: any) => (
+                            <div key={bot.id} className="bg-zinc-100 dark:bg-zinc-900/50 rounded-lg p-3 border border-zinc-200 dark:border-zinc-800">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="font-medium text-sm text-zinc-900 dark:text-white truncate max-w-[150px]">{bot.name}</span>
+                                    <Badge status={bot.status} />
+                                </div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="flex-1 h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-indigo-500 rounded-full"
+                                            style={{ width: `${bot.activityScore}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-[10px] font-mono text-zinc-500">{bot.activityScore}/100</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] text-zinc-500 uppercase">Volume</span>
+                                    <span className="text-xs font-mono font-medium text-zinc-700 dark:text-zinc-300">{bot.volume.toLocaleString()}</span>
+                                </div>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="py-8 text-center text-zinc-500 text-sm">
+                            No active bots found for this period
+                        </div>
+                    )}
+                </div>
             </div >
         </div >
     )
@@ -586,29 +622,29 @@ function LegendItem({ color, label, onClick, hidden }: { color: string, label: s
 
 function KPICard({ title, value, trend, icon, loading }: KPICardProps) {
     return (
-        <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-6 relative overflow-hidden group hover:border-zinc-300 dark:hover:border-zinc-800 transition-colors shadow-sm dark:shadow-none">
-            <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-zinc-700 dark:text-zinc-100 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800 transition-colors">
+        <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 sm:p-6 relative overflow-hidden group hover:border-zinc-300 dark:hover:border-zinc-800 transition-colors shadow-sm dark:shadow-none">
+            <div className="flex justify-between items-start mb-3 sm:mb-4">
+                <div className="p-1.5 sm:p-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-zinc-700 dark:text-zinc-100 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800 transition-colors [&>svg]:w-4 [&>svg]:h-4 sm:[&>svg]:w-5 sm:[&>svg]:h-5">
                     {icon}
                 </div>
                 {trend !== undefined && (
-                    <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${trend >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+                    <div className={`flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full ${trend >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
                         }`}>
-                        {trend >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                        {trend >= 0 ? <ArrowUpRight className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> : <ArrowDownRight className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
                         {Math.abs(trend)}%
                     </div>
                 )}
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5 sm:space-y-1">
                 {loading && value === undefined ? (
-                    <div className="h-8 w-24 bg-zinc-200 dark:bg-zinc-900 rounded animate-pulse" />
+                    <div className="h-6 sm:h-8 w-16 sm:w-24 bg-zinc-200 dark:bg-zinc-900 rounded animate-pulse" />
                 ) : (
-                    <h3 className="text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">
+                    <h3 className="text-xl sm:text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">
                         {typeof value === 'number' ? value.toLocaleString() : value}
                     </h3>
                 )}
-                <p className="text-sm text-zinc-500 font-medium">{title}</p>
+                <p className="text-xs sm:text-sm text-zinc-500 font-medium">{title}</p>
             </div>
         </div>
     )

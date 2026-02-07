@@ -357,18 +357,18 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
             < div className="flex-1 flex flex-col h-screen border-r border-zinc-200 dark:border-zinc-800 relative bg-zinc-50 dark:bg-black overflow-hidden" >
                 {/* Header */}
                 < div className="shrink-0 bg-zinc-50 dark:bg-black z-20 border-b border-zinc-200 dark:border-zinc-800" >
-                    <div className="max-w-6xl mx-auto px-6 py-4">
+                    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <button onClick={onClose} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors group">
-                                    <ChevronLeft size={20} className="transition-transform duration-300 group-hover:-translate-x-1" />
+                            <div className="flex items-center gap-2 sm:gap-4">
+                                <button onClick={onClose} className="p-1.5 sm:p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors group">
+                                    <ChevronLeft size={18} className="sm:w-5 sm:h-5 transition-transform duration-300 group-hover:-translate-x-1" />
                                 </button>
                                 <div>
-                                    <h1 className="text-xl font-semibold text-zinc-900 dark:text-white">{ruleId ? 'Edit Auto-Reply' : 'Create Auto-Reply'}</h1>
-                                    <p className="text-sm text-zinc-500 dark:text-zinc-400">Configure automated responses for incoming messages</p>
+                                    <h1 className="text-base sm:text-xl font-semibold text-zinc-900 dark:text-white">{ruleId ? 'Edit Auto-Reply' : 'Create Auto-Reply'}</h1>
+                                    <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 hidden sm:block">Configure automated responses for incoming messages</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3">
                                 <button
                                     onClick={() => setIsPreviewOpen(!isPreviewOpen)}
                                     className={`hidden lg:flex items-center gap-2 px-4 py-2.5 border rounded-lg font-medium transition-all group ${isPreviewOpen
@@ -396,12 +396,12 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                 </div >
 
                 {/* Scrollable Content */}
-                < div className="flex-1 overflow-y-auto px-6 lg:px-12 py-8 pb-24 lg:pb-8" >
-                    <div className="max-w-3xl mx-auto space-y-8">
+                < div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-12 py-6 sm:py-8 pb-24 lg:pb-8" >
+                    <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
 
                         {/* Bot Selection - Only show if botId is NOT provided */}
                         {!botId && (
-                            <section className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none">
+                            <section className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm dark:shadow-none">
                                 <SectionHeader step={1} title="Basic Details" desc="Select which bot this rule applies to." />
                                 <div className="space-y-4">
                                     <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Target Bot *</label>
@@ -420,7 +420,7 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                         )}
 
                         {/* Trigger & Scope */}
-                        <section className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none">
+                        <section className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm dark:shadow-none">
                             <SectionHeader step={botId ? 1 : 2} title="Trigger Condition" desc="Define the keywords that trigger this rule." />
 
                             <div className="space-y-6">
@@ -463,7 +463,7 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                             </div>
                         </section>
 
-                        <section className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none">
+                        <section className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm dark:shadow-none">
                             <SectionHeader step={botId ? 2 : 3} title="Target Audience" desc="Who should be able to trigger this rule?" />
 
                             <div className="flex bg-zinc-800/50 p-1 rounded-lg border border-zinc-700 w-fit mb-4">
@@ -655,7 +655,7 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                         </section>
 
                         {/* Response Action */}
-                        <section className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm dark:shadow-none">
+                        <section className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm dark:shadow-none">
                             <SectionHeader step={botId ? 3 : 4} title="Response Message" desc="What should the bot reply when triggered?" />
 
                             <div className="space-y-4">
