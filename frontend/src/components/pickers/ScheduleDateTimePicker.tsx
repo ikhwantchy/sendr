@@ -214,7 +214,7 @@ export default function ScheduleDateTimePicker({
         <div 
             ref={datePickerRef}
             style={{ top: datePickerPos.top, left: datePickerPos.left }}
-            className={`fixed z-[99999] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 ${compact ? 'p-3 w-[280px]' : 'p-4 w-[320px]'} animate-in fade-in slide-in-from-top-2 duration-200`}
+            className={`fixed z-[99999] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 ${compact ? 'p-3 w-[280px]' : 'p-4 w-[320px]'}`}
         >
             {/* Month Navigation */}
             <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
@@ -300,7 +300,7 @@ export default function ScheduleDateTimePicker({
         <div 
             ref={timePickerRef}
             style={{ top: timePickerPos.top, left: timePickerPos.left }}
-            className={`fixed z-[99999] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 ${compact ? 'p-3 w-[260px]' : 'p-4 w-[320px]'} animate-in fade-in slide-in-from-top-2 duration-200`}
+            className={`fixed z-[99999] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 ${compact ? 'p-3 w-[260px]' : 'p-4 w-[320px]'}`}
         >
             {/* Current Time Display */}
             <div className={`flex items-center justify-between ${compact ? 'mb-3 pb-2' : 'mb-4 pb-3'} border-b border-zinc-800`}>
