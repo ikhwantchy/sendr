@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Calendar, Clock, ChevronLeft, ChevronRight, X } from 'lucide-react'
 
 interface ScheduleDateTimePickerProps {
@@ -18,10 +19,15 @@ export default function ScheduleDateTimePicker({
 }: ScheduleDateTimePickerProps) {
     const [showDatePicker, setShowDatePicker] = useState(false)
     const [showTimePicker, setShowTimePicker] = useState(false)
+    const [mounted, setMounted] = useState(false)
+    const dateButtonRef = useRef<HTMLButtonElement>(null)
+    const timeButtonRef = useRef<HTMLButtonElement>(null)
     const datePickerRef = useRef<HTMLDivElement>(null)
     const timePickerRef = useRef<HTMLDivElement>(null)
     const hourScrollRef = useRef<HTMLDivElement>(null)
     const minuteScrollRef = useRef<HTMLDivElement>(null)
+    const [datePickerPos, setDatePickerPos] = useState({ top: 0, left: 0 })
+    const [timePickerPos, setTimePickerPos] = useState({ top: 0, left: 0 })
 
     // Parse value to Date
     const selectedDate = value ? new Date(value) : new Date()
@@ -30,13 +36,59 @@ export default function ScheduleDateTimePicker({
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
     const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    // Calculate dropdown positions
+    useEffect(() => {
+        if (showDatePicker && dateButtonRef.current) {
+            const rect = dateButtonRef.current.getBoundingClientRect()
+            const dropdownHeight = compact ? 320 : 380
+            const spaceBelow = window.innerHeight - rect.bottom
+            const spaceAbove = rect.top
+            
+            // Check if dropdown fits below, otherwise show above
+            if (spaceBelow >= dropdownHeight || spaceBelow >= spaceAbove) {
+                setDatePickerPos({ top: rect.bottom + 8, left: rect.left })
+            } else {
+                setDatePickerPos({ top: rect.top - dropdownHeight - 8, left: rect.left })
+            }
+        }
+    }, [showDatePicker, compact])
+
+    useEffect(() => {
+        if (showTimePicker && timeButtonRef.current) {
+            const rect = timeButtonRef.current.getBoundingClientRect()
+            const dropdownHeight = compact ? 280 : 320
+            const dropdownWidth = compact ? 260 : 320
+            const spaceBelow = window.innerHeight - rect.bottom
+            const spaceAbove = rect.top
+            
+            let top = rect.bottom + 8
+            if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+                top = rect.top - dropdownHeight - 8
+            }
+            
+            // Ensure it doesn't go off-screen to the right
+            let left = rect.left
+            if (left + dropdownWidth > window.innerWidth - 16) {
+                left = window.innerWidth - dropdownWidth - 16
+            }
+            
+            setTimePickerPos({ top, left })
+        }
+    }, [showTimePicker, compact])
+
     // Close dropdowns when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+            if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node) &&
+                dateButtonRef.current && !dateButtonRef.current.contains(event.target as Node)) {
                 setShowDatePicker(false)
             }
-            if (timePickerRef.current && !timePickerRef.current.contains(event.target as Node)) {
+            if (timePickerRef.current && !timePickerRef.current.contains(event.target as Node) &&
+                timeButtonRef.current && !timeButtonRef.current.contains(event.target as Node)) {
                 setShowTimePicker(false)
             }
         }
@@ -51,18 +103,20 @@ export default function ScheduleDateTimePicker({
             const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
             const minute = selectedDate.getMinutes()
             
-            if (hourScrollRef.current) {
-                const hourElement = hourScrollRef.current.querySelector(`[data-hour="${hour12}"]`)
-                if (hourElement) {
-                    hourElement.scrollIntoView({ block: 'center', behavior: 'auto' })
+            setTimeout(() => {
+                if (hourScrollRef.current) {
+                    const hourElement = hourScrollRef.current.querySelector(`[data-hour="${hour12}"]`)
+                    if (hourElement) {
+                        hourElement.scrollIntoView({ block: 'center', behavior: 'auto' })
+                    }
                 }
-            }
-            if (minuteScrollRef.current) {
-                const minuteElement = minuteScrollRef.current.querySelector(`[data-minute="${minute}"]`)
-                if (minuteElement) {
-                    minuteElement.scrollIntoView({ block: 'center', behavior: 'auto' })
+                if (minuteScrollRef.current) {
+                    const minuteElement = minuteScrollRef.current.querySelector(`[data-minute="${minute}"]`)
+                    if (minuteElement) {
+                        minuteElement.scrollIntoView({ block: 'center', behavior: 'auto' })
+                    }
                 }
-            }
+            }, 50)
         }
     }, [showTimePicker])
 
@@ -155,224 +209,242 @@ export default function ScheduleDateTimePicker({
     const hours12 = Array.from({ length: 12 }, (_, i) => i + 1)
     const minutes = Array.from({ length: 60 }, (_, i) => i)
 
+    // Date Picker Dropdown (Portal)
+    const datePickerDropdown = showDatePicker && mounted ? createPortal(
+        <div 
+            ref={datePickerRef}
+            style={{ top: datePickerPos.top, left: datePickerPos.left }}
+            className={`fixed z-[99999] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 ${compact ? 'p-3 w-[280px]' : 'p-4 w-[320px]'} animate-in fade-in slide-in-from-top-2 duration-200`}
+        >
+            {/* Month Navigation */}
+            <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
+                <button
+                    type="button"
+                    onClick={previousMonth}
+                    className={`${compact ? 'w-7 h-7' : 'w-8 h-8'} rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white`}
+                >
+                    <ChevronLeft size={compact ? 16 : 18} />
+                </button>
+                <div className={`text-white font-semibold ${compact ? 'text-xs' : 'text-sm'}`}>
+                    {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                </div>
+                <button
+                    type="button"
+                    onClick={nextMonth}
+                    className={`${compact ? 'w-7 h-7' : 'w-8 h-8'} rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white`}
+                >
+                    <ChevronRight size={compact ? 16 : 18} />
+                </button>
+            </div>
+
+            {/* Day Names */}
+            <div className={`grid grid-cols-7 gap-1 ${compact ? 'mb-1' : 'mb-2'}`}>
+                {dayNames.map(day => (
+                    <div key={day} className={`text-center ${compact ? 'text-[10px]' : 'text-xs'} font-medium text-zinc-500 py-1`}>
+                        {day}
+                    </div>
+                ))}
+            </div>
+
+            {/* Calendar Grid */}
+            <div className="grid grid-cols-7 gap-1">
+                {/* Empty cells */}
+                {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+                    <div key={`empty-${i}`} className="aspect-square" />
+                ))}
+                
+                {/* Days */}
+                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+                    const disabled = isPastDate(day)
+                    const selected = isSelected(day)
+                    const today = isToday(day)
+
+                    return (
+                        <button
+                            key={day}
+                            type="button"
+                            onClick={() => !disabled && handleDateClick(day)}
+                            disabled={disabled}
+                            className={`aspect-square rounded-lg flex items-center justify-center ${compact ? 'text-xs' : 'text-sm'} font-medium transition-all ${
+                                disabled
+                                    ? 'text-zinc-700 cursor-not-allowed'
+                                    : selected
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                                        : today
+                                            ? 'bg-blue-600/20 text-blue-400 border border-blue-500/50'
+                                            : 'text-zinc-300 hover:bg-zinc-800'
+                            }`}
+                        >
+                            {day}
+                        </button>
+                    )
+                })}
+            </div>
+
+            {/* Clear Button */}
+            <div className={`flex justify-end ${compact ? 'mt-3 pt-2' : 'mt-4 pt-3'} border-t border-zinc-800`}>
+                <button
+                    type="button"
+                    onClick={handleClear}
+                    className={`${compact ? 'px-2 py-1 text-[10px]' : 'px-3 py-1.5 text-xs'} font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors`}
+                >
+                    Clear
+                </button>
+            </div>
+        </div>,
+        document.body
+    ) : null
+
+    // Time Picker Dropdown (Portal)
+    const timePickerDropdown = showTimePicker && mounted ? createPortal(
+        <div 
+            ref={timePickerRef}
+            style={{ top: timePickerPos.top, left: timePickerPos.left }}
+            className={`fixed z-[99999] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 ${compact ? 'p-3 w-[260px]' : 'p-4 w-[320px]'} animate-in fade-in slide-in-from-top-2 duration-200`}
+        >
+            {/* Current Time Display */}
+            <div className={`flex items-center justify-between ${compact ? 'mb-3 pb-2' : 'mb-4 pb-3'} border-b border-zinc-800`}>
+                <div className={`${compact ? 'text-base' : 'text-lg'} font-bold text-white`}>{formatDisplayTime()}</div>
+                <button
+                    type="button"
+                    onClick={() => setShowTimePicker(false)}
+                    className={`${compact ? 'w-6 h-6' : 'w-7 h-7'} rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-500 hover:text-white`}
+                >
+                    <X size={compact ? 14 : 16} />
+                </button>
+            </div>
+
+            {/* Time Selection - Three Columns: Hour, Minute, AM/PM */}
+            <div className="flex gap-2">
+                {/* Hours Column (1-12) */}
+                <div 
+                    ref={hourScrollRef}
+                    className={`flex-1 ${compact ? 'max-h-[160px]' : 'max-h-[200px]'} overflow-y-auto rounded-lg bg-zinc-800/50 p-1`}
+                    style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}
+                >
+                    {hours12.map(hour => (
+                        <button
+                            key={hour}
+                            type="button"
+                            data-hour={hour}
+                            onClick={() => handleTimeChange(hour, currentMinute, currentPeriod)}
+                            className={`w-full ${compact ? 'py-1.5 px-2 text-xs' : 'py-2 px-3 text-sm'} font-medium rounded-lg transition-all mb-1 text-center ${
+                                currentHour12 === hour
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                            }`}
+                        >
+                            {hour.toString().padStart(2, '0')}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Minutes Column */}
+                <div 
+                    ref={minuteScrollRef}
+                    className={`flex-1 ${compact ? 'max-h-[160px]' : 'max-h-[200px]'} overflow-y-auto rounded-lg bg-zinc-800/50 p-1`}
+                    style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}
+                >
+                    {minutes.map(minute => (
+                        <button
+                            key={minute}
+                            type="button"
+                            data-minute={minute}
+                            onClick={() => handleTimeChange(currentHour12, minute, currentPeriod)}
+                            className={`w-full ${compact ? 'py-1.5 px-2 text-xs' : 'py-2 px-3 text-sm'} font-medium rounded-lg transition-all mb-1 text-center ${
+                                currentMinute === minute
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                            }`}
+                        >
+                            {minute.toString().padStart(2, '0')}
+                        </button>
+                    ))}
+                </div>
+
+                {/* AM/PM Column */}
+                <div className={`${compact ? 'w-12' : 'w-16'} flex flex-col gap-1 p-1`}>
+                    <button
+                        type="button"
+                        onClick={() => handleTimeChange(currentHour12, currentMinute, 'AM')}
+                        className={`flex-1 ${compact ? 'py-2 text-xs' : 'py-3 text-sm'} font-bold rounded-lg transition-all ${
+                            currentPeriod === 'AM'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                        }`}
+                    >
+                        AM
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleTimeChange(currentHour12, currentMinute, 'PM')}
+                        className={`flex-1 ${compact ? 'py-2 text-xs' : 'py-3 text-sm'} font-bold rounded-lg transition-all ${
+                            currentPeriod === 'PM'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                        }`}
+                    >
+                        PM
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    ) : null
+
     return (
-        <div className={compact ? "flex gap-2" : "flex gap-3"}>
-            {/* Date Picker Field */}
-            <div className="relative flex-1" ref={datePickerRef}>
-                <button
-                    type="button"
-                    onClick={() => {
-                        setShowDatePicker(!showDatePicker)
-                        setShowTimePicker(false)
-                    }}
-                    className={`w-full flex items-center ${compact ? 'gap-2 px-3 py-2' : 'gap-3 px-4 py-2.5'} bg-zinc-900 border rounded-lg text-left transition-all hover:border-zinc-600 ${
-                        showDatePicker ? 'border-blue-500 ring-1 ring-blue-500/20' : 'border-zinc-700'
-                    }`}
-                >
-                    <div className={`${compact ? 'w-6 h-6 rounded-md' : 'w-8 h-8 rounded-lg'} bg-zinc-800 flex items-center justify-center`}>
-                        <Calendar size={compact ? 14 : 16} className="text-zinc-400" />
-                    </div>
-                    <div className="flex-1">
-                        <div className={`${compact ? 'text-[9px]' : 'text-[10px]'} uppercase tracking-wider text-zinc-500 font-medium`}>Date</div>
-                        <div className={`${compact ? 'text-[11px]' : 'text-xs'} text-white font-semibold`}>{formatDisplayDate()}</div>
-                    </div>
-                </button>
-
-                {/* Date Picker Dropdown */}
-                {showDatePicker && (
-                    <div className={`absolute top-full left-0 mt-2 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 ${compact ? 'p-3 w-[280px]' : 'p-4 w-[320px]'} animate-in fade-in slide-in-from-top-2 duration-200`}>
-                        {/* Month Navigation */}
-                        <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
-                            <button
-                                type="button"
-                                onClick={previousMonth}
-                                className={`${compact ? 'w-7 h-7' : 'w-8 h-8'} rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white`}
-                            >
-                                <ChevronLeft size={compact ? 16 : 18} />
-                            </button>
-                            <div className={`text-white font-semibold ${compact ? 'text-xs' : 'text-sm'}`}>
-                                {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-                            </div>
-                            <button
-                                type="button"
-                                onClick={nextMonth}
-                                className={`${compact ? 'w-7 h-7' : 'w-8 h-8'} rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-400 hover:text-white`}
-                            >
-                                <ChevronRight size={compact ? 16 : 18} />
-                            </button>
+        <>
+            <div className={compact ? "flex gap-2" : "flex gap-3"}>
+                {/* Date Picker Field */}
+                <div className="relative flex-1">
+                    <button
+                        ref={dateButtonRef}
+                        type="button"
+                        onClick={() => {
+                            setShowDatePicker(!showDatePicker)
+                            setShowTimePicker(false)
+                        }}
+                        className={`w-full flex items-center ${compact ? 'gap-2 px-3 py-2' : 'gap-3 px-4 py-2.5'} bg-zinc-900 border rounded-lg text-left transition-all hover:border-zinc-600 ${
+                            showDatePicker ? 'border-blue-500 ring-1 ring-blue-500/20' : 'border-zinc-700'
+                        }`}
+                    >
+                        <div className={`${compact ? 'w-6 h-6 rounded-md' : 'w-8 h-8 rounded-lg'} bg-zinc-800 flex items-center justify-center`}>
+                            <Calendar size={compact ? 14 : 16} className="text-zinc-400" />
                         </div>
-
-                        {/* Day Names */}
-                        <div className={`grid grid-cols-7 gap-1 ${compact ? 'mb-1' : 'mb-2'}`}>
-                            {dayNames.map(day => (
-                                <div key={day} className={`text-center ${compact ? 'text-[10px]' : 'text-xs'} font-medium text-zinc-500 py-1`}>
-                                    {day}
-                                </div>
-                            ))}
+                        <div className="flex-1">
+                            <div className={`${compact ? 'text-[9px]' : 'text-[10px]'} uppercase tracking-wider text-zinc-500 font-medium`}>Date</div>
+                            <div className={`${compact ? 'text-[11px]' : 'text-xs'} text-white font-semibold`}>{formatDisplayDate()}</div>
                         </div>
+                    </button>
+                </div>
 
-                        {/* Calendar Grid */}
-                        <div className="grid grid-cols-7 gap-1">
-                            {/* Empty cells */}
-                            {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-                                <div key={`empty-${i}`} className="aspect-square" />
-                            ))}
-                            
-                            {/* Days */}
-                            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
-                                const disabled = isPastDate(day)
-                                const selected = isSelected(day)
-                                const today = isToday(day)
-
-                                return (
-                                    <button
-                                        key={day}
-                                        type="button"
-                                        onClick={() => !disabled && handleDateClick(day)}
-                                        disabled={disabled}
-                                        className={`aspect-square rounded-lg flex items-center justify-center ${compact ? 'text-xs' : 'text-sm'} font-medium transition-all ${
-                                            disabled
-                                                ? 'text-zinc-700 cursor-not-allowed'
-                                                : selected
-                                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                                                    : today
-                                                        ? 'bg-blue-600/20 text-blue-400 border border-blue-500/50'
-                                                        : 'text-zinc-300 hover:bg-zinc-800'
-                                        }`}
-                                    >
-                                        {day}
-                                    </button>
-                                )
-                            })}
+                {/* Time Picker Field */}
+                <div className="relative flex-1">
+                    <button
+                        ref={timeButtonRef}
+                        type="button"
+                        onClick={() => {
+                            setShowTimePicker(!showTimePicker)
+                            setShowDatePicker(false)
+                        }}
+                        className={`w-full flex items-center ${compact ? 'gap-2 px-3 py-2' : 'gap-3 px-4 py-2.5'} bg-zinc-900 border rounded-lg text-left transition-all hover:border-zinc-600 ${
+                            showTimePicker ? 'border-blue-500 ring-1 ring-blue-500/20' : 'border-zinc-700'
+                        }`}
+                    >
+                        <div className={`${compact ? 'w-6 h-6 rounded-md' : 'w-8 h-8 rounded-lg'} bg-zinc-800 flex items-center justify-center`}>
+                            <Clock size={compact ? 14 : 16} className="text-zinc-400" />
                         </div>
-
-                        {/* Clear Button */}
-                        <div className={`flex justify-end ${compact ? 'mt-3 pt-2' : 'mt-4 pt-3'} border-t border-zinc-800`}>
-                            <button
-                                type="button"
-                                onClick={handleClear}
-                                className={`${compact ? 'px-2 py-1 text-[10px]' : 'px-3 py-1.5 text-xs'} font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors`}
-                            >
-                                Clear
-                            </button>
+                        <div className="flex-1">
+                            <div className={`${compact ? 'text-[9px]' : 'text-[10px]'} uppercase tracking-wider text-zinc-500 font-medium`}>Time</div>
+                            <div className={`${compact ? 'text-[11px]' : 'text-xs'} text-white font-semibold`}>{formatDisplayTime()}</div>
                         </div>
-                    </div>
-                )}
+                    </button>
+                </div>
             </div>
 
-            {/* Time Picker Field */}
-            <div className="relative flex-1" ref={timePickerRef}>
-                <button
-                    type="button"
-                    onClick={() => {
-                        setShowTimePicker(!showTimePicker)
-                        setShowDatePicker(false)
-                    }}
-                    className={`w-full flex items-center ${compact ? 'gap-2 px-3 py-2' : 'gap-3 px-4 py-2.5'} bg-zinc-900 border rounded-lg text-left transition-all hover:border-zinc-600 ${
-                        showTimePicker ? 'border-blue-500 ring-1 ring-blue-500/20' : 'border-zinc-700'
-                    }`}
-                >
-                    <div className={`${compact ? 'w-6 h-6 rounded-md' : 'w-8 h-8 rounded-lg'} bg-zinc-800 flex items-center justify-center`}>
-                        <Clock size={compact ? 14 : 16} className="text-zinc-400" />
-                    </div>
-                    <div className="flex-1">
-                        <div className={`${compact ? 'text-[9px]' : 'text-[10px]'} uppercase tracking-wider text-zinc-500 font-medium`}>Time</div>
-                        <div className={`${compact ? 'text-[11px]' : 'text-xs'} text-white font-semibold`}>{formatDisplayTime()}</div>
-                    </div>
-                </button>
-
-                {/* Time Picker Dropdown */}
-                {showTimePicker && (
-                    <div className={`absolute top-full right-0 mt-2 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl shadow-black/50 ${compact ? 'p-3 w-[260px]' : 'p-4 w-[320px]'} animate-in fade-in slide-in-from-top-2 duration-200`}>
-                        {/* Current Time Display */}
-                        <div className={`flex items-center justify-between ${compact ? 'mb-3 pb-2' : 'mb-4 pb-3'} border-b border-zinc-800`}>
-                            <div className={`${compact ? 'text-base' : 'text-lg'} font-bold text-white`}>{formatDisplayTime()}</div>
-                            <button
-                                type="button"
-                                onClick={() => setShowTimePicker(false)}
-                                className={`${compact ? 'w-6 h-6' : 'w-7 h-7'} rounded-lg hover:bg-zinc-800 transition-colors flex items-center justify-center text-zinc-500 hover:text-white`}
-                            >
-                                <X size={compact ? 14 : 16} />
-                            </button>
-                        </div>
-
-                        {/* Time Selection - Three Columns: Hour, Minute, AM/PM */}
-                        <div className="flex gap-2">
-                            {/* Hours Column (1-12) */}
-                            <div 
-                                ref={hourScrollRef}
-                                className={`flex-1 ${compact ? 'max-h-[160px]' : 'max-h-[200px]'} overflow-y-auto rounded-lg bg-zinc-800/50 p-1`}
-                                style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}
-                            >
-                                {hours12.map(hour => (
-                                    <button
-                                        key={hour}
-                                        type="button"
-                                        data-hour={hour}
-                                        onClick={() => handleTimeChange(hour, currentMinute, currentPeriod)}
-                                        className={`w-full ${compact ? 'py-1.5 px-2 text-xs' : 'py-2 px-3 text-sm'} font-medium rounded-lg transition-all mb-1 text-center ${
-                                            currentHour12 === hour
-                                                ? 'bg-blue-600 text-white'
-                                                : 'text-zinc-400 hover:bg-zinc-700 hover:text-white'
-                                        }`}
-                                    >
-                                        {hour.toString().padStart(2, '0')}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Minutes Column */}
-                            <div 
-                                ref={minuteScrollRef}
-                                className={`flex-1 ${compact ? 'max-h-[160px]' : 'max-h-[200px]'} overflow-y-auto rounded-lg bg-zinc-800/50 p-1`}
-                                style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}
-                            >
-                                {minutes.map(minute => (
-                                    <button
-                                        key={minute}
-                                        type="button"
-                                        data-minute={minute}
-                                        onClick={() => handleTimeChange(currentHour12, minute, currentPeriod)}
-                                        className={`w-full ${compact ? 'py-1.5 px-2 text-xs' : 'py-2 px-3 text-sm'} font-medium rounded-lg transition-all mb-1 text-center ${
-                                            currentMinute === minute
-                                                ? 'bg-blue-600 text-white'
-                                                : 'text-zinc-400 hover:bg-zinc-700 hover:text-white'
-                                        }`}
-                                    >
-                                        {minute.toString().padStart(2, '0')}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* AM/PM Column */}
-                            <div className={`${compact ? 'w-12' : 'w-16'} flex flex-col gap-1 p-1`}>
-                                <button
-                                    type="button"
-                                    onClick={() => handleTimeChange(currentHour12, currentMinute, 'AM')}
-                                    className={`flex-1 ${compact ? 'py-2 text-xs' : 'py-3 text-sm'} font-bold rounded-lg transition-all ${
-                                        currentPeriod === 'AM'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white'
-                                    }`}
-                                >
-                                    AM
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleTimeChange(currentHour12, currentMinute, 'PM')}
-                                    className={`flex-1 ${compact ? 'py-2 text-xs' : 'py-3 text-sm'} font-bold rounded-lg transition-all ${
-                                        currentPeriod === 'PM'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white'
-                                    }`}
-                                >
-                                    PM
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
+            {/* Render dropdowns via portal */}
+            {datePickerDropdown}
+            {timePickerDropdown}
+        </>
     )
 }
