@@ -160,8 +160,10 @@ class GoogleSheetsWriteService {
         }
 
         // Fallback to default tenant (where admin configures SA)
-        if (tenantId !== 'default-tenant-id') {
-            const defaultTenantClient = await this.getClientForTenant('default-tenant-id');
+        // Try both 'default-tenant' (from db) and 'default-tenant-id' (legacy) for compatibility
+        if (tenantId !== 'default-tenant' && tenantId !== 'default-tenant-id') {
+            const defaultTenantClient = await this.getClientForTenant('default-tenant') 
+                || await this.getClientForTenant('default-tenant-id');
             if (defaultTenantClient) {
                 logger.debug(`[SheetsWrite] Using default tenant SA for tenant ${tenantId}`);
                 return defaultTenantClient;

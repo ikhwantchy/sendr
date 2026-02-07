@@ -39,10 +39,13 @@ class BotRepository {
         return bot;
     }
     /**
-     * Find all bots in the system (for admins)
+     * Find all bots in the system (for admins) - includes owner info
      */
     async findAll() {
-        const result = await (0, connection_1.query)('SELECT * FROM bots ORDER BY created_at DESC');
+        const result = await (0, connection_1.query)(`SELECT b.*, u.name as owner_name, u.email as owner_email 
+             FROM bots b 
+             LEFT JOIN users u ON b.tenant_id = u.tenant_id 
+             ORDER BY b.created_at DESC`);
         return result.rows.map((bot) => {
             if (bot.config) {
                 try {
@@ -128,8 +131,8 @@ class BotRepository {
         const botId = this.generateUUID();
         const configJson = data.config ? JSON.stringify(data.config) : JSON.stringify({});
         // Insert bot with explicit ID
-        await (0, connection_1.query)(`INSERT INTO bots (id, tenant_id, name, config, created_by)
-       VALUES (?, ?, ?, ?, ?)`, [botId, data.tenant_id, data.name, configJson, data.created_by]);
+        await (0, connection_1.query)(`INSERT INTO bots (id, tenant_id, name, config, created_by, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?)`, [botId, data.tenant_id, data.name, configJson, data.created_by, data.expires_at || null]);
         // Fetch the created bot
         const bot = await this.findById(botId);
         if (!bot) {
@@ -198,6 +201,29 @@ class BotRepository {
             : 'SELECT * FROM bots WHERE status = ?';
         const params = tenantId ? ['connected', tenantId] : ['connected'];
         const result = await (0, connection_1.query)(sql, params);
+        return result.rows;
+    }
+    /**
+     * Find expired bots that are still connected
+     * Used by cron job to auto-disconnect expired bots
+     */
+    async findExpiredConnectedBots() {
+        const result = await (0, connection_1.query)(`SELECT * FROM bots 
+             WHERE status = 'connected' 
+             AND expires_at IS NOT NULL 
+             AND expires_at < datetime('now')
+             ORDER BY expires_at ASC`);
+        return result.rows;
+    }
+    /**
+     * Find bots expiring soon (within X days)
+     */
+    async findExpiringSoon(days = 7) {
+        const result = await (0, connection_1.query)(`SELECT * FROM bots 
+             WHERE expires_at IS NOT NULL 
+             AND expires_at > datetime('now')
+             AND expires_at < datetime('now', '+' || ? || ' days')
+             ORDER BY expires_at ASC`, [days]);
         return result.rows;
     }
 }

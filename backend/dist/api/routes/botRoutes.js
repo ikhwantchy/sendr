@@ -119,7 +119,7 @@ router.get('/:id', async (req, res) => {
 // Create a new bot
 router.post('/', (0, auth_1.requireRole)(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
     try {
-        const { name, config, target_tenant_id } = req.body;
+        const { name, config, target_tenant_id, expires_at, permissions } = req.body;
         let tenantId = req.user.tenant_id;
         const userId = req.user.id;
         const userRole = req.user.role;
@@ -133,23 +133,60 @@ router.post('/', (0, auth_1.requireRole)(['OWNER', 'ADMIN', 'OPERATOR', 'USER'])
                 error: 'Bot name is required',
             });
         }
+        // Only ADMIN/OWNER can set expiration date
+        const botExpiresAt = (userRole === 'OWNER' || userRole === 'ADMIN') ? expires_at : null;
         const bot = await botRepository_1.botRepository.create({
             tenant_id: tenantId,
             name,
             config: config || {},
             created_by: userId,
+            expires_at: botExpiresAt,
         });
+        // Default permissions (all enabled except AI)
+        const defaultPerms = {
+            can_view: 1,
+            can_edit: 1,
+            can_delete: 1,
+            can_create_campaigns: 1,
+            can_create_rules: 1,
+            can_view_analytics: 1,
+            can_use_reminders: 1,
+            can_use_ai: 0,
+            can_manage_contacts: 1,
+            can_manage_datasources: 1,
+        };
+        // Merge with provided permissions (if admin/owner provides them)
+        const finalPerms = { ...defaultPerms };
+        if (permissions && (userRole === 'OWNER' || userRole === 'ADMIN')) {
+            if (permissions.can_view !== undefined)
+                finalPerms.can_view = permissions.can_view ? 1 : 0;
+            if (permissions.can_view_analytics !== undefined)
+                finalPerms.can_view_analytics = permissions.can_view_analytics ? 1 : 0;
+            if (permissions.can_create_rules !== undefined)
+                finalPerms.can_create_rules = permissions.can_create_rules ? 1 : 0;
+            if (permissions.can_use_reminders !== undefined)
+                finalPerms.can_use_reminders = permissions.can_use_reminders ? 1 : 0;
+            if (permissions.can_create_campaigns !== undefined)
+                finalPerms.can_create_campaigns = permissions.can_create_campaigns ? 1 : 0;
+            if (permissions.can_use_ai !== undefined)
+                finalPerms.can_use_ai = permissions.can_use_ai ? 1 : 0;
+            // Always allow edit/delete/manage for the bot owner
+            finalPerms.can_edit = 1;
+            finalPerms.can_delete = 1;
+            finalPerms.can_manage_contacts = 1;
+            finalPerms.can_manage_datasources = 1;
+        }
         // If bot is created for a different tenant (by admin), create bot_permissions for the tenant owner
         if (target_tenant_id && (userRole === 'OWNER' || userRole === 'ADMIN')) {
             // Find the user who owns this tenant
             const tenantUserResult = await (0, connection_1.query)(`SELECT id FROM users WHERE tenant_id = ? LIMIT 1`, [target_tenant_id]);
             if (tenantUserResult.rows.length > 0) {
                 const targetUserId = tenantUserResult.rows[0].id;
-                // Create full access permissions for the tenant owner
+                // Create permissions based on admin's selection
                 await (0, connection_1.query)(`INSERT OR REPLACE INTO bot_permissions 
                     (user_id, bot_id, can_view, can_edit, can_delete, can_create_campaigns, can_create_rules, can_view_analytics, can_use_reminders, can_use_ai, can_manage_contacts, can_manage_datasources)
-                    VALUES (?, ?, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)`, [targetUserId, bot.id]);
-                logger_1.logger.info('Created bot permissions for tenant user', { targetUserId, botId: bot.id });
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [targetUserId, bot.id, finalPerms.can_view, finalPerms.can_edit, finalPerms.can_delete, finalPerms.can_create_campaigns, finalPerms.can_create_rules, finalPerms.can_view_analytics, finalPerms.can_use_reminders, finalPerms.can_use_ai, finalPerms.can_manage_contacts, finalPerms.can_manage_datasources]);
+                logger_1.logger.info('Created bot permissions for tenant user', { targetUserId, botId: bot.id, permissions: finalPerms });
             }
         }
         else {
@@ -213,6 +250,18 @@ router.post('/:id/connect', (0, auth_1.requireRole)(['OWNER', 'ADMIN', 'OPERATOR
         let bot = await botRepository_1.botRepository.findById(id);
         if (!bot)
             return res.status(404).json({ success: false, error: 'Bot not found' });
+        // Check if bot has expired
+        if (bot.expires_at) {
+            const expiresAt = new Date(bot.expires_at);
+            if (expiresAt < new Date()) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Bot subscription has expired',
+                    expired_at: bot.expires_at,
+                    expired_reason: bot.expired_reason || 'Your bot subscription has ended. Please contact admin to renew.'
+                });
+            }
+        }
         if (!isAdmin && bot.tenant_id !== req.user.tenant_id) {
             const permCheck = await (0, connection_1.query)(`SELECT 1 FROM bot_permissions 
                  WHERE user_id = ? AND bot_id = ? AND (can_edit = 1 OR can_edit = 'true')`, [req.user.id, id]);

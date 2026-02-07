@@ -16,6 +16,8 @@ export interface Bot {
     config: any;
     ai_config: any;
     last_connected_at: string | null;
+    expires_at: string | null;
+    expired_reason: string | null;
     created_by: string | null;
     created_at: string;
     updated_at: string;
@@ -26,7 +28,7 @@ declare class BotRepository {
      */
     findById(id: string, tenantId?: string): Promise<Bot | null>;
     /**
-     * Find all bots in the system (for admins)
+     * Find all bots in the system (for admins) - includes owner info
      */
     findAll(): Promise<Bot[]>;
     /**
@@ -45,6 +47,7 @@ declare class BotRepository {
         name: string;
         config?: any;
         created_by?: string;
+        expires_at?: string | null;
     }): Promise<Bot>;
     /**
      * Generate UUID v4
@@ -62,6 +65,15 @@ declare class BotRepository {
      * Find connected bots
      */
     findConnected(tenantId?: string): Promise<Bot[]>;
+    /**
+     * Find expired bots that are still connected
+     * Used by cron job to auto-disconnect expired bots
+     */
+    findExpiredConnectedBots(): Promise<Bot[]>;
+    /**
+     * Find bots expiring soon (within X days)
+     */
+    findExpiringSoon(days?: number): Promise<Bot[]>;
 }
 export declare const botRepository: BotRepository;
 export {};

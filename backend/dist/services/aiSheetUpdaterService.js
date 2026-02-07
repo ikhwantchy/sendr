@@ -376,11 +376,9 @@ Respond with ONLY the classification word (e.g., CONFIRMED, DECLINED, MAYBE, UNK
     }
     /**
      * Quick AI classification without full conversation context
+     * Uses the appropriate provider based on config (Gemini, Groq, OpenAI, etc.)
      */
     async quickAIClassify(prompt) {
-        // Use Gemini directly for simple classification
-        const { GoogleGeminiProvider } = await Promise.resolve().then(() => __importStar(require('./llm/providers/google')));
-        const provider = new GoogleGeminiProvider();
         // Get any available API key from configs
         const keyResult = await (0, connection_1.query)(`
             SELECT llm_config FROM llm_allowed_targets 
@@ -391,11 +389,30 @@ Respond with ONLY the classification word (e.g., CONFIRMED, DECLINED, MAYBE, UNK
             throw new Error('No AI API key configured');
         }
         const config = JSON.parse(keyResult.rows[0].llm_config);
+        const providerName = config.provider || 'gemini';
+        // Import the appropriate provider based on config
+        let provider;
+        switch (providerName.toLowerCase()) {
+            case 'groq':
+                const { GroqProvider } = await Promise.resolve().then(() => __importStar(require('./llm/providers/groq')));
+                provider = new GroqProvider();
+                break;
+            case 'openai':
+                const { OpenAIProvider } = await Promise.resolve().then(() => __importStar(require('./llm/providers/openai')));
+                provider = new OpenAIProvider();
+                break;
+            case 'gemini':
+            default:
+                const { GoogleGeminiProvider } = await Promise.resolve().then(() => __importStar(require('./llm/providers/google')));
+                provider = new GoogleGeminiProvider();
+                break;
+        }
         const response = await provider.chat([{ role: 'user', content: prompt }], {
-            provider: config.provider || 'gemini',
+            provider: providerName,
             model: config.model || 'gemini-2.0-flash',
             apiKey: config.api_key || config.apiKey,
-            maxTokens: 50,
+            baseUrl: config.base_url || config.baseUrl,
+            maxTokens: 100,
             temperature: 0.1
         });
         return response.content;
@@ -443,6 +460,22 @@ Respond with ONLY the classification word (e.g., CONFIRMED, DECLINED, MAYBE, UNK
             // If there are AI extraction fields, use AI to extract them all at once
             if (aiExtractionFields.length > 0) {
                 const fieldsDescription = aiExtractionFields.map(f => `- ${f.name}: ${f.ai_prompt || 'Extract relevant information'}`).join('\n');
+                // Get today's date in Indonesian timezone (UTC+7) for relative date conversion
+                const now = new Date();
+                const jakartaOffset = 7 * 60; // UTC+7 in minutes
+                const jakartaTime = new Date(now.getTime() + (jakartaOffset + now.getTimezoneOffset()) * 60000);
+                const todayStr = jakartaTime.toISOString().split('T')[0]; // YYYY-MM-DD
+                const dayOfWeek = jakartaTime.toLocaleDateString('id-ID', { weekday: 'long' });
+                // Build explicit day-to-date mapping for next 7 days
+                const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+                const upcomingDays = [];
+                for (let i = 1; i <= 7; i++) {
+                    const futureDate = new Date(jakartaTime);
+                    futureDate.setDate(futureDate.getDate() + i);
+                    const dayName = dayNames[futureDate.getDay()];
+                    const dateStr = futureDate.toISOString().split('T')[0];
+                    upcomingDays.push(`${dayName} depan = ${dateStr}`);
+                }
                 const prompt = `${aiInstructions || 'Extract the following information from the message. Be concise and accurate.'}
 
 Message: "${message}"
@@ -458,7 +491,12 @@ ${aiExtractionFields.map(f => `  "${f.name}": "extracted value or empty string i
 Important:
 - Return ONLY valid JSON, no explanation
 - Use empty string "" if information is not found
-- Keep values concise (1-3 words when possible)`;
+- Keep values concise (1-3 words when possible)
+- For DATE fields: Convert to YYYY-MM-DD format.
+  TODAY is ${todayStr} (${dayOfWeek}).
+  Use this exact mapping:
+  ${upcomingDays.join(', ')}
+  "15 februari" = 2026-02-15 (year 2026 if not specified).`;
                 try {
                     const aiResponse = await this.quickAIClassify(prompt);
                     // Parse JSON response - handle potential markdown code blocks
@@ -880,6 +918,98 @@ Respond in JSON format ONLY:
         catch (error) {
             return [];
         }
+    }
+    /**
+     * Get sheet data for AI chat context
+     * Returns formatted sheet data that can be injected into the AI system prompt
+     * @param botId - Bot ID to look up configs for
+     * @param targetJid - Target group/contact JID to filter configs
+     * @returns Formatted string with sheet data, or null if no relevant config
+     */
+    async getSheetDataForChat(botId, targetJid) {
+        try {
+            // Find configs that apply to this target
+            const configs = await this.getConfigsByBot(botId);
+            const applicableConfigs = configs.filter(c => c.is_enabled &&
+                c.target_jids &&
+                c.target_jids.includes(targetJid));
+            if (applicableConfigs.length === 0) {
+                logger_1.logger.debug('[AISheetUpdater] No applicable configs for sheet read', { botId, targetJid });
+                return null;
+            }
+            // Use the first applicable config (usually there's only one per target)
+            const config = applicableConfigs[0];
+            if (!config.spreadsheet_id) {
+                logger_1.logger.warn('[AISheetUpdater] Config missing spreadsheet_id', { configId: config.id });
+                return null;
+            }
+            // Read sheet data
+            const { headers, objects } = await googleSheetsWriteService_1.googleSheetsWriteService.readSheet(config.spreadsheet_id, config.sheet_name);
+            if (objects.length === 0) {
+                return {
+                    data: 'Sheet is empty - no data recorded yet.',
+                    sheetName: config.sheet_name,
+                    headers
+                };
+            }
+            // Format data as a readable list
+            // Limit to last 20 entries to avoid token overflow
+            const recentData = objects.slice(-20);
+            // Format each row as a readable line
+            const formattedRows = recentData.map((row, index) => {
+                const entries = Object.entries(row)
+                    .filter(([key, value]) => value && String(value).trim() !== '')
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join(', ');
+                return `${index + 1}. ${entries}`;
+            }).join('\n');
+            const summary = `📋 Sheet: ${config.sheet_name}\nTotal entries: ${objects.length}\n\nRecent entries:\n${formattedRows}`;
+            logger_1.logger.info('[AISheetUpdater] Retrieved sheet data for chat', {
+                botId,
+                targetJid,
+                sheetName: config.sheet_name,
+                totalRows: objects.length
+            });
+            return {
+                data: summary,
+                sheetName: config.sheet_name,
+                headers
+            };
+        }
+        catch (error) {
+            logger_1.logger.error('[AISheetUpdater] Error getting sheet data for chat:', error.message);
+            return null;
+        }
+    }
+    /**
+     * Check if a message is asking about sheet data
+     * Simple keyword check to avoid unnecessary AI calls
+     */
+    isQueryingSheetData(message) {
+        const queryPatterns = [
+            'ada tugas',
+            'tugas apa',
+            'list tugas',
+            'daftar tugas',
+            'deadline apa',
+            'ada deadline',
+            'kapan deadline',
+            'rekap tugas',
+            'rekap deadline',
+            'apa aja tugas',
+            'apa saja tugas',
+            'tugas yang ada',
+            'reminder tugas',
+            'ingetin tugas',
+            'cek tugas',
+            'lihat tugas',
+            'show tasks',
+            'what tasks',
+            'any tasks',
+            'list deadlines'
+        ];
+        const lowerMessage = message.toLowerCase();
+        return queryPatterns.some(pattern => lowerMessage.includes(pattern));
     }
 }
 exports.aiSheetUpdaterService = new AISheetUpdaterService();

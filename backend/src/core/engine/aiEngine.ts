@@ -43,17 +43,37 @@ class AIEngine {
             // Get bot AI config first to check mode
             const botResult = await query('SELECT ai_config, name FROM bots WHERE id = ?', [bot_id]);
             const aiConfig = botResult.rows.length ? JSON.parse(botResult.rows[0].ai_config || '{}') : {};
-            // Silent confirmation for hybrid and data_collection modes
-            // Only conversation mode sends "✅ Noted!" confirmation
-            const shouldSendConfirmation = aiConfig.mode === 'conversation';
-
+            
             // ✅ AI Sheet Updater - Process message for auto sheet updates (runs independently)
             // Priority: sender_phone (resolved) > from JID > contact_id
             const senderJid = payload.from || contact_id || '';
+            const targetJid = context.group_id || contact_id || senderJid;
             const senderPhone = payload.sender_phone; // Resolved phone from LID
             const sheetResult = await this.processSheetUpdate(bot_id, senderJid, payload.content, payload, senderPhone);
 
-            // Send confirmation for CREATE mode (only in conversation mode)
+            // Check per-target config for confirmation behavior
+            // Default: send confirmation unless silentCollection is explicitly true
+            let shouldSendConfirmation = true;
+            const targetConfigResult = await query(
+                'SELECT llm_config FROM llm_allowed_targets WHERE bot_id = ? AND target_jid = ? AND is_enabled = 1 LIMIT 1',
+                [bot_id, targetJid]
+            );
+            if (targetConfigResult.rows.length > 0) {
+                const targetConfig = JSON.parse(targetConfigResult.rows[0].llm_config || '{}');
+                // Only suppress confirmation if silentCollection is explicitly true
+                if (targetConfig.silentCollection === true) {
+                    shouldSendConfirmation = false;
+                }
+            }
+
+            logger.info('[AIEngine] Sheet confirmation check', { 
+                targetJid, 
+                shouldSendConfirmation, 
+                sheetSuccess: sheetResult?.success,
+                sheetMode: sheetResult?.mode
+            });
+
+            // Send confirmation for CREATE mode
             if (sheetResult?.success && sheetResult.mode === 'create' && sheetResult.extractedData && shouldSendConfirmation) {
                 // Build a natural confirmation message from extracted data
                 const dataEntries = Object.entries(sheetResult.extractedData)

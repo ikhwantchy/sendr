@@ -6,13 +6,29 @@ const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 // All routes require authentication
 router.use(auth_1.authenticate);
+// Helper: Verify bot access (OWNER and ADMIN can access all bots)
+async function verifyBotAccess(botId, tenantId, userRole) {
+    const isGlobalAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
+    const botQuery = isGlobalAdmin
+        ? 'SELECT * FROM bots WHERE id = ?'
+        : 'SELECT * FROM bots WHERE id = ? AND tenant_id = ?';
+    const botParams = isGlobalAdmin ? [botId] : [botId, tenantId];
+    const botResult = await (0, connection_1.query)(botQuery, botParams);
+    return botResult.rows && botResult.rows.length > 0;
+}
 // Get all allowed targets for a bot
 router.get('/:botId/llm-targets', async (req, res) => {
     try {
         const { botId } = req.params;
         const tenantId = req.user.tenant_id;
-        // Verify bot ownership
-        const botResult = await (0, connection_1.query)('SELECT * FROM bots WHERE id = ? AND tenant_id = ?', [botId, tenantId]);
+        const userRole = req.user.role;
+        // Verify bot ownership (OWNER/ADMIN can access all bots)
+        const isGlobalAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
+        const botQuery = isGlobalAdmin
+            ? 'SELECT * FROM bots WHERE id = ?'
+            : 'SELECT * FROM bots WHERE id = ? AND tenant_id = ?';
+        const botParams = isGlobalAdmin ? [botId] : [botId, tenantId];
+        const botResult = await (0, connection_1.query)(botQuery, botParams);
         if (!botResult.rows || botResult.rows.length === 0) {
             return res.status(404).json({ error: 'Bot not found' });
         }
@@ -43,6 +59,7 @@ router.post('/:botId/llm-targets', async (req, res) => {
     try {
         const { botId } = req.params;
         const tenantId = req.user.tenant_id;
+        const userRole = req.user.role;
         const { config_name, target_type, target_jid, target_name, is_enabled = 1, llm_config = '{}' } = req.body;
         // Validate input
         if (!target_type || !target_jid) {
@@ -51,9 +68,8 @@ router.post('/:botId/llm-targets', async (req, res) => {
         if (!['group', 'contact'].includes(target_type)) {
             return res.status(400).json({ error: 'target_type must be "group" or "contact"' });
         }
-        // Verify bot ownership
-        const botResult = await (0, connection_1.query)('SELECT * FROM bots WHERE id = ? AND tenant_id = ?', [botId, tenantId]);
-        if (!botResult.rows || botResult.rows.length === 0) {
+        // Verify bot ownership (OWNER can access all bots)
+        if (!await verifyBotAccess(botId, tenantId, userRole)) {
             console.log(`Bot not found or tenant mismatch: botId=${botId}, tenantId=${tenantId}`);
             return res.status(404).json({ error: 'Bot not found or you do not have permission' });
         }
@@ -90,10 +106,10 @@ router.put('/:botId/llm-targets/:targetId', async (req, res) => {
     try {
         const { botId, targetId } = req.params;
         const tenantId = req.user.tenant_id;
+        const userRole = req.user.role;
         const { config_name, target_type, target_jid, target_name, is_enabled, llm_config } = req.body;
-        // Verify bot ownership
-        const botResult = await (0, connection_1.query)('SELECT * FROM bots WHERE id = ? AND tenant_id = ?', [botId, tenantId]);
-        if (!botResult.rows || botResult.rows.length === 0) {
+        // Verify bot ownership (OWNER can access all bots)
+        if (!await verifyBotAccess(botId, tenantId, userRole)) {
             return res.status(404).json({ error: 'Bot not found' });
         }
         // Update record
@@ -124,9 +140,9 @@ router.patch('/:botId/llm-targets/:targetId/toggle', async (req, res) => {
     try {
         const { botId, targetId } = req.params;
         const tenantId = req.user.tenant_id;
-        // Verify bot ownership
-        const botResult = await (0, connection_1.query)('SELECT * FROM bots WHERE id = ? AND tenant_id = ?', [botId, tenantId]);
-        if (!botResult.rows || botResult.rows.length === 0) {
+        const userRole = req.user.role;
+        // Verify bot ownership (OWNER can access all bots)
+        if (!await verifyBotAccess(botId, tenantId, userRole)) {
             return res.status(404).json({ error: 'Bot not found' });
         }
         // Toggle status
@@ -153,9 +169,9 @@ router.delete('/:botId/llm-targets/:targetId', async (req, res) => {
     try {
         const { botId, targetId } = req.params;
         const tenantId = req.user.tenant_id;
-        // Verify bot ownership
-        const botResult = await (0, connection_1.query)('SELECT * FROM bots WHERE id = ? AND tenant_id = ?', [botId, tenantId]);
-        if (!botResult.rows || botResult.rows.length === 0) {
+        const userRole = req.user.role;
+        // Verify bot ownership (OWNER can access all bots)
+        if (!await verifyBotAccess(botId, tenantId, userRole)) {
             return res.status(404).json({ error: 'Bot not found' });
         }
         // Delete target
@@ -172,13 +188,13 @@ router.post('/:botId/llm-targets/bulk', async (req, res) => {
     try {
         const { botId } = req.params;
         const tenantId = req.user.tenant_id;
+        const userRole = req.user.role;
         const { targets } = req.body; // Array of { target_type, target_jid, target_name }
         if (!Array.isArray(targets) || targets.length === 0) {
             return res.status(400).json({ error: 'targets array is required' });
         }
-        // Verify bot ownership
-        const botResult = await (0, connection_1.query)('SELECT * FROM bots WHERE id = ? AND tenant_id = ?', [botId, tenantId]);
-        if (!botResult.rows || botResult.rows.length === 0) {
+        // Verify bot ownership (OWNER can access all bots)
+        if (!await verifyBotAccess(botId, tenantId, userRole)) {
             return res.status(404).json({ error: 'Bot not found' });
         }
         // Insert each target

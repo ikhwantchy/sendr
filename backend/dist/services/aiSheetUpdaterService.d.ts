@@ -124,6 +124,7 @@ declare class AISheetUpdaterService {
     classifyMessage(message: string, valueMappings: ValueMapping[], aiInstructions?: string): Promise<ClassificationResult>;
     /**
      * Quick AI classification without full conversation context
+     * Uses the appropriate provider based on config (Gemini, Groq, OpenAI, etc.)
      */
     private quickAIClassify;
     /**
@@ -174,6 +175,23 @@ declare class AISheetUpdaterService {
      * Get update logs for a config
      */
     getUpdateLogs(configId: string, limit?: number): Promise<any[]>;
+    /**
+     * Get sheet data for AI chat context
+     * Returns formatted sheet data that can be injected into the AI system prompt
+     * @param botId - Bot ID to look up configs for
+     * @param targetJid - Target group/contact JID to filter configs
+     * @returns Formatted string with sheet data, or null if no relevant config
+     */
+    getSheetDataForChat(botId: string, targetJid: string): Promise<{
+        data: string;
+        sheetName: string;
+        headers: string[];
+    } | null>;
+    /**
+     * Check if a message is asking about sheet data
+     * Simple keyword check to avoid unnecessary AI calls
+     */
+    isQueryingSheetData(message: string): boolean;
 }
 export declare const aiSheetUpdaterService: AISheetUpdaterService;
 export default aiSheetUpdaterService;

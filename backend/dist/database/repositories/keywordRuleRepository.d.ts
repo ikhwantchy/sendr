@@ -25,7 +25,7 @@ declare class KeywordRuleRepository {
     private parseRule;
     findById(id: string, tenantId?: string): Promise<KeywordRule | null>;
     findByBot(tenantId: string | undefined, botId: string): Promise<KeywordRule[]>;
-    findByTenant(tenantId: string): Promise<KeywordRule[]>;
+    findByTenant(tenantId?: string): Promise<KeywordRule[]>;
     create(data: {
         tenant_id: string;
         bot_id: string;
@@ -39,9 +39,9 @@ declare class KeywordRuleRepository {
         metadata?: any;
         created_by?: string;
     }): Promise<KeywordRule>;
-    update(id: string, tenantId: string, data: Partial<KeywordRule>): Promise<KeywordRule>;
+    update(id: string, tenantId: string | undefined, data: Partial<KeywordRule>): Promise<KeywordRule>;
     private generateUUID;
-    delete(id: string, tenantId: string): Promise<void>;
+    delete(id: string, tenantId?: string): Promise<void>;
 }
 export declare const keywordRuleRepository: KeywordRuleRepository;
 export {};

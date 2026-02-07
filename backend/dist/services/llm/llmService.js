@@ -11,6 +11,7 @@ const openai_1 = require("./providers/openai");
 const groq_1 = require("./providers/groq");
 const connection_1 = require("../../database/connection");
 const logger_1 = require("../../utils/logger");
+const aiSheetUpdaterService_1 = require("../aiSheetUpdaterService");
 class LLMService {
     providers = new Map();
     constructor() {
@@ -75,9 +76,28 @@ class LLMService {
             }
             // Get or create conversation
             const conversation = await this.getOrCreateConversation(botId, contactId, 'chat');
+            // Build base system prompt
+            let systemPrompt = activeConfig.systemPrompt || 'You are a helpful assistant.';
+            // Check if user is querying sheet data and inject context if available
+            if (aiSheetUpdaterService_1.aiSheetUpdaterService.isQueryingSheetData(userMessage)) {
+                try {
+                    const sheetData = await aiSheetUpdaterService_1.aiSheetUpdaterService.getSheetDataForChat(botId, contactId);
+                    if (sheetData && sheetData.data) {
+                        systemPrompt += `\n\n--- DATA REFERENCE ---\nThe following is real-time data from the connected spreadsheet. Use this to answer questions about tasks, deadlines, or recorded information:\n\n${sheetData.data}\n--- END DATA ---\n\nWhen answering about this data, be concise and helpful. Format nicely for WhatsApp (use bullet points or numbered lists).`;
+                        logger_1.logger.info('[LLMService] Injected sheet data into system prompt', {
+                            botId,
+                            contactId,
+                            sheetName: sheetData.sheetName
+                        });
+                    }
+                }
+                catch (sheetError) {
+                    logger_1.logger.warn('[LLMService] Failed to get sheet data for chat', { error: sheetError.message });
+                }
+            }
             // Build messages with context
             const messages = [
-                { role: 'system', content: activeConfig.systemPrompt || 'You are a helpful assistant.' }
+                { role: 'system', content: systemPrompt }
             ];
             // Add conversation history (last 10 messages)
             const history = JSON.parse(conversation.messages || '[]').slice(-10);

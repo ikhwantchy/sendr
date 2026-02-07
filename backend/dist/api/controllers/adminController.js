@@ -3,10 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clearCache = exports.testEmail = exports.updateSettings = exports.bulkUpdateSettings = exports.getAllSettings = exports.getSettings = exports.getDashboardStats = exports.createUser = void 0;
+exports.deleteGoogleServiceAccount = exports.saveGoogleServiceAccount = exports.getGoogleServiceAccount = exports.clearCache = exports.testEmail = exports.updateSettings = exports.bulkUpdateSettings = exports.getAllSettings = exports.getSettings = exports.getDashboardStats = exports.createUser = void 0;
 const systemSettingsService_1 = __importDefault(require("../../services/systemSettingsService"));
 const auditLogService_1 = __importDefault(require("../../services/auditLogService"));
 const userInviteService_1 = __importDefault(require("../../services/userInviteService"));
+const googleSheetsWriteService_1 = require("../../services/googleSheetsWriteService");
 const connection_sqlite_1 = require("../../database/connection-sqlite");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const uuid_1 = require("uuid");
@@ -376,4 +377,146 @@ const clearCache = async (req, res) => {
     }
 };
 exports.clearCache = clearCache;
+/**
+ * GET /api/admin/google-service-account
+ * Get Google Service Account status for the tenant
+ */
+const getGoogleServiceAccount = async (req, res) => {
+    try {
+        const tenantId = req.user.tenant_id;
+        const result = await (0, connection_sqlite_1.query)('SELECT google_service_account FROM tenants WHERE id = ?', [tenantId]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Tenant not found'
+            });
+        }
+        const serviceAccount = result.rows[0].google_service_account;
+        let parsed = null;
+        let email = null;
+        if (serviceAccount) {
+            try {
+                parsed = JSON.parse(serviceAccount);
+                email = parsed.client_email;
+            }
+            catch (e) {
+                // Invalid JSON stored
+            }
+        }
+        res.json({
+            success: true,
+            data: {
+                configured: !!email,
+                email: email,
+                // Don't expose private key
+            }
+        });
+    }
+    catch (error) {
+        console.error('[Admin] Get Google Service Account error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch Google Service Account',
+            error: error.message
+        });
+    }
+};
+exports.getGoogleServiceAccount = getGoogleServiceAccount;
+/**
+ * POST /api/admin/google-service-account
+ * Save Google Service Account JSON for the tenant
+ */
+const saveGoogleServiceAccount = async (req, res) => {
+    try {
+        const tenantId = req.user.tenant_id;
+        const { serviceAccountJson } = req.body;
+        if (!serviceAccountJson) {
+            return res.status(400).json({
+                success: false,
+                message: 'serviceAccountJson is required'
+            });
+        }
+        // Validate JSON structure
+        let parsed;
+        try {
+            parsed = typeof serviceAccountJson === 'string'
+                ? JSON.parse(serviceAccountJson)
+                : serviceAccountJson;
+        }
+        catch (e) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid JSON format'
+            });
+        }
+        // Validate required fields
+        if (!parsed.client_email || !parsed.private_key || !parsed.project_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid service account JSON. Required fields: client_email, private_key, project_id'
+            });
+        }
+        // Store as JSON string
+        const jsonString = JSON.stringify(parsed);
+        await (0, connection_sqlite_1.query)('UPDATE tenants SET google_service_account = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [jsonString, tenantId]);
+        // Clear cached client so new credentials are used immediately
+        googleSheetsWriteService_1.googleSheetsWriteService.clearTenantCache(tenantId);
+        await auditLogService_1.default.log({
+            user_id: req.user.id,
+            action_type: 'settings.update',
+            action_category: 'integrations',
+            description: `Updated Google Service Account (${parsed.client_email})`,
+            status: 'success'
+        });
+        res.json({
+            success: true,
+            message: 'Google Service Account saved successfully',
+            data: {
+                email: parsed.client_email,
+                projectId: parsed.project_id
+            }
+        });
+    }
+    catch (error) {
+        console.error('[Admin] Save Google Service Account error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to save Google Service Account',
+            error: error.message
+        });
+    }
+};
+exports.saveGoogleServiceAccount = saveGoogleServiceAccount;
+/**
+ * DELETE /api/admin/google-service-account
+ * Remove Google Service Account from tenant
+ */
+const deleteGoogleServiceAccount = async (req, res) => {
+    try {
+        const tenantId = req.user.tenant_id;
+        await (0, connection_sqlite_1.query)('UPDATE tenants SET google_service_account = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [tenantId]);
+        // Clear cached client
+        googleSheetsWriteService_1.googleSheetsWriteService.clearTenantCache(tenantId);
+        await auditLogService_1.default.log({
+            user_id: req.user.id,
+            action_type: 'settings.delete',
+            action_category: 'integrations',
+            description: 'Removed Google Service Account',
+            status: 'success'
+        });
+        res.json({
+            success: true,
+            message: 'Google Service Account removed successfully'
+        });
+    }
+    catch (error) {
+        console.error('[Admin] Delete Google Service Account error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete Google Service Account',
+            error: error.message
+        });
+    }
+};
+exports.deleteGoogleServiceAccount = deleteGoogleServiceAccount;
 //# sourceMappingURL=adminController.js.map

@@ -14,12 +14,14 @@ const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 /**
  * GET /api/sheet-updater/status
- * Check if sheet write service is ready
+ * Check if sheet write service is ready (checks tenant-specific first, then global fallback)
  */
 router.get('/status', async (req, res) => {
     try {
-        const isReady = googleSheetsWriteService_1.googleSheetsWriteService.isReady();
-        const serviceEmail = googleSheetsWriteService_1.googleSheetsWriteService.getServiceAccountEmail();
+        const tenantId = req.user?.tenant_id;
+        // Check tenant-specific credentials first
+        const isReady = await googleSheetsWriteService_1.googleSheetsWriteService.isReadyForTenant(tenantId);
+        const serviceEmail = await googleSheetsWriteService_1.googleSheetsWriteService.getServiceAccountEmailForTenant(tenantId);
         res.json({
             success: true,
             data: {
@@ -27,7 +29,7 @@ router.get('/status', async (req, res) => {
                 serviceAccountEmail: serviceEmail,
                 message: isReady
                     ? 'Service is ready. Share your spreadsheet with the service account email.'
-                    : 'Service account not configured. Please set GOOGLE_SERVICE_ACCOUNT_KEY in .env'
+                    : 'Google Service Account not configured. Go to Settings > Integrations to set up.'
             }
         });
     }
@@ -42,6 +44,7 @@ router.get('/status', async (req, res) => {
 router.post('/validate-sheet', async (req, res) => {
     try {
         const { spreadsheetUrl } = req.body;
+        const tenantId = req.user?.tenant_id;
         if (!spreadsheetUrl) {
             return res.status(400).json({ success: false, error: 'spreadsheetUrl is required' });
         }
@@ -49,7 +52,7 @@ router.post('/validate-sheet', async (req, res) => {
         if (!spreadsheetId) {
             return res.status(400).json({ success: false, error: 'Invalid spreadsheet URL' });
         }
-        const validation = await googleSheetsWriteService_1.googleSheetsWriteService.validateWriteAccess(spreadsheetId);
+        const validation = await googleSheetsWriteService_1.googleSheetsWriteService.validateWriteAccess(spreadsheetId, tenantId);
         res.json({
             success: validation.valid,
             data: validation
@@ -66,6 +69,7 @@ router.post('/validate-sheet', async (req, res) => {
 router.get('/sheet-info', async (req, res) => {
     try {
         const { spreadsheetUrl, sheetName } = req.query;
+        const tenantId = req.user?.tenant_id;
         if (!spreadsheetUrl) {
             return res.status(400).json({ success: false, error: 'spreadsheetUrl is required' });
         }
@@ -73,13 +77,13 @@ router.get('/sheet-info', async (req, res) => {
         if (!spreadsheetId) {
             return res.status(400).json({ success: false, error: 'Invalid spreadsheet URL' });
         }
-        const sheets = await googleSheetsWriteService_1.googleSheetsWriteService.getSheetNames(spreadsheetId);
+        const sheets = await googleSheetsWriteService_1.googleSheetsWriteService.getSheetNames(spreadsheetId, tenantId);
         let headers = [];
         if (sheetName && sheets.includes(sheetName)) {
-            headers = await googleSheetsWriteService_1.googleSheetsWriteService.getHeaders(spreadsheetId, sheetName);
+            headers = await googleSheetsWriteService_1.googleSheetsWriteService.getHeaders(spreadsheetId, sheetName, tenantId);
         }
         else if (sheets.length > 0) {
-            headers = await googleSheetsWriteService_1.googleSheetsWriteService.getHeaders(spreadsheetId, sheets[0]);
+            headers = await googleSheetsWriteService_1.googleSheetsWriteService.getHeaders(spreadsheetId, sheets[0], tenantId);
         }
         res.json({
             success: true,
@@ -176,12 +180,32 @@ router.get('/config/:configId', async (req, res) => {
 router.post('/configs', async (req, res) => {
     try {
         const config = req.body;
-        if (!config.bot_id || !config.name || !config.spreadsheet_url ||
-            !config.sheet_name || !config.match_column || !config.update_column) {
+        // Base required fields
+        if (!config.bot_id || !config.name || !config.spreadsheet_url || !config.sheet_name) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing required fields: bot_id, name, spreadsheet_url, sheet_name, match_column, update_column'
+                error: 'Missing required fields: bot_id, name, spreadsheet_url, sheet_name'
             });
+        }
+        // Mode-specific validation
+        const isCreateMode = config.mode === 'create';
+        if (isCreateMode) {
+            // CREATE (LOG) mode requires column_schema
+            if (!config.column_schema || config.column_schema.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'LOG mode requires column_schema with at least one column'
+                });
+            }
+        }
+        else {
+            // UPDATE/SMART mode requires match_column and update_column
+            if (!config.match_column || !config.update_column) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'UPDATE mode requires match_column and update_column'
+                });
+            }
         }
         // Use default mappings if not provided
         if (!config.value_mappings || config.value_mappings.length === 0) {

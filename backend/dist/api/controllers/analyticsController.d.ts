@@ -1,8 +1,9 @@
 type TimeRange = '30m' | '24h' | '7d' | '30d';
 interface AnalyticsFilter {
     timeRange: TimeRange;
-    tenantId: string;
+    tenantId: string | null;
     botId?: string;
+    timezone?: string;
 }
 export declare class AnalyticsController {
     /**

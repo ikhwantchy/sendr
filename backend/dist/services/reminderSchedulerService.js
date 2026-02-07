@@ -452,9 +452,10 @@ class ReminderSchedulerService {
         try {
             // Import WhatsApp adapter dynamically to avoid circular dependencies
             const { whatsappAdapter } = await Promise.resolve().then(() => __importStar(require('../adapters/whatsapp/whatsappAdapter.baileys')));
+            let result;
             if (imageUrl) {
                 // Send with image
-                await whatsappAdapter.sendMessage(botId, targetJid, {
+                result = await whatsappAdapter.sendMessage(botId, targetJid, {
                     type: 'image',
                     media_url: imageUrl,
                     caption: message,
@@ -462,11 +463,23 @@ class ReminderSchedulerService {
             }
             else {
                 // Send text only
-                await whatsappAdapter.sendMessage(botId, targetJid, {
+                result = await whatsappAdapter.sendMessage(botId, targetJid, {
                     type: 'text',
                     content: message,
                 });
             }
+            // Log message to database with source = 'reminder'
+            const { v4: uuidv4 } = require('uuid');
+            await (0, connection_1.query)(`
+                INSERT INTO messages (id, bot_id, wa_message_id, direction, source, message_type, content, created_at)
+                VALUES (?, ?, ?, 'outbound', 'reminder', ?, ?, CURRENT_TIMESTAMP)
+            `, [
+                uuidv4(),
+                botId,
+                result?.message_id || `reminder_${Date.now()}`,
+                imageUrl ? 'image' : 'text',
+                message
+            ]);
             console.log(`✅ Message sent to ${targetJid}`);
         }
         catch (error) {
@@ -484,8 +497,11 @@ class ReminderSchedulerService {
                 VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
             `, [require('uuid').v4(), reminderId, status, details]);
             // Get reminder info to check if it's a "Once" type
-            const reminderResult = await (0, connection_1.query)('SELECT schedule FROM reminders WHERE id = ?', [reminderId]);
-            const isOnceReminder = reminderResult.rows.length > 0 && this.isOnceCron(reminderResult.rows[0].schedule);
+            const reminderResult = await (0, connection_1.query)('SELECT schedule, timezone FROM reminders WHERE id = ?', [reminderId]);
+            if (reminderResult.rows.length === 0)
+                return;
+            const reminder = reminderResult.rows[0];
+            const isOnceReminder = this.isOnceCron(reminder.schedule);
             // Update reminder's last_run_at
             // For "Once" reminders, clear next_run_at after execution
             if (isOnceReminder) {
@@ -497,11 +513,28 @@ class ReminderSchedulerService {
                 console.log(`📭 Cleared next_run_at for "Once" reminder: ${reminderId}`);
             }
             else {
+                // For recurring reminders, calculate and update next_run_at
+                let nextRunAt = null;
+                try {
+                    const cp = require('cron-parser');
+                    const parser = cp.default || cp;
+                    const parseFn = parser.parseExpression || parser.parse;
+                    if (typeof parseFn === 'function') {
+                        const interval = parseFn.call(parser, reminder.schedule, {
+                            tz: reminder.timezone || 'Asia/Jakarta'
+                        });
+                        nextRunAt = interval.next().toISOString();
+                        console.log(`📅 Updated next_run_at for "${reminderId}": ${nextRunAt}`);
+                    }
+                }
+                catch (err) {
+                    console.error('Error calculating next run after execution:', err);
+                }
                 await (0, connection_1.query)(`
                     UPDATE reminders 
-                    SET last_run_at = CURRENT_TIMESTAMP, last_status = ?, run_count = run_count + 1
+                    SET last_run_at = CURRENT_TIMESTAMP, last_status = ?, run_count = run_count + 1, next_run_at = ?
                     WHERE id = ?
-                `, [status, reminderId]);
+                `, [status, nextRunAt, reminderId]);
             }
         }
         catch (error) {

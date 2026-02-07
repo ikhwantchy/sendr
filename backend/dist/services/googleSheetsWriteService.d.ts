@@ -2,12 +2,11 @@
  * Google Sheets Write Service
  * Uses Service Account for read/write access to Google Sheets
  *
- * SETUP:
- * 1. Create Service Account di Google Cloud Console
- * 2. Download JSON key file
- * 3. Set GOOGLE_SERVICE_ACCOUNT_KEY di .env (base64 encoded) atau path ke file
- * 4. Share spreadsheet ke email service account
+ * SETUP (Two Options):
+ * A) Per-Tenant (Recommended): Configure via Dashboard > Settings > Integrations
+ * B) Global Fallback: Set GOOGLE_SERVICE_ACCOUNT_KEY in .env (base64 encoded)
  */
+import { sheets_v4 } from 'googleapis';
 interface UpdateResult {
     success: boolean;
     updatedRange?: string;
@@ -25,27 +24,57 @@ declare class GoogleSheetsWriteService {
     private initialized;
     private initAttempted;
     private credentials;
+    private tenantClients;
+    private readonly CLIENT_CACHE_TTL;
     constructor();
     /**
      * Ensure service is initialized (lazy initialization)
      */
     private ensureInitialized;
     /**
-     * Synchronous initialization
+     * Synchronous initialization for global/fallback credentials
      */
     private initSync;
     /**
+     * Get or create a Sheets client for a specific tenant
+     */
+    getClientForTenant(tenantId: string): Promise<{
+        sheets: sheets_v4.Sheets;
+        email: string;
+    } | null>;
+    /**
+     * Get the appropriate sheets client (tenant-specific or global fallback)
+     * Fallback order: Tenant SA → Default tenant SA → Global .env
+     */
+    getSheetsClient(tenantId?: string): Promise<{
+        sheets: sheets_v4.Sheets;
+        email: string;
+    } | null>;
+    /**
      * Check if service is ready for write operations
+     * @param tenantId Optional tenant ID to check tenant-specific credentials
+     */
+    isReadyForTenant(tenantId?: string): Promise<boolean>;
+    /**
+     * Check if service is ready (global fallback only, for backward compatibility)
      */
     isReady(): boolean;
     /**
-     * Get service account email (for sharing instructions)
+     * Get service account email for a tenant
+     */
+    getServiceAccountEmailForTenant(tenantId?: string): Promise<string | null>;
+    /**
+     * Get service account email (global, for backward compatibility)
      */
     getServiceAccountEmail(): string | null;
     /**
-     * Get service account credentials from env or file
+     * Clear cached client for a tenant (call after credentials are updated)
      */
-    private getCredentials;
+    clearTenantCache(tenantId: string): void;
+    /**
+     * Get service account credentials from environment variables
+     */
+    private getCredentialsFromEnv;
     /**
      * Extract spreadsheet ID from URL
      */
@@ -53,15 +82,15 @@ declare class GoogleSheetsWriteService {
     /**
      * Get all sheet/tab names in a spreadsheet
      */
-    getSheetNames(spreadsheetId: string): Promise<string[]>;
+    getSheetNames(spreadsheetId: string, tenantId?: string): Promise<string[]>;
     /**
      * Get headers (first row) of a sheet
      */
-    getHeaders(spreadsheetId: string, sheetName: string): Promise<string[]>;
+    getHeaders(spreadsheetId: string, sheetName: string, tenantId?: string): Promise<string[]>;
     /**
      * Read all data from a sheet
      */
-    readSheet(spreadsheetId: string, sheetName: string): Promise<{
+    readSheet(spreadsheetId: string, sheetName: string, tenantId?: string): Promise<{
         headers: string[];
         rows: string[][];
         objects: any[];
@@ -73,7 +102,7 @@ declare class GoogleSheetsWriteService {
     /**
      * Update a specific cell
      */
-    updateCell(spreadsheetId: string, sheetName: string, row: number, column: string | number, value: string): Promise<UpdateResult>;
+    updateCell(spreadsheetId: string, sheetName: string, row: number, column: string | number, value: string, tenantId?: string): Promise<UpdateResult>;
     /**
      * Update a row by finding it first
      */
@@ -81,9 +110,9 @@ declare class GoogleSheetsWriteService {
     /**
      * Append a new row to the sheet
      */
-    appendRow(spreadsheetId: string, sheetName: string, values: string[]): Promise<UpdateResult>;
+    appendRow(spreadsheetId: string, sheetName: string, values: string[], tenantId?: string): Promise<UpdateResult>;
     /**
-     * Append a row as object (matches headers)
+     * Append a row as object (matches headers - case insensitive)
      */
     appendRowAsObject(spreadsheetId: string, sheetName: string, data: Record<string, string>): Promise<UpdateResult>;
     /**
@@ -93,7 +122,7 @@ declare class GoogleSheetsWriteService {
     /**
      * Validate if spreadsheet is accessible with write permission
      */
-    validateWriteAccess(spreadsheetId: string): Promise<{
+    validateWriteAccess(spreadsheetId: string, tenantId?: string): Promise<{
         valid: boolean;
         message: string;
         sheets?: string[];

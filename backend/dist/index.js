@@ -202,6 +202,15 @@ const server = app.listen(PORT, async () => {
     catch (error) {
         logger_1.logger.error('❌ Failed to initialize campaign scheduler', { error: error.message });
     }
+    // ✅ Initialize bot expiration scheduler
+    try {
+        const { botExpirationScheduler } = await Promise.resolve().then(() => __importStar(require('./scheduler/botExpirationScheduler')));
+        botExpirationScheduler.start();
+        logger_1.logger.info('⏰ Bot expiration scheduler initialized');
+    }
+    catch (error) {
+        logger_1.logger.error('❌ Failed to initialize bot expiration scheduler', { error: error.message });
+    }
 });
 // Graceful shutdown
 process.on('SIGTERM', async () => {

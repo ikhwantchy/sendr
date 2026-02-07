@@ -43,4 +43,19 @@ export declare const testEmail: (req: Request, res: Response) => Promise<Respons
  * Clear system cache
  */
 export declare const clearCache: (req: Request, res: Response) => Promise<void>;
+/**
+ * GET /api/admin/google-service-account
+ * Get Google Service Account status for the tenant
+ */
+export declare const getGoogleServiceAccount: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+/**
+ * POST /api/admin/google-service-account
+ * Save Google Service Account JSON for the tenant
+ */
+export declare const saveGoogleServiceAccount: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+/**
+ * DELETE /api/admin/google-service-account
+ * Remove Google Service Account from tenant
+ */
+export declare const deleteGoogleServiceAccount: (req: Request, res: Response) => Promise<void>;
 //# sourceMappingURL=adminController.d.ts.map

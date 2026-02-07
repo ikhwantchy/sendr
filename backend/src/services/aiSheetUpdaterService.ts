@@ -1153,6 +1153,115 @@ Respond in JSON format ONLY:
             return [];
         }
     }
+
+    /**
+     * Get sheet data for AI chat context
+     * Returns formatted sheet data that can be injected into the AI system prompt
+     * @param botId - Bot ID to look up configs for
+     * @param targetJid - Target group/contact JID to filter configs
+     * @returns Formatted string with sheet data, or null if no relevant config
+     */
+    async getSheetDataForChat(botId: string, targetJid: string): Promise<{ data: string; sheetName: string; headers: string[] } | null> {
+        try {
+            // Find configs that apply to this target
+            const configs = await this.getConfigsByBot(botId);
+            const applicableConfigs = configs.filter(c => 
+                c.is_enabled && 
+                c.target_jids && 
+                c.target_jids.includes(targetJid)
+            );
+
+            if (applicableConfigs.length === 0) {
+                logger.debug('[AISheetUpdater] No applicable configs for sheet read', { botId, targetJid });
+                return null;
+            }
+
+            // Use the first applicable config (usually there's only one per target)
+            const config = applicableConfigs[0];
+            
+            if (!config.spreadsheet_id) {
+                logger.warn('[AISheetUpdater] Config missing spreadsheet_id', { configId: config.id });
+                return null;
+            }
+
+            // Read sheet data
+            const { headers, objects } = await googleSheetsWriteService.readSheet(
+                config.spreadsheet_id,
+                config.sheet_name
+            );
+
+            if (objects.length === 0) {
+                return { 
+                    data: 'Sheet is empty - no data recorded yet.', 
+                    sheetName: config.sheet_name,
+                    headers 
+                };
+            }
+
+            // Format data as a readable list
+            // Limit to last 20 entries to avoid token overflow
+            const recentData = objects.slice(-20);
+            
+            // Format each row as a readable line
+            const formattedRows = recentData.map((row, index) => {
+                const entries = Object.entries(row)
+                    .filter(([key, value]) => value && String(value).trim() !== '')
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join(', ');
+                return `${index + 1}. ${entries}`;
+            }).join('\n');
+
+            const summary = `📋 Sheet: ${config.sheet_name}\nTotal entries: ${objects.length}\n\nRecent entries:\n${formattedRows}`;
+
+            logger.info('[AISheetUpdater] Retrieved sheet data for chat', { 
+                botId, 
+                targetJid, 
+                sheetName: config.sheet_name,
+                totalRows: objects.length 
+            });
+
+            return {
+                data: summary,
+                sheetName: config.sheet_name,
+                headers
+            };
+        } catch (error: any) {
+            logger.error('[AISheetUpdater] Error getting sheet data for chat:', error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Check if a message is asking about sheet data
+     * Simple keyword check to avoid unnecessary AI calls
+     */
+    isQueryingSheetData(message: string): boolean {
+        const queryPatterns = [
+            'ada tugas',
+            'tugas apa',
+            'list tugas',
+            'daftar tugas',
+            'deadline apa',
+            'ada deadline',
+            'kapan deadline',
+            'rekap tugas',
+            'rekap deadline',
+            'apa aja tugas',
+            'apa saja tugas',
+            'tugas yang ada',
+            'reminder tugas',
+            'ingetin tugas',
+            'cek tugas',
+            'lihat tugas',
+            'show tasks',
+            'what tasks',
+            'any tasks',
+            'list deadlines'
+        ];
+        
+        const lowerMessage = message.toLowerCase();
+        return queryPatterns.some(pattern => lowerMessage.includes(pattern));
+    }
 }
 
 export const aiSheetUpdaterService = new AISheetUpdaterService();

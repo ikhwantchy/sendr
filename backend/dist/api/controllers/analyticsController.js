@@ -2,12 +2,57 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AnalyticsController = void 0;
 const connection_1 = require("../../database/connection");
+/**
+ * Format a Date to a specific timezone string
+ */
+function formatInTimezone(date, timezone, format) {
+    const options = {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    };
+    const parts = new Intl.DateTimeFormat('en-CA', options).formatToParts(date);
+    const get = (type) => parts.find(p => p.type === type)?.value || '00';
+    const year = get('year');
+    const month = get('month');
+    const day = get('day');
+    const hour = get('hour');
+    const minute = get('minute');
+    if (format === 'day') {
+        return `${year}-${month}-${day}`;
+    }
+    else if (format === 'hour') {
+        return `${year}-${month}-${day} ${hour}:00`;
+    }
+    else {
+        return `${year}-${month}-${day} ${hour}:${minute}`;
+    }
+}
+/**
+ * Get timezone offset in hours for SQLite datetime modifier
+ */
+function getTimezoneOffsetHours(timezone) {
+    try {
+        const now = new Date();
+        const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+        const tzDate = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+        return Math.round((tzDate.getTime() - utcDate.getTime()) / (1000 * 60 * 60));
+    }
+    catch {
+        // Default to Asia/Jakarta (+7) if timezone is invalid
+        return 7;
+    }
+}
 class AnalyticsController {
     /**
      * Get comprehensive analytics data
      */
     static async getAnalyticsData(filter) {
-        const { timeRange, tenantId, botId } = filter;
+        const { timeRange, tenantId, botId, timezone = 'Asia/Jakarta' } = filter;
         // 1. Calculate Date Ranges
         const now = new Date();
         let startDate = new Date();
@@ -41,11 +86,17 @@ class AnalyticsController {
                 break;
         }
         // Debug log
-        console.log(`[Analytics] TimeRange: ${timeRange}, StartDate: ${startDate.toISOString()}, GroupBy: ${groupByFormat}${botId ? `, BotId: ${botId}` : ''}`);
-        const startIso = startDate.toISOString();
-        const prevStartIso = prevStartDate.toISOString();
-        const prevEndIso = prevEndDate.toISOString();
-        // SQL Helpers
+        console.log(`[Analytics] TimeRange: ${timeRange}, StartDate: ${startDate.toISOString()}, GroupBy: ${groupByFormat}${botId ? `, BotId: ${botId}` : ''}, TenantId: ${tenantId || 'ALL'}`);
+        // Convert to SQLite-friendly format (YYYY-MM-DD HH:MM:SS) - no T, no Z, no milliseconds
+        const toSqliteDate = (d) => d.toISOString().replace('T', ' ').replace('Z', '').split('.')[0];
+        const startIso = toSqliteDate(startDate);
+        const prevStartIso = toSqliteDate(prevStartDate);
+        const prevEndIso = toSqliteDate(prevEndDate);
+        // Debug the converted format
+        console.log(`[Analytics] SQLite StartDate: ${startIso}`);
+        // SQL Helpers - tenantId null means show all tenants (OWNER/ADMIN)
+        const tenantFilter = tenantId ? `AND b.tenant_id = ?` : '';
+        const tenantParams = tenantId ? [tenantId] : [];
         const botFilter = botId ? `AND b.id = ?` : '';
         const botParams = botId ? [botId] : [];
         // 2. Fetch Summaries (Current Period vs Previous Period)
@@ -53,27 +104,28 @@ class AnalyticsController {
         const totalMessagesResult = await (0, connection_1.query)(`
             SELECT COUNT(*) as count FROM messages m
             JOIN bots b ON m.bot_id = b.id
-            WHERE b.tenant_id = ? 
-            AND datetime(m.created_at) >= datetime(?)
+            WHERE datetime(m.created_at) >= datetime(?)
             AND m.direction = 'outbound'
+            ${tenantFilter}
             ${botFilter}
-        `, [tenantId, startIso, ...botParams]);
+        `, [startIso, ...tenantParams, ...botParams]);
         const totalMessages = totalMessagesResult.rows[0]?.count || 0;
         // NEW: Lifetime Total Messages (The 'Original' Count from Dashboard)
         const lifetimeResult = await (0, connection_1.query)(`
             SELECT COUNT(*) as count FROM messages m
             JOIN bots b ON m.bot_id = b.id
-            WHERE b.tenant_id = ? 
-            AND m.direction = 'outbound'
+            WHERE m.direction = 'outbound'
+            ${tenantFilter}
             ${botFilter}
-        `, [tenantId, ...botParams]);
+        `, [...tenantParams, ...botParams]);
         const lifetimeMessages = lifetimeResult.rows[0]?.count || 0;
         const prevTotalMessagesResult = await (0, connection_1.query)(`
             SELECT COUNT(*) as count FROM messages m
             JOIN bots b ON m.bot_id = b.id
-            WHERE b.tenant_id = ? AND m.created_at >= ? AND m.created_at < ?
+            WHERE m.created_at >= ? AND m.created_at < ?
+            ${tenantFilter}
             ${botFilter}
-        `, [tenantId, prevStartIso, prevEndIso, ...botParams]);
+        `, [prevStartIso, prevEndIso, ...tenantParams, ...botParams]);
         const prevTotalMessages = prevTotalMessagesResult.rows[0]?.count || 0;
         const messageTrend = AnalyticsController.calculateTrend(totalMessages, prevTotalMessages);
         // Reminders Delivered (from logs for accuracy of delivery vs just sent)
@@ -81,9 +133,10 @@ class AnalyticsController {
             SELECT COUNT(*) as count FROM reminder_logs rl
             JOIN reminders r ON rl.reminder_id = r.id
             JOIN bots b ON r.bot_id = b.id
-            WHERE r.tenant_id = ? AND rl.executed_at >= ? AND rl.status = 'success'
+            WHERE rl.executed_at >= ? AND rl.status = 'success'
+            ${tenantId ? `AND r.tenant_id = ?` : ''}
             ${botFilter}
-        `, [tenantId, startIso, ...botParams]);
+        `, [startIso, ...tenantParams, ...botParams]);
         const totalReminders = remindersResult.rows[0]?.count || 0;
         // Active Bots
         const botsResult = await (0, connection_1.query)(`
@@ -91,34 +144,39 @@ class AnalyticsController {
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'connected' THEN 1 ELSE 0 END) as active
             FROM bots b
-            WHERE tenant_id = ?
+            WHERE 1=1
+            ${tenantFilter}
             ${botFilter}
-        `, [tenantId, ...botParams]);
+        `, [...tenantParams, ...botParams]);
         const totalBots = botsResult.rows[0]?.total || 0;
         const activeBots = botsResult.rows[0]?.active || 0;
         // 3. Traffic Chart Data - BREAKDOWN BY SOURCE
+        // Calculate timezone offset for SQLite (e.g., 'Asia/Jakarta' = +7 hours)
+        const tzOffsetHours = getTimezoneOffsetHours(timezone);
+        const tzModifier = tzOffsetHours >= 0 ? `+${tzOffsetHours} hours` : `${tzOffsetHours} hours`;
         const trafficResult = await (0, connection_1.query)(`
             SELECT 
-                strftime(?, datetime(m.created_at, 'localtime')) as date,
+                strftime(?, datetime(m.created_at, '${tzModifier}')) as date,
                 SUM(CASE WHEN (m.source = 'auto_reply' OR m.direction = 'outbound') AND (m.source IS NULL OR m.source NOT IN ('campaign', 'reminder')) THEN 1 ELSE 0 END) as auto_replies,
                 SUM(CASE WHEN m.source = 'campaign' THEN 1 ELSE 0 END) as campaigns,
                 SUM(CASE WHEN m.source = 'reminder' THEN 1 ELSE 0 END) as reminders,
                 SUM(CASE WHEN m.direction = 'inbound' THEN 1 ELSE 0 END) as received
             FROM messages m
             JOIN bots b ON m.bot_id = b.id
-            WHERE b.tenant_id = ? AND m.created_at >= ?
+            WHERE m.created_at >= ?
+            ${tenantFilter}
             ${botFilter}
             GROUP BY 1
             ORDER BY 1
-        `, [groupByFormat, tenantId, startIso, ...botParams]);
+        `, [groupByFormat, startIso, ...tenantParams, ...botParams]);
         let trafficChart = trafficResult.rows;
-        // Generate empty buckets to ensure full time range is displayed
+        // Generate empty buckets to ensure full time range is displayed (in user's timezone)
         const buckets = [];
         if (timeRange === '30m') {
             // 30 Minutes: Minute intervals
             for (let i = 30; i >= 0; i--) {
                 const d = new Date(now.getTime() - i * 60 * 1000);
-                const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                const timeStr = formatInTimezone(d, timezone, 'minute');
                 buckets.push({ date: timeStr, auto_replies: 0, campaigns: 0, reminders: 0, received: 0 });
             }
         }
@@ -126,7 +184,7 @@ class AnalyticsController {
             // 24 Hours: Hourly intervals (Clean chart style)
             for (let i = 24; i >= 0; i--) {
                 const d = new Date(now.getTime() - i * 60 * 60 * 1000);
-                const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:00`;
+                const timeStr = formatInTimezone(d, timezone, 'hour');
                 buckets.push({ date: timeStr, auto_replies: 0, campaigns: 0, reminders: 0, received: 0 });
             }
         }
@@ -135,7 +193,7 @@ class AnalyticsController {
             const days = timeRange === '7d' ? 7 : 30;
             for (let i = days; i >= 0; i--) {
                 const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-                const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                const timeStr = formatInTimezone(d, timezone, 'day');
                 buckets.push({ date: timeStr, auto_replies: 0, campaigns: 0, reminders: 0, received: 0 });
             }
         }
@@ -152,10 +210,11 @@ class AnalyticsController {
             SELECT source, COUNT(*) as count
             FROM messages m
             JOIN bots b ON m.bot_id = b.id
-            WHERE b.tenant_id = ? AND m.created_at >= ? AND m.direction = 'outbound'
+            WHERE m.created_at >= ? AND m.direction = 'outbound'
+            ${tenantFilter}
             ${botFilter}
             GROUP BY source
-        `, [tenantId, startIso, ...botParams]);
+        `, [startIso, ...tenantParams, ...botParams]);
         // Map database results to UI structure
         const distMap = {
             'auto_reply': 0,
@@ -180,12 +239,13 @@ class AnalyticsController {
                 COUNT(m.id) as volume
             FROM bots b
             LEFT JOIN messages m ON b.id = m.bot_id AND m.created_at >= ?
-            WHERE b.tenant_id = ?
+            WHERE 1=1
+            ${tenantFilter}
             ${botFilter}
             GROUP BY b.id
             ORDER BY volume DESC
             LIMIT 5
-        `, [startIso, tenantId, ...botParams]);
+        `, [startIso, ...tenantParams, ...botParams]);
         const maxVolume = topBotsResult.rows[0]?.volume || 1;
         const topBots = topBotsResult.rows.map((bot) => ({
             id: bot.id,

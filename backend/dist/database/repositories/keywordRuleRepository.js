@@ -54,7 +54,11 @@ class KeywordRuleRepository {
         return result.rows.map(rule => this.parseRule(rule));
     }
     async findByTenant(tenantId) {
-        const result = await (0, connection_1.query)('SELECT * FROM keyword_rules WHERE tenant_id = ? ORDER BY created_at DESC', [tenantId]);
+        const sql = tenantId
+            ? 'SELECT * FROM keyword_rules WHERE tenant_id = ? ORDER BY created_at DESC'
+            : 'SELECT * FROM keyword_rules ORDER BY created_at DESC';
+        const params = tenantId ? [tenantId] : [];
+        const result = await (0, connection_1.query)(sql, params);
         return result.rows.map(rule => this.parseRule(rule));
     }
     async create(data) {
@@ -100,9 +104,16 @@ class KeywordRuleRepository {
         }
         if (fields.length === 0)
             return await this.findById(id, tenantId);
-        values.push(id, tenantId);
-        await (0, connection_1.query)(`UPDATE keyword_rules SET ${fields.join(', ')} 
-             WHERE id = ? AND tenant_id = ?`, values);
+        const sql = tenantId
+            ? `UPDATE keyword_rules SET ${fields.join(', ')} WHERE id = ? AND tenant_id = ?`
+            : `UPDATE keyword_rules SET ${fields.join(', ')} WHERE id = ?`;
+        if (tenantId) {
+            values.push(id, tenantId);
+        }
+        else {
+            values.push(id);
+        }
+        await (0, connection_1.query)(sql, values);
         const rule = await this.findById(id, tenantId);
         if (!rule) {
             throw new Error('Rule not found after update');
@@ -117,7 +128,11 @@ class KeywordRuleRepository {
         });
     }
     async delete(id, tenantId) {
-        await (0, connection_1.query)('DELETE FROM keyword_rules WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+        const sql = tenantId
+            ? 'DELETE FROM keyword_rules WHERE id = ? AND tenant_id = ?'
+            : 'DELETE FROM keyword_rules WHERE id = ?';
+        const params = tenantId ? [id, tenantId] : [id];
+        await (0, connection_1.query)(sql, params);
     }
 }
 exports.keywordRuleRepository = new KeywordRuleRepository();

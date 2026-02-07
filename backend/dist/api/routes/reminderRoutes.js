@@ -19,14 +19,16 @@ router.use(auth_1.authenticate);
 router.get('/', async (req, res) => {
     try {
         const tenantId = req.user.tenant_id;
+        const userRole = req.user.role;
+        const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
         const result = await (0, connection_1.query)(`
             SELECT r.*, b.name as bot_name, b.phone_number,
                    (SELECT group_name FROM wa_groups WHERE group_jid = r.target_id AND bot_id = r.bot_id) as group_name
             FROM reminders r
             LEFT JOIN bots b ON r.bot_id = b.id
-            WHERE r.tenant_id = ?
+            ${isAdmin ? '' : 'WHERE r.tenant_id = ?'}
             ORDER BY r.created_at DESC
-        `, [tenantId]);
+        `, isAdmin ? [] : [tenantId]);
         res.json({
             success: true,
             data: result.rows,
@@ -77,14 +79,16 @@ router.get('/by-bot/:botId', (0, checkPermission_1.checkBotAccess)('use_reminder
     try {
         const { botId } = req.params;
         const tenantId = req.user.tenant_id;
+        const userRole = req.user.role;
+        const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
         const result = await (0, connection_1.query)(`
             SELECT r.*, b.name as bot_name, b.phone_number,
                    (SELECT group_name FROM wa_groups WHERE group_jid = r.target_id AND bot_id = r.bot_id) as group_name
             FROM reminders r
             LEFT JOIN bots b ON r.bot_id = b.id
-            WHERE r.bot_id = ? AND r.tenant_id = ?
+            WHERE r.bot_id = ? ${isAdmin ? '' : 'AND r.tenant_id = ?'}
             ORDER BY r.created_at DESC
-        `, [botId, tenantId]);
+        `, isAdmin ? [botId] : [botId, tenantId]);
         res.json({
             success: true,
             data: result.rows,
@@ -106,13 +110,15 @@ router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const tenantId = req.user.tenant_id;
+        const userRole = req.user.role;
+        const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
         const result = await (0, connection_1.query)(`
             SELECT r.*, b.name as bot_name, b.phone_number,
                    (SELECT group_name FROM wa_groups WHERE group_jid = r.target_id AND bot_id = r.bot_id) as group_name
             FROM reminders r
             LEFT JOIN bots b ON r.bot_id = b.id
-            WHERE r.id = ? AND r.tenant_id = ?
-        `, [id, tenantId]);
+            WHERE r.id = ? ${isAdmin ? '' : 'AND r.tenant_id = ?'}
+        `, isAdmin ? [id] : [id, tenantId]);
         if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -155,8 +161,12 @@ router.post('/', async (req, res) => {
                 details: { name, botId, targetId, templateConfig }
             });
         }
-        // Verify bot ownership
-        const botResult = await (0, connection_1.query)('SELECT * FROM bots WHERE id = ? AND tenant_id = ?', [botId, tenantId]);
+        // Verify bot ownership - OWNER/ADMIN can access any bot
+        const userRole = req.user.role;
+        const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
+        const botResult = await (0, connection_1.query)(isAdmin
+            ? 'SELECT * FROM bots WHERE id = ?'
+            : 'SELECT * FROM bots WHERE id = ? AND tenant_id = ?', isAdmin ? [botId] : [botId, tenantId]);
         if (botResult.rows.length === 0) {
             return res.status(403).json({
                 success: false,
@@ -234,11 +244,13 @@ router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const tenantId = req.user.tenant_id;
+        const userRole = req.user.role;
+        const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
         const { name, description, botId, targetType, targetId, schedule, timezone, dataSourceId, templateConfig, } = req.body;
-        // Verify ownership
-        const verifyResult = await (0, connection_1.query)(`
-            SELECT * FROM reminders WHERE id = ? AND tenant_id = ?
-        `, [id, tenantId]);
+        // Verify ownership - OWNER/ADMIN can access any reminder
+        const verifyResult = await (0, connection_1.query)(isAdmin
+            ? `SELECT * FROM reminders WHERE id = ?`
+            : `SELECT * FROM reminders WHERE id = ? AND tenant_id = ?`, isAdmin ? [id] : [id, tenantId]);
         if (verifyResult.rows.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -294,10 +306,12 @@ router.patch('/:id/toggle', async (req, res) => {
     try {
         const { id } = req.params;
         const tenantId = req.user.tenant_id;
-        // Verify ownership
-        const result = await (0, connection_1.query)(`
-            SELECT * FROM reminders WHERE id = ? AND tenant_id = ?
-        `, [id, tenantId]);
+        const userRole = req.user.role;
+        const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
+        // Verify ownership - OWNER/ADMIN can access any reminder
+        const result = await (0, connection_1.query)(isAdmin
+            ? `SELECT * FROM reminders WHERE id = ?`
+            : `SELECT * FROM reminders WHERE id = ? AND tenant_id = ?`, isAdmin ? [id] : [id, tenantId]);
         if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -339,10 +353,12 @@ router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const tenantId = req.user.tenant_id;
-        // Verify ownership
-        const result = await (0, connection_1.query)(`
-            SELECT * FROM reminders WHERE id = ? AND tenant_id = ?
-        `, [id, tenantId]);
+        const userRole = req.user.role;
+        const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
+        // Verify ownership - OWNER/ADMIN can access any reminder
+        const result = await (0, connection_1.query)(isAdmin
+            ? `SELECT * FROM reminders WHERE id = ?`
+            : `SELECT * FROM reminders WHERE id = ? AND tenant_id = ?`, isAdmin ? [id] : [id, tenantId]);
         if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -374,10 +390,12 @@ router.get('/:id/logs', async (req, res) => {
     try {
         const { id } = req.params;
         const tenantId = req.user.tenant_id;
-        // Verify ownership
-        const result = await (0, connection_1.query)(`
-            SELECT * FROM reminders WHERE id = ? AND tenant_id = ?
-        `, [id, tenantId]);
+        const userRole = req.user.role;
+        const isAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
+        // Verify ownership - OWNER/ADMIN can access any reminder
+        const result = await (0, connection_1.query)(isAdmin
+            ? `SELECT * FROM reminders WHERE id = ?`
+            : `SELECT * FROM reminders WHERE id = ? AND tenant_id = ?`, isAdmin ? [id] : [id, tenantId]);
         if (result.rows.length === 0) {
             return res.status(404).json({
                 success: false,

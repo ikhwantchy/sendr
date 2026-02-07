@@ -7,7 +7,7 @@ export interface AuditLogEntry {
     tenant_id?: string;
     user_id?: string;
     action_type: string;
-    action_category: 'user' | 'bot' | 'reminder' | 'system' | 'api' | 'settings';
+    action_category: 'user' | 'bot' | 'reminder' | 'system' | 'api' | 'settings' | 'integrations';
     resource_type?: string;
     resource_id?: string;
     description: string;

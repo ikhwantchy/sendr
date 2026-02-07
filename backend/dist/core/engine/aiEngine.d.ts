@@ -29,6 +29,7 @@ declare class AIEngine {
      * Process message for AI Sheet Updater
      * Checks if sender matches any configured sheet and updates accordingly
      * Now supports matching by name if phone not found (for LID cases)
+     * Returns result for optional confirmation reply
      */
     private processSheetUpdate;
 }
