@@ -48,15 +48,15 @@ export default function LoginPage() {
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 blur-[120px] rounded-full pointer-events-none"></div>
 
             <div className="w-full max-w-[440px] mx-4 relative z-10 transition-none">
-                <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-[2.5rem] shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden h-[700px] flex flex-col justify-center">
-                    <div className="animate-push-slide-in-left p-8 md:p-12">
+                <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-[1.5rem] sm:rounded-[2.5rem] shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden min-h-[500px] sm:min-h-[600px] flex flex-col justify-center">
+                    <div className="animate-push-slide-in-left p-6 sm:p-8 md:p-12">
                         {/* Brand */}
-                        <div className="flex flex-col items-center mb-8">
-                            <div className="w-16 h-16 bg-black rounded-2xl border border-zinc-800 flex items-center justify-center mb-6 shadow-2xl overflow-hidden ring-1 ring-zinc-700/50">
-                                <img src="/sendr-logo.png" alt="Sendr" className="w-10 h-10 object-contain" />
+                        <div className="flex flex-col items-center mb-6 sm:mb-8">
+                            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-black rounded-xl sm:rounded-2xl border border-zinc-800 flex items-center justify-center mb-4 sm:mb-6 shadow-2xl overflow-hidden ring-1 ring-zinc-700/50">
+                                <img src="/sendr-logo.png" alt="Sendr" className="w-7 h-7 sm:w-10 sm:h-10 object-contain" />
                             </div>
-                            <h1 className="text-2xl font-bold tracking-tight text-white">Welcome back</h1>
-                            <p className="text-zinc-500 text-sm mt-2 text-center opacity-80 font-medium">Enter your credentials to access your workspace</p>
+                            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Welcome back</h1>
+                            <p className="text-zinc-500 text-xs sm:text-sm mt-2 text-center opacity-80 font-medium">Enter your credentials to access your workspace</p>
                         </div>
 
                         {/* Form Content */}

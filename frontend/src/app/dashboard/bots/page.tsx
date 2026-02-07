@@ -180,19 +180,19 @@ export default function BotsPage() {
     }
 
     return (
-        <div className="p-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100">
+        <div className="p-4 sm:p-6 lg:p-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
                 <div>
                     <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white tracking-tight">Bots</h1>
+                        <h1 className="text-xl sm:text-2xl font-semibold text-zinc-900 dark:text-white tracking-tight">Bots</h1>
                         {isRefreshing && (
                             <Loader2 className="w-4 h-4 text-blue-500 dark:text-blue-400 animate-spin" />
                         )}
                     </div>
 
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                     {/* User Filter Dropdown - Only for Admin/Owner */}
                     {mounted && isAdmin && uniqueOwners.length > 1 && (
                         <div className="relative" ref={dropdownRef}>
@@ -262,10 +262,11 @@ export default function BotsPage() {
                     {mounted && isAdmin && (
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
+                            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 rounded-lg text-sm font-medium transition-colors"
                         >
                             <Plus className="w-4 h-4" />
-                            Create Bot
+                            <span className="hidden sm:inline">Create Bot</span>
+                            <span className="sm:hidden">New</span>
                         </button>
                     )}
                 </div>
@@ -280,18 +281,18 @@ export default function BotsPage() {
                         ))}
                     </div>
                 ) : bots.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6">
                         {bots.map((bot: any) => (
                             <div
                                 key={bot.id}
-                                className="group relative flex flex-col p-6 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-sm dark:shadow-none"
+                                className="group relative flex flex-col p-4 sm:p-6 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800 transition-all shadow-sm dark:shadow-none"
                             >
-                                <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-start justify-between mb-3 sm:mb-4">
                                     <Link
                                         href={`/dashboard/bots/${bot.id}`}
-                                        className="p-3 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors"
+                                        className="p-2 sm:p-3 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors"
                                     >
-                                        <Bot className="w-6 h-6" />
+                                        <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
                                     </Link>
                                     <div className="flex items-center gap-2">
                                         <StatusBadge status={bot.status} />
@@ -335,11 +336,11 @@ export default function BotsPage() {
                                 </div>
 
                                 <Link href={`/dashboard/bots/${bot.id}`} className="flex-1">
-                                    <div className="mb-4">
-                                        <h3 className="text-lg font-semibold text-zinc-900 dark:text-white tracking-tight mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                    <div className="mb-3 sm:mb-4">
+                                        <h3 className="text-base sm:text-lg font-semibold text-zinc-900 dark:text-white tracking-tight mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
                                             {bot.name}
                                         </h3>
-                                        <p className="text-zinc-500 text-sm font-mono truncate">
+                                        <p className="text-zinc-500 text-xs sm:text-sm font-mono truncate">
                                             {bot.phone_number ? `+${bot.phone_number}` : 'No number connected'}
                                         </p>
                                         {/* Show owner for admin */}

@@ -24,22 +24,22 @@ interface KPICardProps {
 
 function KPICard({ title, value, icon, loading }: KPICardProps) {
     return (
-        <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 relative overflow-hidden group hover:border-zinc-800 transition-colors">
-            <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-zinc-900 rounded-lg text-zinc-400 group-hover:bg-zinc-800 transition-colors">
+        <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 sm:p-6 relative overflow-hidden group hover:border-zinc-800 transition-colors">
+            <div className="flex justify-between items-start mb-3 sm:mb-4">
+                <div className="p-1.5 sm:p-2 bg-zinc-900 rounded-lg text-zinc-400 group-hover:bg-zinc-800 transition-colors">
                     {icon}
                 </div>
             </div>
 
             <div className="space-y-1">
                 {loading ? (
-                    <div className="h-8 w-24 bg-zinc-900 rounded animate-pulse" />
+                    <div className="h-6 sm:h-8 w-16 sm:w-24 bg-zinc-900 rounded animate-pulse" />
                 ) : (
-                    <h3 className="text-3xl font-bold tracking-tight text-white transition-all duration-300">
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-white transition-all duration-300">
                         {typeof value === 'number' ? value.toLocaleString() : value}
                     </h3>
                 )}
-                <p className="text-sm text-zinc-500 font-medium">{title}</p>
+                <p className="text-xs sm:text-sm text-zinc-500 font-medium">{title}</p>
             </div>
         </div>
     )
@@ -145,12 +145,12 @@ export default function UsersPage() {
 
     return (
         <AdminGuard>
-        <div className="p-8 space-y-8 min-h-screen bg-black text-zinc-100 font-sans">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 lg:space-y-8 min-h-screen bg-black text-zinc-100 font-sans">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-semibold tracking-tight text-white mb-1">
+                        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-white mb-1">
                             User Management
                         </h1>
                         {isRefreshing && (
@@ -160,7 +160,7 @@ export default function UsersPage() {
 
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     {/* Role Filter Dropdown */}
                     <div className="relative">
                         <button
@@ -222,16 +222,17 @@ export default function UsersPage() {
                     {/* Create User Button */}
                     <button
                         onClick={() => setShowCreateModal(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-white text-black rounded-lg font-medium hover:bg-zinc-200 transition-colors"
+                        className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-white text-black rounded-lg font-medium hover:bg-zinc-200 transition-colors text-sm"
                     >
                         <UserPlus className="w-4 h-4" />
-                        Create User
+                        <span className="hidden sm:inline">Create User</span>
+                        <span className="sm:hidden">New</span>
                     </button>
                 </div>
             </div>
 
             {/* KPI Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <KPICard
                     title="Total Users"
                     value={stats?.total_users || 0}
@@ -299,7 +300,8 @@ export default function UsersPage() {
                     </div>
                 ) : (
                     <>
-                        <div className="overflow-x-auto">
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto">
                             <table className="w-full">
                                 <thead>
                                     <tr className="border-b border-zinc-800/50 bg-zinc-900/30">
@@ -373,22 +375,82 @@ export default function UsersPage() {
                             </table>
                         </div>
 
+                        {/* Mobile Card View */}
+                        <div className="md:hidden space-y-3 p-3">
+                            {paginatedUsers.map((user: any) => (
+                                <div
+                                    key={user.id}
+                                    className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4 hover:bg-zinc-900/80 transition-all"
+                                >
+                                    {/* Top: Name + Role */}
+                                    <div className="flex items-start justify-between gap-3 mb-3">
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-zinc-100 font-semibold truncate">{user.name || 'N/A'}</h3>
+                                            <p className="text-zinc-500 text-sm truncate">{user.email}</p>
+                                        </div>
+                                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium border flex-shrink-0 ${user.role === 'OWNER'
+                                            ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                                            : user.role === 'ADMIN'
+                                                ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                            }`}>
+                                            <Shield className="w-3 h-3" />
+                                            {user.role}
+                                        </span>
+                                    </div>
+
+                                    {/* Stats */}
+                                    <div className="flex items-center gap-4 text-xs mb-3">
+                                        <div className="flex items-center gap-1.5 text-zinc-400">
+                                            <Bot className="w-3.5 h-3.5" />
+                                            <span className="font-mono">{user.bots_count || 0} bots</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800/50">
+                                        <Link
+                                            href={`/dashboard/users/${user.id}`}
+                                            className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 transition-all flex items-center justify-center text-blue-400"
+                                            title="View Details"
+                                        >
+                                            <Eye className="w-4 h-4" />
+                                        </Link>
+                                        <button
+                                            onClick={() => handleEdit(user)}
+                                            className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-zinc-800 hover:border-amber-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-amber-400"
+                                            title="Edit"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(user)}
+                                            className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:bg-red-500/10 hover:border-red-500/50 transition-all flex items-center justify-center text-zinc-400 hover:text-red-400"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
                         {/* Pagination */}
-                        <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/50 border-t border-zinc-800/50">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-zinc-900/50 border-t border-zinc-800/50">
                             {totalPages > 1 ? (
                                 <>
-                                    <div className="text-sm text-zinc-500">
+                                    <div className="text-xs sm:text-sm text-zinc-500 text-center sm:text-left">
                                         Showing <span className="text-zinc-300 font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-zinc-300 font-medium">{Math.min(currentPage * itemsPerPage, filteredUsers.length)}</span> of <span className="text-zinc-300 font-medium">{filteredUsers.length}</span> users
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <button
                                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                             disabled={currentPage === 1}
-                                            className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-all"
+                                            className="px-2 sm:px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-all"
                                         >
-                                            Previous
+                                            Prev
                                         </button>
-                                        <div className="flex items-center gap-1">
+                                        <div className="hidden sm:flex items-center gap-1">
                                             {[...Array(totalPages)].map((_, i) => (
                                                 <button
                                                     key={i}
@@ -399,17 +461,18 @@ export default function UsersPage() {
                                                 </button>
                                             ))}
                                         </div>
+                                        <span className="sm:hidden text-xs text-zinc-400">{currentPage}/{totalPages}</span>
                                         <button
                                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                             disabled={currentPage === totalPages}
-                                            className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-all"
+                                            className="px-2 sm:px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-all"
                                         >
                                             Next
                                         </button>
                                     </div>
                                 </>
                             ) : (
-                                <div className="text-sm text-zinc-500">
+                                <div className="text-xs sm:text-sm text-zinc-500">
                                     Showing <span className="text-zinc-300 font-medium">{filteredUsers.length}</span> users
                                 </div>
                             )}

@@ -114,17 +114,17 @@ export default function DashboardPage() {
     }
 
     return (
-        <div className="p-8 space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
             {/* Header */}
-            <div className="flex justify-between items-end border-b border-zinc-200 dark:border-zinc-800/10 pb-6">
+            <div className="flex justify-between items-end border-b border-zinc-200 dark:border-zinc-800/10 pb-4 sm:pb-6">
                 <div>
-                    <h1 className="text-2xl font-medium text-zinc-900 dark:text-white tracking-tight">Overview</h1>
+                    <h1 className="text-xl sm:text-2xl font-medium text-zinc-900 dark:text-white tracking-tight">Overview</h1>
 
                 </div>
             </div>
 
             {/* KPI Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <StatCard
                     label="Connected Bots"
                     value={stats.totalBots}
@@ -167,15 +167,17 @@ export default function DashboardPage() {
             </div>
 
             {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
 
                 {/* Left Column: Quick Actions & Activity */}
-                <div className={`${user?.role === 'ADMIN' || user?.role === 'OWNER' ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-8`}>
+                <div className={`${user?.role === 'ADMIN' || user?.role === 'OWNER' ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-4 sm:space-y-8`}
+
+>
 
                     {/* Quick Start Features */}
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                         <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Start Building</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                             {user?.role === 'ADMIN' || user?.role === 'OWNER' ? (
                                 <>
                                     <FeatureCard
@@ -270,17 +272,17 @@ export default function DashboardPage() {
 
 function StatCard({ label, value, icon }: { label: string, value: string | number, icon: any }) {
     return (
-        <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 p-6 rounded-xl hover:border-zinc-300 dark:hover:border-zinc-800 transition-all duration-200 group shadow-sm dark:shadow-none">
-            <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-zinc-600 dark:text-zinc-100 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800 transition-colors">
+        <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 p-4 sm:p-6 rounded-xl hover:border-zinc-300 dark:hover:border-zinc-800 transition-all duration-200 group shadow-sm dark:shadow-none">
+            <div className="flex justify-between items-start mb-3 sm:mb-4">
+                <div className="p-1.5 sm:p-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-zinc-600 dark:text-zinc-100 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800 transition-colors">
                     {icon}
                 </div>
             </div>
             <div className="space-y-1">
-                <h3 className="text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">
+                <h3 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">
                     {value}
                 </h3>
-                <p className="text-sm text-zinc-500 font-medium">{label}</p>
+                <p className="text-xs sm:text-sm text-zinc-500 font-medium">{label}</p>
             </div>
         </div>
     )
@@ -290,9 +292,9 @@ function FeatureCard({ icon, title, description, onClick }: any) {
     return (
         <button
             onClick={onClick}
-            className="flex flex-col items-start p-6 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800 transition-all text-left group w-full shadow-sm dark:shadow-none"
+            className="flex flex-col items-start p-4 sm:p-6 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-800 transition-all text-left group w-full shadow-sm dark:shadow-none"
         >
-            <div className="mb-4 p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800 transition-colors">
+            <div className="mb-3 sm:mb-4 p-1.5 sm:p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800 transition-colors">
                 {icon}
             </div>
             <h4 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-1">{title}</h4>

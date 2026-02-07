@@ -418,8 +418,8 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
                 </table>
             </div>
 
-            {/* Pagination - Fixed at bottom */}
-            <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/50 rounded-b-xl flex-shrink-0">
+            {/* Pagination - Fixed at bottom - Desktop Only */}
+            <div className="hidden md:flex items-center justify-between px-4 py-3 bg-zinc-800/50 rounded-b-xl flex-shrink-0">
                 {totalPages > 1 ? (
                     <>
                         <div className="text-sm text-zinc-500">
@@ -456,6 +456,37 @@ export default function CampaignsTable({ botId }: CampaignsTableProps) {
                 ) : (
                     <div className="text-sm text-zinc-500">
                         Showing <span className="text-zinc-300 font-medium">{(campaigns || []).length}</span> campaigns
+                    </div>
+                )}
+            </div>
+
+            {/* Mobile Pagination */}
+            <div className="md:hidden flex items-center justify-between px-4 py-3 bg-zinc-800/50 rounded-xl mt-3">
+                {totalPages > 1 ? (
+                    <>
+                        <div className="text-xs text-zinc-500">
+                            {currentPage}/{totalPages}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-all"
+                            >
+                                Prev
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-all"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <div className="text-xs text-zinc-500">
+                        {(campaigns || []).length} campaigns
                     </div>
                 )}
             </div>

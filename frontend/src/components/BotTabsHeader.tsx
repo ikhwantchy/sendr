@@ -119,9 +119,9 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
     const actionLabel = getActionLabel()
 
     return (
-        <div className="relative flex items-center justify-center w-full h-full">
+        <div className="relative flex items-center justify-center w-full h-full overflow-x-auto">
             {/* Center: Tabs */}
-            <div className="flex items-center gap-12 h-full">
+            <div className="flex items-center gap-4 sm:gap-8 lg:gap-12 h-full px-2 sm:px-0">
                 {tabs.map((tab) => {
                     const isActive = tab.id === currentTabId || (tab.subTabs?.some(st => st.id === activeTab))
                     const hasSubTabs = tab.subTabs && tab.subTabs.length > 0
@@ -135,19 +135,19 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
                         >
                             <button
                                 onClick={() => handleTabClick(tab.id)}
-                                className={`group relative flex items-center gap-1 h-[89px] px-1 text-sm font-medium transition-all ${isActive
+                                className={`group relative flex items-center gap-1 h-[70px] sm:h-[89px] px-1 text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${isActive
                                     ? 'text-white'
                                     : 'text-zinc-500 hover:text-zinc-200'
                                     }`}
                             >
                                 <span>{tab.name}</span>
                                 {hasSubTabs && (
-                                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${hoveredTab === tab.id ? 'rotate-180' : ''}`} />
+                                    <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform duration-200 ${hoveredTab === tab.id ? 'rotate-180' : ''}`} />
                                 )}
                                 {isActive ? (
-                                    <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-blue-500 shadow-[0_-4px_12px_rgba(59,130,246,0.3)] animate-in slide-in-from-bottom-1 duration-300"></div>
+                                    <div className="absolute bottom-0 left-0 right-0 h-[2px] sm:h-[3px] bg-blue-500 shadow-[0_-4px_12px_rgba(59,130,246,0.3)] animate-in slide-in-from-bottom-1 duration-300"></div>
                                 ) : (
-                                    <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-transparent group-hover:bg-zinc-800 transition-colors"></div>
+                                    <div className="absolute bottom-0 left-0 right-0 h-[2px] sm:h-[3px] bg-transparent group-hover:bg-zinc-800 transition-colors"></div>
                                 )}
                             </button>
 
@@ -182,11 +182,11 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
                 })}
             </div>
 
-            {/* Right: Action Button (absolute positioned) */}
+            {/* Right: Action Button (absolute positioned) - Hidden on mobile */}
             {actionLabel && (
                 <button
                     onClick={handleActionClick}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-all min-w-[140px] justify-center"
+                    className="hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 items-center gap-2 px-4 py-2.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-all min-w-[140px] justify-center"
                 >
                     <Plus className="w-4 h-4" />
                     {actionLabel}
