@@ -120,13 +120,13 @@ export default function ActivityHistoryPage() {
     const paginatedLogs = filteredLogs.slice(startIndex, startIndex + itemsPerPage)
 
     const filterTabs = [
-        { value: 'all', label: 'All Events' },
-        { value: 'bot', label: 'Bot Status' },
-        { value: 'rule', label: 'Auto-Replies' },
-        { value: 'campaign', label: 'Broadcasts' },
-        { value: 'reminder', label: 'Reminders' },
-        { value: 'message', label: 'Messages' },
-        { value: 'error', label: 'Errors' },
+        { value: 'all', label: 'All Events', shortLabel: 'All' },
+        { value: 'bot', label: 'Bot Status', shortLabel: 'Bot' },
+        { value: 'rule', label: 'Auto-Replies', shortLabel: 'Rules' },
+        { value: 'campaign', label: 'Broadcasts', shortLabel: 'Blast' },
+        { value: 'reminder', label: 'Reminders', shortLabel: 'Remind' },
+        { value: 'message', label: 'Messages', shortLabel: 'Msg' },
+        { value: 'error', label: 'Errors', shortLabel: 'Error' },
     ]
 
     return (
@@ -192,7 +192,7 @@ export default function ActivityHistoryPage() {
                 </div>
 
                 {/* Filters */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar border-b border-zinc-800/50">
+                <div className="flex items-center gap-1 sm:gap-2 pb-2 border-b border-zinc-800/50">
                     {filterTabs.map((tab) => (
                         <button
                             key={tab.value}
@@ -200,12 +200,13 @@ export default function ActivityHistoryPage() {
                                 setFilter(tab.value)
                                 setCurrentPage(1)
                             }}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${filter === tab.value
+                            className={`flex-1 sm:flex-none px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium rounded-md transition-all whitespace-nowrap ${filter === tab.value
                                 ? 'bg-zinc-100 text-black'
                                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'
                                 }`}
                         >
-                            {tab.label}
+                            <span className="sm:hidden">{tab.shortLabel}</span>
+                            <span className="hidden sm:inline">{tab.label}</span>
                         </button>
                     ))}
                 </div>

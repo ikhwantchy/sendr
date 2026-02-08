@@ -310,12 +310,12 @@ export default function BotDetailPage() {
     }
 
     const tabs = [
-        { id: 'overview', name: 'Overview', shortName: 'Home' },
-        { id: 'rules', name: 'Auto-Reply', shortName: 'Rules', permission: 'auto_reply' },
-        { id: 'ai-assistant', name: 'AI Assistant', shortName: 'AI', permission: 'ai_assistant' },
-        { id: 'campaigns', name: 'Campaigns', shortName: 'Blast', permission: 'campaigns' },
-        { id: 'reminders', name: 'Reminders', shortName: 'Remind', permission: 'reminders' },
-        { id: 'settings', name: 'Settings', shortName: 'Config' },
+        { id: 'overview', name: 'Overview' },
+        { id: 'rules', name: 'Auto-Reply', permission: 'auto_reply' },
+        { id: 'ai-assistant', name: 'AI Assistant', permission: 'ai_assistant' },
+        { id: 'campaigns', name: 'Campaigns', permission: 'campaigns' },
+        { id: 'reminders', name: 'Reminders', permission: 'reminders' },
+        { id: 'settings', name: 'Settings' },
     ].filter(tab => !tab.permission || hasModuleAccess(tab.permission, botId))
 
     if (isLoading) {
@@ -347,27 +347,6 @@ export default function BotDetailPage() {
     return (
         <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-black animate-fade-in">
             <div className="space-y-6 sm:space-y-8">
-                    {/* Tab Navigation - Always visible */}
-                <div className="flex items-center gap-1 pb-2">
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => {
-                                setActiveTab(tab.id)
-                                window.location.hash = tab.id
-                            }}
-                            className={`flex-1 sm:flex-none px-2 sm:px-4 py-2 rounded-lg text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
-                                activeTab === tab.id
-                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                                    : 'bg-zinc-900/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 border border-zinc-800/50'
-                            }`}
-                        >
-                            <span className="sm:hidden">{tab.shortName}</span>
-                            <span className="hidden sm:inline">{tab.name}</span>
-                        </button>
-                    ))}
-                </div>
-
                 {activeTab === 'overview' && (
                     <div className="space-y-4 sm:space-y-6">
                         {/* Integrated Hero Section (Overview ONLY) */}
