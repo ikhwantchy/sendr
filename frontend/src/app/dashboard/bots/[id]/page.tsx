@@ -349,9 +349,9 @@ export default function BotDetailPage() {
             <div className="space-y-6 sm:space-y-8">
                 {activeTab === 'overview' && (
                     <div className="space-y-4 sm:space-y-6">
-                        {/* Integrated Hero Section (Overview ONLY) */}
-                        <div className="flex flex-col gap-4 sm:gap-6 pb-6 sm:pb-8 border-b border-zinc-900/50 mb-4 sm:mb-6">
-                            {/* Top: Bot Name with Icon */}
+                        {/* Hero Section - Single row on desktop */}
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 sm:pb-8 border-b border-zinc-900/50 mb-4 sm:mb-6">
+                            {/* Left: Bot Name with Icon */}
                             <div className="flex items-center gap-3 sm:gap-4">
                                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500/10 border border-blue-500/20 rounded-xl sm:rounded-2xl flex items-center justify-center text-blue-500 shadow-lg shadow-blue-500/5">
                                     <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -361,73 +361,64 @@ export default function BotDetailPage() {
                                 </h1>
                             </div>
 
-                            {/* Bottom: Badges & Buttons */}
+                            {/* Right: Phone, Status, Action Button */}
                             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                                 {bot.phone_number && (
-                                    <>
-                                        <div className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-amber-500/5 border border-amber-500/20 rounded-lg sm:rounded-xl text-amber-500 text-[10px] sm:text-xs font-semibold shadow-sm shadow-amber-500/5">
-                                            <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
-                                            <span className="truncate max-w-[100px] sm:max-w-none">{bot.phone_number}</span>
-                                        </div>
-                                        <div className="hidden lg:block h-5 w-[1px] bg-zinc-700/80 mx-1" />
-                                    </>
+                                    <div className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-amber-500/5 border border-amber-500/20 rounded-lg sm:rounded-xl text-amber-500 text-[10px] sm:text-xs font-semibold shadow-sm shadow-amber-500/5">
+                                        <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
+                                        <span className="truncate max-w-[100px] sm:max-w-none">{bot.phone_number}</span>
+                                    </div>
                                 )}
-                                <div className={`inline-flex items-center justify-center gap-2 w-[110px] sm:w-[140px] py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold uppercase tracking-widest border transition-all ${isConnected
+                                <div className={`inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold uppercase tracking-widest border transition-all ${isConnected
                                     ? bot.is_paused
                                         ? 'bg-orange-500/5 border-orange-500/20 text-orange-500'
                                         : 'bg-emerald-500/5 border-emerald-500/20 text-emerald-500'
                                     : 'bg-zinc-500/5 border-zinc-500/20 text-zinc-500'
                                     }`}>
                                     <Circle className={`w-1.5 h-1.5 sm:w-2 sm:h-2 flex-shrink-0 fill-current ${isConnected && !bot.is_paused ? 'animate-pulse' : ''}`} />
-                                    <span className="truncate">{isConnected ? (bot.is_paused ? 'PAUSED' : 'CONNECTED') : 'DISCONNECTED'}</span>
+                                    <span>{isConnected ? (bot.is_paused ? 'PAUSED' : 'CONNECTED') : 'DISCONNECTED'}</span>
                                 </div>
 
-                                <div className="hidden lg:block h-5 w-[1px] bg-zinc-700/80 mx-1" />
-
-                                <div className="w-full sm:w-[145px]">
-                                    {/* Show Connect Now button when never connected (no phone number) */}
-                                    {!isConnected && !bot.phone_number && (
-                                        <Link
-                                            href={`/dashboard/bots/${botId}/connect`}
-                                            className="w-full inline-flex items-center justify-center gap-2 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold border transition-all duration-300 bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"
-                                        >
-                                            <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
-                                            <span className="font-semibold tracking-tight uppercase">CONNECT</span>
-                                        </Link>
-                                    )}
-                                    {/* Show Reconnect button when disconnected but has phone number */}
-                                    {!isConnected && bot.phone_number && (
-                                        <Link
-                                            href={`/dashboard/bots/${botId}/connect`}
-                                            className="w-full inline-flex items-center justify-center gap-2 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold border transition-all duration-300 bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"
-                                        >
-                                            <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" />
-                                            <span className="font-semibold tracking-tight uppercase">RECONNECT</span>
-                                        </Link>
-                                    )}
-                                    {/* Show Pause/Resume button when connected */}
-                                    {isConnected && (
-                                        <button
-                                            onClick={handleToggleBotPause}
-                                            disabled={isBotPausing}
-                                            className={`w-full inline-flex items-center justify-center gap-2 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold border transition-all duration-300 ${isBotPausing || bot.is_paused
-                                                ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25'
-                                                : 'bg-zinc-900 border-red-500/40 text-red-500 hover:bg-red-500/10 hover:border-red-500/60 shadow-xl'
-                                                } active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
-                                        >
-                                            {isBotPausing ? (
-                                                <RefreshCw className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" />
-                                            ) : bot.is_paused ? (
-                                                <Play className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />
-                                            ) : (
-                                                <Pause className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />
-                                            )}
-                                            <span className="font-semibold tracking-tight uppercase">
-                                                {isBotPausing ? 'PROCESSING...' : (bot.is_paused ? 'RESUME' : 'PAUSE')}
-                                            </span>
-                                        </button>
-                                    )}
-                                </div>
+                                {/* Action Button */}
+                                {!isConnected && !bot.phone_number && (
+                                    <Link
+                                        href={`/dashboard/bots/${botId}/connect`}
+                                        className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold border transition-all duration-300 bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"
+                                    >
+                                        <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
+                                        <span className="uppercase">Connect</span>
+                                    </Link>
+                                )}
+                                {!isConnected && bot.phone_number && (
+                                    <Link
+                                        href={`/dashboard/bots/${botId}/connect`}
+                                        className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold border transition-all duration-300 bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"
+                                    >
+                                        <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" />
+                                        <span className="uppercase">Reconnect</span>
+                                    </Link>
+                                )}
+                                {isConnected && (
+                                    <button
+                                        onClick={handleToggleBotPause}
+                                        disabled={isBotPausing}
+                                        className={`inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold border transition-all duration-300 ${isBotPausing || bot.is_paused
+                                            ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25'
+                                            : 'bg-zinc-900 border-red-500/40 text-red-500 hover:bg-red-500/10 hover:border-red-500/60 shadow-xl'
+                                            } active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    >
+                                        {isBotPausing ? (
+                                            <RefreshCw className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" />
+                                        ) : bot.is_paused ? (
+                                            <Play className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />
+                                        ) : (
+                                            <Pause className="w-3 h-3 sm:w-4 sm:h-4 fill-current" />
+                                        )}
+                                        <span className="uppercase">
+                                            {isBotPausing ? 'Processing...' : (bot.is_paused ? 'Resume Bot' : 'Pause Bot')}
+                                        </span>
+                                    </button>
+                                )}
                             </div>
                         </div>
 
