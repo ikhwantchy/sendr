@@ -61,6 +61,9 @@ class EnhancedTemplateRenderer {
             result = this.replaceItemProperties(result, context.data[0]);
         }
 
+        // 4. Clean up excessive newlines (3+ consecutive newlines → 2 newlines)
+        result = result.replace(/\n{3,}/g, '\n\n');
+
         return result.trim();
     }
 
@@ -148,59 +151,42 @@ class EnhancedTemplateRenderer {
      * Handles patterns like: {{#if @length > 0}}{{#each items}}...{{/each}}{{/if}}{{#if @length == 0}}...{{/if}}
      */
     private processConditionalWithLoops(template: string, data: any[], context: RenderContext): string {
-        console.log(`🔍 [Template] Processing conditionals. Data length: ${data?.length || 0}`);
-        console.log(`🔍 [Template] Input template (first 200 chars): ${template.substring(0, 200).replace(/\n/g, '\\n')}`);
-        
-        // Match {{#if condition}}...{{/if}} blocks - use a more robust approach
-        // We need to handle nested if blocks properly
         let result = template;
-        let iterations = 0;
-        const maxIterations = 10; // Safety limit
         
-        while (iterations < maxIterations) {
-            iterations++;
-            const beforeProcess = result;
+        // Process all {{#if ...}}...{{/if}} blocks
+        const processIfBlocks = (text: string): string => {
+            // Match {{#if condition}}content{{/if}}
+            const simpleIfRegex = /\{\{\s*#if\s+([^}]+)\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
             
-            // Find the INNERMOST {{#if}}...{{/if}} block first (one that doesn't contain another #if)
-            // This regex matches {{#if ...}} content {{/if}} where content doesn't contain {{#if
-            const innerIfRegex = /\{\{\s*#if\s+([^}]+)\s*\}\}((?:(?!\{\{\s*#if\s)[\s\S])*?)\{\{\s*\/if\s*\}\}/;
+            let processed = text;
+            let match;
+            let iterations = 0;
             
-            const match = result.match(innerIfRegex);
-            if (!match) {
-                console.log(`🔍 [Template] No more #if blocks found after ${iterations} iterations`);
-                break;
-            }
-            
-            const [fullMatch, condition, content] = match;
-            console.log(`🔍 [Template] Found #if block. Condition: "${condition.trim()}"`);
-            
-            const isTrue = this.evaluateCondition(condition.trim(), context);
-            console.log(`🔍 [Template] Condition "${condition.trim()}" evaluated to: ${isTrue}`);
-            
-            let replacement = '';
-            if (isTrue) {
-                // Process the content inside - may contain loops
-                let processedContent = content;
+            // Keep replacing until no more matches
+            while ((match = simpleIfRegex.exec(processed)) !== null && iterations < 20) {
+                iterations++;
+                const [fullMatch, condition, content] = match;
                 
-                // Process any loops inside this conditional
-                processedContent = this.processLoops(processedContent, data);
+                const isTrue = this.evaluateCondition(condition.trim(), context);
                 
-                replacement = processedContent;
+                let replacement = '';
+                if (isTrue) {
+                    // Process loops inside this block
+                    replacement = this.processLoops(content, data);
+                }
+                
+                // Replace the match and reset regex
+                processed = processed.replace(fullMatch, replacement);
+                simpleIfRegex.lastIndex = 0; // Reset to start from beginning
             }
-            // If false, replacement stays empty string
             
-            result = result.replace(fullMatch, replacement);
-            
-            if (result === beforeProcess) {
-                console.log(`🔍 [Template] No changes made, breaking loop`);
-                break;
-            }
-        }
+            return processed;
+        };
         
-        // After all conditionals are processed, process any remaining loops not wrapped in conditionals
+        result = processIfBlocks(result);
+        
+        // Process any remaining loops not wrapped in conditionals
         result = this.processLoops(result, data);
-        
-        console.log(`🔍 [Template] Final result (first 300 chars): ${result.substring(0, 300).replace(/\n/g, '\\n')}`);
         
         return result;
     }
@@ -215,8 +201,6 @@ class EnhancedTemplateRenderer {
     }
 
     private evaluateCondition(condition: string, context: RenderContext): boolean {
-        console.log(`🧮 [Condition] Evaluating: "${condition}"`);
-        
         // Regex to match "left operator right"
         const comparisonRegex = /(@?[\w.]+)\s*(==|!=|contains|>|<|>=|<=)\s*(.+)/;
         const match = condition.match(comparisonRegex);
@@ -226,30 +210,23 @@ class EnhancedTemplateRenderer {
             const leftValue = this.resolveValue(leftExpr, context);
             const rightValue = this.resolveValue(rightExpr, context);
 
-            console.log(`🧮 [Condition] Left: ${leftExpr} = ${leftValue}, Operator: ${operator}, Right: ${rightExpr} = ${rightValue}`);
-
             const left = String(leftValue || '').toLowerCase().trim();
             const right = String(rightValue || '').toLowerCase().trim();
 
-            let result = false;
             switch (operator) {
-                case '==': result = left === right; break;
-                case '!=': result = left !== right; break;
-                case 'contains': result = left.includes(right); break;
-                case '>': result = Number(leftValue) > Number(rightValue); break;
-                case '<': result = Number(leftValue) < Number(rightValue); break;
-                case '>=': result = Number(leftValue) >= Number(rightValue); break;
-                case '<=': result = Number(leftValue) <= Number(rightValue); break;
+                case '==': return left === right;
+                case '!=': return left !== right;
+                case 'contains': return left.includes(right);
+                case '>': return Number(leftValue) > Number(rightValue);
+                case '<': return Number(leftValue) < Number(rightValue);
+                case '>=': return Number(leftValue) >= Number(rightValue);
+                case '<=': return Number(leftValue) <= Number(rightValue);
             }
-            console.log(`🧮 [Condition] Result: ${result}`);
-            return result;
         }
 
         // Truthy check
         const val = this.resolveValue(condition, context);
-        const result = !!val && val !== '0' && val !== 'false';
-        console.log(`🧮 [Condition] Truthy check for "${condition}" = ${val} → ${result}`);
-        return result;
+        return !!val && val !== '0' && val !== 'false';
     }
 
     private resolveValue(expr: string, context: RenderContext): any {

@@ -207,17 +207,9 @@ class ReminderSchedulerService {
                 let finalMessage = '';
 
                 if (isFromSheet && templateConfig.isDigestMode) {
-                    // NEW: Smarter renderer selection
+                    // Smarter renderer selection
                     const isModernTemplate = /{{.*(@|==|contains|\|).*}}/.test(templateText);
                     const hasModernBlocks = /\{\{\s*#(if|each|group)\s/.test(templateText);
-
-                    console.log(`📝 [Digest] Template text (first 300 chars): ${templateText.substring(0, 300)}`);
-                    console.log(`📝 [Digest] isModernTemplate: ${isModernTemplate}, hasModernBlocks: ${hasModernBlocks}`);
-                    console.log(`📝 [Digest] Data rows: ${sheetRows.length}`);
-                    if (sheetRows.length > 0) {
-                        console.log(`📝 [Digest] First row keys: ${Object.keys(sheetRows[0]).join(', ')}`);
-                        console.log(`📝 [Digest] First row data: ${JSON.stringify(sheetRows[0])}`);
-                    }
 
                     if (isModernTemplate || hasModernBlocks || !/{{.*#/.test(templateText)) {
                         console.log('🎨 Using enhanced template renderer (Modern/Hybrid)');
@@ -233,7 +225,6 @@ class ReminderSchedulerService {
                             },
                             timezone: reminder.timezone || 'Asia/Jakarta'
                         });
-                        console.log(`📝 [Digest] Final message (first 300 chars): ${finalMessage.substring(0, 300)}`);
                     } else {
                         // Legacy Handlebars path
                         console.log('🎨 Using Handlebars template renderer (Legacy)');
