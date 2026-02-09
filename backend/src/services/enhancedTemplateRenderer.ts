@@ -28,11 +28,13 @@ class EnhancedTemplateRenderer {
         const contextData = context.data || [];
         let result = template;
 
-        // 1. Process Loop Blocks (must be before item property replacement)
-        // Group -> Conditional -> Loop
+        // 1. Process in correct order:
+        // First: Groups (they contain their own loops/conditionals)
         result = this.processGroups(result, contextData, context);
-        result = this.processConditionals(result, context);
-        result = this.processLoops(result, contextData);
+        
+        // Second: Process outer conditionals that wrap loops (like {{#if @length > 0}}...{{#each}}...{{/each}}...{{/if}})
+        // We need to handle this specially - extract and process conditional blocks that contain loops
+        result = this.processConditionalWithLoops(result, contextData, context);
 
         // 2. Process Global and Built-in Variables
         // 2. Process Global and Built-in Variables
@@ -121,8 +123,49 @@ class EnhancedTemplateRenderer {
         });
     }
 
+    /**
+     * Process conditionals that may contain loops
+     * Handles patterns like: {{#if @length > 0}}{{#each items}}...{{/each}}{{/if}}{{#if @length == 0}}...{{/if}}
+     */
+    private processConditionalWithLoops(template: string, data: any[], context: RenderContext): string {
+        // Match {{#if condition}}...{{/if}} blocks (non-greedy, handles nested content)
+        const ifRegex = /\{\{\s*#if\s+([^}]+)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
+        
+        let result = template;
+        let lastResult = '';
+        
+        // Keep processing until no more changes (handles multiple if blocks)
+        while (result !== lastResult) {
+            lastResult = result;
+            result = result.replace(ifRegex, (match, condition, content) => {
+                const isTrue = this.evaluateCondition(condition.trim(), context);
+                
+                if (isTrue) {
+                    // Process the content inside - may contain loops
+                    let processedContent = content;
+                    
+                    // Process any loops inside this conditional
+                    processedContent = this.processLoops(processedContent, data);
+                    
+                    // Process any nested conditionals
+                    processedContent = this.processConditionalWithLoops(processedContent, data, context);
+                    
+                    return processedContent;
+                } else {
+                    // Condition is false - return empty string
+                    return '';
+                }
+            });
+        }
+        
+        // After all conditionals are processed, process any remaining loops not wrapped in conditionals
+        result = this.processLoops(result, data);
+        
+        return result;
+    }
+
     private processConditionals(template: string, context: RenderContext): string {
-        const ifElseRegex = /{{\s*#if\s+([^}]+)\s*}}([\s\S]*?)(?:{{\s*else\s*}}([\s\S]*?))?{{\s*\/if\s*}}/g;
+        const ifElseRegex = /\{\{\s*#if\s+([^}]+)\s*\}\}([\s\S]*?)(?:\{\{\s*else\s*\}\}([\s\S]*?))?\{\{\s*\/if\s*\}\}/g;
 
         return template.replace(ifElseRegex, (match, condition, ifContent, elseContent) => {
             const isTrue = this.evaluateCondition(condition.trim(), context);
@@ -259,6 +302,35 @@ class EnhancedTemplateRenderer {
             case 'truncate':
                 const len = parseInt(param) || 50;
                 return valStr.length > len ? valStr.substring(0, len) + '...' : valStr;
+            case 'urgency':
+                // Format deadline with urgency indicator
+                try {
+                    const deadlineDate = smartSheetsProcessor['parseDate'](value);
+                    if (!deadlineDate) return valStr;
+                    
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    deadlineDate.setHours(0, 0, 0, 0);
+                    
+                    const diffTime = deadlineDate.getTime() - today.getTime();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    const formattedDate = format(deadlineDate, 'dd/MM/yyyy');
+                    
+                    if (diffDays < 0) {
+                        return `⚫ ${formattedDate} (Lewat ${Math.abs(diffDays)} hari)`;
+                    } else if (diffDays === 0) {
+                        return `🔴 ${formattedDate} (HARI INI!)`;
+                    } else if (diffDays === 1) {
+                        return `🟠 ${formattedDate} (Besok)`;
+                    } else if (diffDays === 2) {
+                        return `🟡 ${formattedDate} (Lusa)`;
+                    } else if (diffDays <= 3) {
+                        return `🟢 ${formattedDate} (${diffDays} hari lagi)`;
+                    } else {
+                        return `⚪ ${formattedDate} (${diffDays} hari lagi)`;
+                    }
+                } catch { return valStr; }
             default: return value;
         }
     }
