@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { usePermissions } from '@/hooks/usePermissions'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Plus } from 'lucide-react'
+import Link from 'next/link'
 
 interface SubTab {
     id: string
@@ -152,6 +153,20 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
                     )
                 })}
             </div>
+
+            {/* Right: Create Action Button */}
+            {currentTab?.action && currentTab?.actionPath && (
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 pr-2 sm:pr-4">
+                    <Link
+                        href={`${currentTab.actionPath}?botId=${botId}`}
+                        className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20 transition-all"
+                    >
+                        <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <span className="hidden sm:inline">{currentTab.action}</span>
+                        <span className="sm:hidden">New</span>
+                    </Link>
+                </div>
+            )}
         </div>
     )
 }
