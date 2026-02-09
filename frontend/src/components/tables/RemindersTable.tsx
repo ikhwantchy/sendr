@@ -117,13 +117,35 @@ export default function RemindersTable({ botId }: RemindersTableProps) {
                     <Clock className="w-8 h-8 sm:w-10 sm:h-10 text-zinc-500" />
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold text-zinc-100 mb-2 sm:mb-3">No Reminders Yet</h3>
-                <p className="text-zinc-400 text-xs sm:text-sm max-w-xs mx-auto leading-relaxed px-4">Schedule your first automated reminder to keep your customers engaged.</p>
+                <p className="text-zinc-400 text-xs sm:text-sm max-w-xs mx-auto leading-relaxed px-4 mb-6">Schedule your first automated reminder to keep your customers engaged.</p>
+                <button
+                    onClick={() => router.push(`/dashboard/reminders/create?botId=${botId}`)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl shadow-lg shadow-blue-500/20 transition-all"
+                >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Reminder</span>
+                </button>
             </div>
         )
     }
 
     return (
         <div className="flex flex-col">
+            {/* Header with Create Button */}
+            <div className="flex items-center justify-between mb-4">
+                <div>
+                    <h2 className="text-lg font-semibold text-zinc-100">Scheduled Reminders</h2>
+                    <p className="text-xs text-zinc-500">Automate recurring messages to your contacts</p>
+                </div>
+                <button
+                    onClick={() => router.push(`/dashboard/reminders/create?botId=${botId}`)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl shadow-lg shadow-blue-500/20 transition-all"
+                >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Reminder</span>
+                </button>
+            </div>
+
             {/* Desktop Table View */}
             <div className="hidden md:block">
                 <table className="w-full table-fixed">
