@@ -66,7 +66,7 @@ class EnhancedTemplateRenderer {
 
     private processGroups(template: string, data: any[], context: RenderContext): string {
         // More flexible regex: supports by="tipe" or by "tipe" or by=tipe
-        const groupRegex = /{{\s*#group\s+by\s*=?\s*["']?([^"'\s}]+)["']?\s*}}([\s\S]*?){{\s*\/group\s*}}/g;
+        const groupRegex = /\{\{\s*#group\s+by\s*=?\s*["']?([^"'\s}]+)["']?\s*\}\}([\s\S]*?)\{\{\s*\/group\s*\}\}/g;
 
         return template.replace(groupRegex, (match, groupBy, groupContent) => {
             if (!data || data.length === 0) return '';
@@ -89,9 +89,11 @@ class EnhancedTemplateRenderer {
     }
 
     private processLoops(template: string, data: any[]): string {
-        const loopRegex = /{{\s*#each(?:\s+([\w.]+))?\s*}}([\s\S]*?){{\s*\/each\s*}}/g;
+        // Match {{#each}} or {{#each items}} or {{ #each items }}
+        const loopRegex = /\{\{\s*#each(?:\s+([\w.]+))?\s*\}\}([\s\S]*?)\{\{\s*\/each\s*\}\}/g;
 
         return template.replace(loopRegex, (match, varName, loopContent) => {
+            // varName could be "items" or undefined - we ignore it and always use passed data
             if (!data || !Array.isArray(data) || data.length === 0) {
                 console.log('⚠️ [Loop] No data to iterate');
                 return '';
@@ -104,7 +106,7 @@ class EnhancedTemplateRenderer {
 
             return data.map((item, index) => {
                 let rendered = loopContent;
-                const loopVars = {
+                const loopVars: Record<string, any> = {
                     '@index': index + 1,
                     '@first': index === 0,
                     '@last': index === data.length - 1,
@@ -113,13 +115,31 @@ class EnhancedTemplateRenderer {
 
                 // Replace loop vars first
                 Object.entries(loopVars).forEach(([key, val]) => {
-                    const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+                    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const regex = new RegExp(`\\{\\{\\s*${escapedKey}\\s*\\}\\}`, 'g');
                     rendered = rendered.replace(regex, String(val));
                 });
+
+                // Process inline conditionals within the loop (like {{#if Keterangan}})
+                rendered = this.processInlineConditionals(rendered, item);
 
                 // Replace item properties
                 return this.replaceItemProperties(rendered, item);
             }).join('\n');
+        });
+    }
+
+    /**
+     * Process simple inline conditionals like {{#if PropertyName}}...{{/if}}
+     */
+    private processInlineConditionals(template: string, item: any): string {
+        const inlineIfRegex = /\{\{\s*#if\s+(\w+)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
+        
+        return template.replace(inlineIfRegex, (match, propName, content) => {
+            // Check if the property exists and has a truthy value
+            const value = item[propName];
+            const hasValue = value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
+            return hasValue ? content : '';
         });
     }
 
