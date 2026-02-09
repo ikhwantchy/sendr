@@ -61,6 +61,10 @@ interface FormData {
         order: 'asc' | 'desc'
     } | null // NEW: Sorting
     isDigestMode: boolean // Logic for grouping messages
+    // NEW: Simplified Digest Mode fields
+    digestHeader: string      // Header template (shown once at top)
+    digestRowTemplate: string // Row template (repeated for each data row)
+    digestEmptyMessage: string // Shown when no data matches filter
     frequency: Frequency
     startDate: string // YYYY-MM-DD
     hasEndDate: boolean
@@ -143,6 +147,10 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         filters: [],
         sort: null,
         isDigestMode: false,
+        // Simplified Digest Mode defaults
+        digestHeader: '📚 *REMINDER*\n📅 {{@today}}\n\n⏰ *Data:*',
+        digestRowTemplate: '{{@index}}. *{{}}* — {{}}',
+        digestEmptyMessage: '✅ Tidak ada data.',
 
         frequency: 'once',
         startDate: today,
@@ -260,6 +268,34 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         })
                     }
 
+                    // Parse digest parts from combined template if in digest mode
+                    let digestHeader = '📚 *REMINDER*\n📅 {{@today}}\n\n⏰ *Data:*'
+                    let digestRowTemplate = '{{@index}}. *{{}}* — {{}}'
+                    let digestEmptyMessage = '✅ Tidak ada data.'
+                    
+                    if (templateConfig.isDigestMode && templateConfig.body) {
+                        // Try to parse the combined template back into parts
+                        const body = templateConfig.body as string
+                        
+                        // Extract header (everything before {{#if @length)
+                        const headerMatch = body.match(/^([\s\S]*?)(?=\n\n\{\{#if @length)/m)
+                        if (headerMatch) {
+                            digestHeader = headerMatch[1].trim()
+                        }
+                        
+                        // Extract row template (between {{#each items}} and {{/each}})
+                        const rowMatch = body.match(/\{\{#each items\}\}\n([\s\S]*?)\n\{\{\/each\}\}/)
+                        if (rowMatch) {
+                            digestRowTemplate = rowMatch[1].trim()
+                        }
+                        
+                        // Extract empty message (between {{#if @length == 0}} and {{/if}} at the end)
+                        const emptyMatch = body.match(/\{\{#if @length == 0\}\}\n([\s\S]*?)\n\{\{\/if\}\}$/)
+                        if (emptyMatch) {
+                            digestEmptyMessage = emptyMatch[1].trim()
+                        }
+                    }
+
                     setFormData({
                         name: r.name || '',
                         targetType: r.target_type || 'group',
@@ -280,6 +316,10 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         filters: templateConfig.filters || [],
                         sort: templateConfig.sort || null,
                         isDigestMode: templateConfig.isDigestMode || false,
+                        // Load parsed digest parts
+                        digestHeader: digestHeader,
+                        digestRowTemplate: digestRowTemplate,
+                        digestEmptyMessage: digestEmptyMessage,
 
                         frequency: frequency,
                         startDate: startDate,
@@ -467,8 +507,22 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
             let targetId: string | null = null;
 
             // 2. Prepare Template Config (declare early so we can add manualContacts)
+            // For Digest Mode, combine the 3 parts into proper template syntax
+            let messageBody = formData.message;
+            
+            if (formData.isDigestMode && formData.dataSource === 'google_sheets') {
+                // Build the combined template from the 3 simplified parts
+                const header = formData.digestHeader || '';
+                const rowTemplate = formData.digestRowTemplate || '';
+                const emptyMessage = formData.digestEmptyMessage || '✅ Tidak ada data.';
+                
+                // Combine into proper Handlebars-style template
+                // Format: Header + {{#if @length > 0}}{{#each items}}RowTemplate{{/each}}{{/if}}{{#if @length == 0}}EmptyMessage{{/if}}
+                messageBody = `${header}\n\n{{#if @length > 0}}\n{{#each items}}\n${rowTemplate}\n{{/each}}\n{{/if}}\n{{#if @length == 0}}\n${emptyMessage}\n{{/if}}`;
+            }
+            
             const templateConfig: any = {
-                body: formData.message,
+                body: messageBody,
             };
 
             if (formData.targetType === 'group') {
@@ -1449,92 +1503,221 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
                             <SectionHeader step={5} title="Message" desc="Compose your message with formatting and variables." />
 
-                            <div className="mt-5 bg-zinc-800/50 border border-zinc-700 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-600/50 transition-all">
-
-
-                                {/* Shared Editor - Dual View */}
-                                <div className="relative">
-                                    <SharedMessageEditor
-                                        value={formData.message}
-                                        onChange={(val) => setFormData({ ...formData, message: val })}
-                                        variables={currentVariables}
-                                        isExpanded={false}
-                                        onToggleExpand={() => setIsEditorExpanded(true)}
-                                        variableWrapper={['{{', '}}']}
-                                        extraToolbarItems={extraToolbarItems}
-                                        placeholder="Type your reminder message here..."
-                                    />
-                                    {isEditorExpanded && (
-                                        <>
-                                            <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsEditorExpanded(false)} />
-                                            <div className="fixed top-[5vh] bottom-[5vh] left-1/2 -translate-x-1/2 w-[95vw] max-w-5xl z-[200] flex flex-col animate-in zoom-in-95 duration-300">
-                                                <SharedMessageEditor
-                                                    value={formData.message}
-                                                    onChange={(val) => setFormData({ ...formData, message: val })}
-                                                    variables={currentVariables}
-                                                    isExpanded={true}
-                                                    onToggleExpand={() => setIsEditorExpanded(false)}
-                                                    variableWrapper={['{{', '}}']}
-                                                    extraToolbarItems={extraToolbarItems}
-                                                    placeholder="Type your reminder message here..."
-                                                />
-                                            </div>
-                                        </>
-                                    )}
+                            {/* Digest Mode Toggle - Prominent position */}
+                            {formData.dataSource === 'google_sheets' && (
+                                <div className="mt-4 mb-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData(prev => ({ ...prev, isDigestMode: !prev.isDigestMode }))}
+                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all border ${formData.isDigestMode
+                                            ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-lg shadow-purple-500/10'
+                                            : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600'
+                                            }`}
+                                    >
+                                        <FileText size={16} />
+                                        {formData.isDigestMode ? '📋 Digest Mode: ON' : 'Enable Digest Mode'}
+                                    </button>
+                                    <p className="text-[10px] text-zinc-500 mt-2">
+                                        {formData.isDigestMode
+                                            ? 'Digest mode will loop through filtered data and create a summary message.'
+                                            : 'Enable to send multiple rows as a single summary message.'}
+                                    </p>
                                 </div>
+                            )}
 
-                                {/* Image Attachment - Styled like Campaign */}
-                                <div className="p-4 border-t border-zinc-700/50 bg-zinc-900/30">
-                                    {!formData.imagePreview ? (
-                                        <label className="flex items-center justify-center gap-3 w-full py-4 bg-zinc-800/50 border-2 border-dashed border-zinc-700/50 rounded-xl cursor-pointer hover:bg-zinc-800 transition-all group hover:border-blue-500/40">
-                                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
-                                                <ImageIcon size={20} className="text-zinc-500 group-hover:text-blue-500 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[-10deg]" />
-                                            </div>
-                                            <div className="text-left">
-                                                <span className="text-sm font-bold text-zinc-300 group-hover:text-white block">Attach Media</span>
-                                                <span className="text-[10px] text-zinc-500 uppercase tracking-tighter">Images, flyers, or promo banners</span>
-                                            </div>
-                                            <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
-                                        </label>
-                                    ) : (
-                                        <div className="flex items-center justify-between p-3 bg-zinc-950 border border-zinc-800 rounded-xl group animate-in slide-in-from-top-2 duration-300">
-                                            <div className="flex items-center gap-4">
-                                                <div
-                                                    className="w-14 h-14 rounded-lg border border-zinc-800 overflow-hidden cursor-pointer hover:border-blue-500/50 transition-colors shrink-0"
-                                                    onClick={() => window.open(formData.imagePreview as string, '_blank')}
-                                                >
-                                                    <img src={formData.imagePreview} className="w-full h-full object-cover" />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-0.5">
-                                                        <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold rounded uppercase tracking-wider border border-emerald-500/20">Media Attached</div>
-                                                        <span className="text-xs font-bold text-zinc-300">Image file selected</span>
-                                                    </div>
-                                                    <p className="text-[10px] text-zinc-500">This media will be sent as a caption.</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => window.open(formData.imagePreview as string, '_blank')}
-                                                    className="flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-bold transition-all border border-zinc-800 focus:ring-2 focus:ring-blue-500/20"
-                                                >
-                                                    <Eye size={14} />
-                                                    View
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData({ ...formData, imageFile: null, imagePreview: null })}
-                                                    className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
-                                                    title="Remove media"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
+                            {/* Simplified Digest Mode UI */}
+                            {formData.isDigestMode && formData.dataSource === 'google_sheets' ? (
+                                <div className="mt-4 space-y-5 animate-in fade-in slide-in-from-top-2">
+                                    {/* Available Variables - Prominent Display */}
+                                    <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Database size={14} className="text-emerald-400" />
+                                            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Variables from Sheet</span>
                                         </div>
-                                    )}
+                                        <div className="flex flex-wrap gap-2">
+                                            {/* Built-in variables */}
+                                            <button
+                                                type="button"
+                                                onClick={() => navigator.clipboard.writeText('{{@today}}')}
+                                                className="px-2.5 py-1.5 bg-blue-500/10 text-blue-400 text-xs font-mono rounded border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                                                title="Click to copy"
+                                            >
+                                                @today
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => navigator.clipboard.writeText('{{@index}}')}
+                                                className="px-2.5 py-1.5 bg-blue-500/10 text-blue-400 text-xs font-mono rounded border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                                                title="Click to copy"
+                                            >
+                                                @index
+                                            </button>
+                                            {/* Sheet columns */}
+                                            {formData.csvPreview.length > 0 && formData.csvPreview[0].split(',').map((col, i) => {
+                                                const colName = col.trim()
+                                                if (!colName) return null
+                                                return (
+                                                    <button
+                                                        key={i}
+                                                        type="button"
+                                                        onClick={() => navigator.clipboard.writeText(`{{${colName}}}`)}
+                                                        className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 text-xs font-mono rounded border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                                                        title="Click to copy"
+                                                    >
+                                                        {colName}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                        <p className="text-[10px] text-zinc-500 mt-2">Click variable to copy. Use <code className="text-purple-400">| urgency</code> after date columns for smart formatting.</p>
+                                    </div>
+
+                                    {/* 1. Header */}
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-2 text-sm font-semibold text-white">
+                                            <span className="w-6 h-6 bg-purple-500/20 text-purple-400 rounded-full flex items-center justify-center text-xs">1</span>
+                                            Header (Tampil di atas)
+                                        </label>
+                                        <textarea
+                                            value={formData.digestHeader}
+                                            onChange={e => setFormData({ ...formData, digestHeader: e.target.value })}
+                                            rows={3}
+                                            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm font-mono focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 outline-none resize-none transition-all"
+                                            placeholder="📚 *REMINDER*&#10;📅 {{@today}}&#10;⏰ Data:"
+                                        />
+                                    </div>
+
+                                    {/* 2. Row Template */}
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-2 text-sm font-semibold text-white">
+                                            <span className="w-6 h-6 bg-purple-500/20 text-purple-400 rounded-full flex items-center justify-center text-xs">2</span>
+                                            Format Tiap Baris (diulang per data)
+                                        </label>
+                                        <textarea
+                                            value={formData.digestRowTemplate}
+                                            onChange={e => setFormData({ ...formData, digestRowTemplate: e.target.value })}
+                                            rows={3}
+                                            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm font-mono focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 outline-none resize-none transition-all"
+                                            placeholder="{{@index}}. *{{Matkul}}* — {{Tugas}}&#10;📆 {{Deadline | urgency}}"
+                                        />
+                                        <p className="text-[10px] text-zinc-500">Template ini akan diulang untuk setiap baris data yang match filter.</p>
+                                    </div>
+
+                                    {/* 3. Empty Message */}
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-2 text-sm font-semibold text-white">
+                                            <span className="w-6 h-6 bg-purple-500/20 text-purple-400 rounded-full flex items-center justify-center text-xs">3</span>
+                                            Jika Tidak Ada Data
+                                        </label>
+                                        <textarea
+                                            value={formData.digestEmptyMessage}
+                                            onChange={e => setFormData({ ...formData, digestEmptyMessage: e.target.value })}
+                                            rows={2}
+                                            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm font-mono focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 outline-none resize-none transition-all"
+                                            placeholder="✅ Tidak ada data yang match filter."
+                                        />
+                                    </div>
+
+                                    {/* Auto-generated template preview */}
+                                    <div className="bg-zinc-900/80 border border-zinc-800 rounded-lg p-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Code size={14} className="text-zinc-500" />
+                                            <span className="text-xs font-medium text-zinc-500">Generated Template (Auto)</span>
+                                        </div>
+                                        <pre className="text-[10px] text-zinc-600 font-mono whitespace-pre-wrap break-all">
+                                            {formData.digestHeader}{'\n\n'}{'{{#if @length > 0}}\n{{#each items}}\n'}{formData.digestRowTemplate}{'\n{{/each}}\n{{/if}}\n{{#if @length == 0}}\n'}{formData.digestEmptyMessage}{'\n{{/if}}'}
+                                        </pre>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                /* Regular Message Editor (Non-Digest or Static) */
+                                <div className="mt-5 bg-zinc-800/50 border border-zinc-700 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-600/50 transition-all">
+
+
+                                    {/* Shared Editor - Dual View */}
+                                    <div className="relative">
+                                        <SharedMessageEditor
+                                            value={formData.message}
+                                            onChange={(val) => setFormData({ ...formData, message: val })}
+                                            variables={currentVariables}
+                                            isExpanded={false}
+                                            onToggleExpand={() => setIsEditorExpanded(true)}
+                                            variableWrapper={['{{', '}}']}
+                                            extraToolbarItems={extraToolbarItems}
+                                            placeholder="Type your reminder message here..."
+                                        />
+                                        {isEditorExpanded && (
+                                            <>
+                                                <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsEditorExpanded(false)} />
+                                                <div className="fixed top-[5vh] bottom-[5vh] left-1/2 -translate-x-1/2 w-[95vw] max-w-5xl z-[200] flex flex-col animate-in zoom-in-95 duration-300">
+                                                    <SharedMessageEditor
+                                                        value={formData.message}
+                                                        onChange={(val) => setFormData({ ...formData, message: val })}
+                                                        variables={currentVariables}
+                                                        isExpanded={true}
+                                                        onToggleExpand={() => setIsEditorExpanded(false)}
+                                                        variableWrapper={['{{', '}}']}
+                                                        extraToolbarItems={extraToolbarItems}
+                                                        placeholder="Type your reminder message here..."
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Image Attachment - Styled like Campaign */}
+                                    <div className="p-4 border-t border-zinc-700/50 bg-zinc-900/30">
+                                        {!formData.imagePreview ? (
+                                            <label className="flex items-center justify-center gap-3 w-full py-4 bg-zinc-800/50 border-2 border-dashed border-zinc-700/50 rounded-xl cursor-pointer hover:bg-zinc-800 transition-all group hover:border-blue-500/40">
+                                                <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
+                                                    <ImageIcon size={20} className="text-zinc-500 group-hover:text-blue-500 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[-10deg]" />
+                                                </div>
+                                                <div className="text-left">
+                                                    <span className="text-sm font-bold text-zinc-300 group-hover:text-white block">Attach Media</span>
+                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-tighter">Images, flyers, or promo banners</span>
+                                                </div>
+                                                <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                                            </label>
+                                        ) : (
+                                            <div className="flex items-center justify-between p-3 bg-zinc-950 border border-zinc-800 rounded-xl group animate-in slide-in-from-top-2 duration-300">
+                                                <div className="flex items-center gap-4">
+                                                    <div
+                                                        className="w-14 h-14 rounded-lg border border-zinc-800 overflow-hidden cursor-pointer hover:border-blue-500/50 transition-colors shrink-0"
+                                                        onClick={() => window.open(formData.imagePreview as string, '_blank')}
+                                                    >
+                                                        <img src={formData.imagePreview} className="w-full h-full object-cover" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                            <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold rounded uppercase tracking-wider border border-emerald-500/20">Media Attached</div>
+                                                            <span className="text-xs font-bold text-zinc-300">Image file selected</span>
+                                                        </div>
+                                                        <p className="text-[10px] text-zinc-500">This media will be sent as a caption.</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => window.open(formData.imagePreview as string, '_blank')}
+                                                        className="flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-bold transition-all border border-zinc-800 focus:ring-2 focus:ring-blue-500/20"
+                                                    >
+                                                        <Eye size={14} />
+                                                        View
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, imageFile: null, imagePreview: null })}
+                                                        className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                                                        title="Remove media"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </section>
 
                     </div>
