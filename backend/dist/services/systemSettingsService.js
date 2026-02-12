@@ -40,8 +40,8 @@ class SystemSettingsService {
      */
     async getCategory(category, includePrivate = false) {
         const whereClause = includePrivate
-            ? 'WHERE category = $1'
-            : 'WHERE category = $1 AND is_public = true';
+            ? 'WHERE category = ?'
+            : 'WHERE category = ? AND is_public = 1';
         const result = await (0, connection_sqlite_1.query)(`SELECT key, value, data_type as value_type FROM system_settings ${whereClause}`, [category]);
         const settings = {};
         result.rows.forEach(row => {
@@ -53,7 +53,7 @@ class SystemSettingsService {
      * Get all settings (grouped by category)
      */
     async getAll(includePrivate = false) {
-        const whereClause = includePrivate ? '' : 'WHERE is_public = true';
+        const whereClause = includePrivate ? '' : 'WHERE is_public = 1';
         const result = await (0, connection_sqlite_1.query)(`SELECT category, key, value, data_type as value_type, description, is_public 
              FROM system_settings ${whereClause}
              ORDER BY category, key`);
@@ -79,16 +79,24 @@ class SystemSettingsService {
         const oldValue = await this.get(category, key);
         // Determine value type
         const value_type = this.inferType(value);
-        // Update or insert (SQLite UPSERT)
-        await (0, connection_sqlite_1.query)(`INSERT INTO system_settings (id, category, key, value, data_type, updated_by, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-             ON CONFLICT (key) 
-             DO UPDATE SET 
-                value = excluded.value,
-                data_type = excluded.data_type,
-                category = excluded.category,
-                updated_by = excluded.updated_by,
-                updated_at = datetime('now')`, [require('uuid').v4(), category, key, value, value_type, updated_by]);
+        const now = new Date().toISOString();
+        // Ensure all values are strings for SQLite compatibility
+        const safeValue = value != null ? String(value) : '';
+        const safeCategory = category || 'general';
+        const safeUpdatedBy = updated_by || null;
+        // Check if setting already exists (sql.js has issues with UPSERT)
+        const existing = await (0, connection_sqlite_1.query)('SELECT key FROM system_settings WHERE key = ?', [key]);
+        if (existing.rows.length > 0) {
+            // UPDATE existing
+            await (0, connection_sqlite_1.query)(`UPDATE system_settings 
+                 SET value = ?, data_type = ?, category = ?, updated_by = ?, updated_at = ?
+                 WHERE key = ?`, [safeValue, value_type, safeCategory, safeUpdatedBy, now, key]);
+        }
+        else {
+            // INSERT new
+            await (0, connection_sqlite_1.query)(`INSERT INTO system_settings (id, category, key, value, data_type, updated_by, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`, [require('uuid').v4(), safeCategory, key, safeValue, value_type, safeUpdatedBy, now]);
+        }
         // Clear cache
         this.cache.delete(`${category}.${key}`);
         this.cacheExpiry.delete(`${category}.${key}`);

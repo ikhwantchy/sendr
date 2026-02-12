@@ -553,9 +553,9 @@ async function initSchema() {
         _db.run(`
         CREATE TABLE IF NOT EXISTS system_settings (
             id TEXT,
-            category TEXT NOT NULL DEFAULT 'general',
+            category TEXT DEFAULT 'general',
             key TEXT PRIMARY KEY,
-            value TEXT NOT NULL,
+            value TEXT,
             data_type TEXT DEFAULT 'string',
             description TEXT,
             is_public INTEGER DEFAULT 0,
@@ -571,7 +571,7 @@ async function initSchema() {
     }
     catch (e) { }
     try {
-        _db.run(`ALTER TABLE system_settings ADD COLUMN category TEXT NOT NULL DEFAULT 'general'`);
+        _db.run(`ALTER TABLE system_settings ADD COLUMN category TEXT DEFAULT 'general'`);
     }
     catch (e) { }
     try {
@@ -687,13 +687,53 @@ async function initSchema() {
         "ALTER TABLE bots ADD COLUMN is_paused INTEGER DEFAULT 0",
         "ALTER TABLE campaign_recipients ADD COLUMN wa_message_id TEXT",
         "ALTER TABLE tenants ADD COLUMN google_service_account TEXT",
-        "ALTER TABLE tenants ADD COLUMN settings TEXT DEFAULT '{}'"
+        "ALTER TABLE tenants ADD COLUMN settings TEXT DEFAULT '{}'",
+        "ALTER TABLE bots ADD COLUMN expires_at TEXT",
+        "ALTER TABLE bots ADD COLUMN expired_reason TEXT"
     ];
     for (const sql of migrations) {
         try {
             _db.run(sql);
         }
         catch (e) { }
+    }
+    // Fix system_settings: remove NOT NULL constraint on value/category
+    // SQLite can't ALTER column constraints, so we recreate the table
+    try {
+        const hasTable = _db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='system_settings'");
+        if (hasTable.length > 0) {
+            // Check if value column has NOT NULL by trying to insert a NULL
+            try {
+                _db.run("INSERT INTO system_settings (key, value) VALUES ('__null_test__', NULL)");
+                // If we get here, no NOT NULL constraint — clean up test row
+                _db.run("DELETE FROM system_settings WHERE key = '__null_test__'");
+            }
+            catch (e) {
+                // NOT NULL constraint exists — need to recreate table
+                logger_1.logger.info('Fixing system_settings table constraints...');
+                _db.run(`CREATE TABLE IF NOT EXISTS system_settings_backup AS SELECT * FROM system_settings`);
+                _db.run(`DROP TABLE system_settings`);
+                _db.run(`
+          CREATE TABLE system_settings (
+            id TEXT,
+            category TEXT DEFAULT 'general',
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            data_type TEXT DEFAULT 'string',
+            description TEXT,
+            is_public INTEGER DEFAULT 0,
+            updated_by TEXT REFERENCES users(id),
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+                _db.run(`INSERT INTO system_settings SELECT * FROM system_settings_backup`);
+                _db.run(`DROP TABLE system_settings_backup`);
+                logger_1.logger.info('✅ system_settings table constraints fixed');
+            }
+        }
+    }
+    catch (e) {
+        logger_1.logger.warn('system_settings migration skipped', { error: e });
     }
     saveDatabase();
     logger_1.logger.info('✅ Database schema initialized');
