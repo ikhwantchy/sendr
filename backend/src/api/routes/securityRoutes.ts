@@ -4,6 +4,7 @@
 
 import { Router } from 'express';
 import crypto from 'crypto';
+import axios from 'axios';
 import { authenticate } from '../middleware/auth';
 import securityService from '../../services/securityService';
 import systemSettingsService from '../../services/systemSettingsService';
@@ -111,7 +112,13 @@ router.post('/telegram/bot-token', authenticate, async (req, res) => {
 
         // Verify token by calling Telegram getMe API
         try {
-            const response = await (await import('axios')).default.get(`https://api.telegram.org/bot${botToken.trim()}/getMe`);
+            logger.info('Verifying Telegram bot token...', { tokenPrefix: botToken.trim().substring(0, 10) + '...' });
+            const response = await axios.get(`https://api.telegram.org/bot${botToken.trim()}/getMe`, {
+                timeout: 10000
+            });
+            
+            logger.info('Telegram API response:', { ok: response.data?.ok, result: response.data?.result });
+            
             if (!response.data?.ok) {
                 return res.status(400).json({ success: false, error: 'Invalid bot token - Telegram rejected it' });
             }
@@ -147,7 +154,14 @@ router.post('/telegram/bot-token', authenticate, async (req, res) => {
                 }
             });
         } catch (apiError: any) {
-            return res.status(400).json({ success: false, error: 'Invalid bot token - could not verify with Telegram' });
+            logger.error('Telegram API verification failed', { 
+                message: apiError.message, 
+                status: apiError.response?.status,
+                data: apiError.response?.data,
+                code: apiError.code
+            });
+            const detail = apiError.response?.data?.description || apiError.message || 'Unknown error';
+            return res.status(400).json({ success: false, error: `Failed to verify bot token: ${detail}` });
         }
     } catch (error: any) {
         logger.error('Failed to save bot token', { error: error.message });

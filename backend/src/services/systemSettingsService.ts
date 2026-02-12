@@ -128,6 +128,11 @@ class SystemSettingsService {
         const value_type = this.inferType(value);
         const now = new Date().toISOString();
 
+        // Ensure all values are strings for SQLite compatibility
+        const safeValue = value != null ? String(value) : '';
+        const safeCategory = category || 'general';
+        const safeUpdatedBy = updated_by || null;
+
         // Check if setting already exists (sql.js has issues with UPSERT)
         const existing = await query(
             'SELECT key FROM system_settings WHERE key = ?',
@@ -140,14 +145,14 @@ class SystemSettingsService {
                 `UPDATE system_settings 
                  SET value = ?, data_type = ?, category = ?, updated_by = ?, updated_at = ?
                  WHERE key = ?`,
-                [value, value_type, category, updated_by, now, key]
+                [safeValue, value_type, safeCategory, safeUpdatedBy, now, key]
             );
         } else {
             // INSERT new
             await query(
                 `INSERT INTO system_settings (id, category, key, value, data_type, updated_by, updated_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [require('uuid').v4(), category, key, value, value_type, updated_by, now]
+                [require('uuid').v4(), safeCategory, key, safeValue, value_type, safeUpdatedBy, now]
             );
         }
 
