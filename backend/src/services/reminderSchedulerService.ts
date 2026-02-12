@@ -155,6 +155,16 @@ class ReminderSchedulerService {
             const templateConfig = JSON.parse(reminder.template_config || '{}');
             const templateText = templateConfig.body || templateConfig.template || '';
 
+            // DEBUG: Log all config
+            console.log('🔍 [DEBUG] Reminder config:', {
+                id: reminder.id,
+                name: reminder.name,
+                data_source_id: reminder.data_source_id,
+                google_sheets_url: reminder.google_sheets_url,
+            });
+            console.log('🔍 [DEBUG] Template config:', JSON.stringify(templateConfig, null, 2));
+            console.log('🔍 [DEBUG] Template text:', templateText.substring(0, 200));
+
             // 1. Data Source Logic
             let sheetRows: any[] = [];
             let isFromSheet = false;
@@ -163,16 +173,25 @@ class ReminderSchedulerService {
             const googleSheetsUrl = templateConfig.googleSheetsUrl || reminder.google_sheets_url;
             const spreadsheetId = googleSheetsUrl ? googleSheetsService.extractSpreadsheetId(googleSheetsUrl) : null;
 
+            console.log('🔍 [DEBUG] googleSheetsUrl:', googleSheetsUrl);
+            console.log('🔍 [DEBUG] spreadsheetId:', spreadsheetId);
+
             if (reminder.data_source_id || (googleSheetsUrl && spreadsheetId)) {
                 isFromSheet = true;
+                console.log('🔍 [DEBUG] isFromSheet = true, fetching data...');
                 try {
                     sheetRows = await this.fetchAndFilterSheetData(reminder, templateConfig);
                     console.log(`📊 Fetched ${sheetRows.length} relevant rows from sheet`);
+                    if (sheetRows.length > 0) {
+                        console.log('🔍 [DEBUG] First row:', JSON.stringify(sheetRows[0]));
+                    }
                 } catch (err: any) {
                     console.error('Error in data source pipeline:', err.message);
                     await this.logExecution(reminderId, 'failed', `Data Source Error: ${err.message}`);
                     return;
                 }
+            } else {
+                console.log('🔍 [DEBUG] isFromSheet = false (no sheet URL or spreadsheet ID)');
             }
 
             // 2. Messaging Logic
@@ -207,12 +226,15 @@ class ReminderSchedulerService {
                 let finalMessage = '';
 
                 if (isFromSheet && templateConfig.isDigestMode) {
+                    console.log('🔍 [DEBUG] Digest Mode is ON');
                     // Smarter renderer selection
                     const isModernTemplate = /{{.*(@|==|contains|\|).*}}/.test(templateText);
                     const hasModernBlocks = /\{\{\s*#(if|each|group)\s/.test(templateText);
+                    console.log('🔍 [DEBUG] isModernTemplate:', isModernTemplate, 'hasModernBlocks:', hasModernBlocks);
 
                     if (isModernTemplate || hasModernBlocks || !/{{.*#/.test(templateText)) {
                         console.log('🎨 Using enhanced template renderer (Modern/Hybrid)');
+                        console.log('🔍 [DEBUG] Passing data to renderer:', sheetRows.length, 'rows');
                         finalMessage = enhancedTemplateRenderer.render(templateText, {
                             data: sheetRows,
                             globalVars: {
@@ -225,6 +247,7 @@ class ReminderSchedulerService {
                             },
                             timezone: reminder.timezone || 'Asia/Jakarta'
                         });
+                        console.log('🔍 [DEBUG] Final message:', finalMessage.substring(0, 300));
                     } else {
                         // Legacy Handlebars path
                         console.log('🎨 Using Handlebars template renderer (Legacy)');

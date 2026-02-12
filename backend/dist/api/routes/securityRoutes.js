@@ -2,6 +2,39 @@
 /**
  * Security Management Routes
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -86,6 +119,82 @@ router.get('/logs', auth_1.authenticate, async (req, res) => {
     }
 });
 /**
+ * POST /api/security/telegram/bot-token
+ * Save Telegram Bot Token to system settings
+ */
+router.post('/telegram/bot-token', auth_1.authenticate, async (req, res) => {
+    try {
+        const { botToken } = req.body;
+        const userId = req.user.id;
+        if (!botToken || !botToken.trim()) {
+            return res.status(400).json({ success: false, error: 'Bot token is required' });
+        }
+        // Validate token format (basic check: contains colon, starts with numbers)
+        if (!/^\d+:.+$/.test(botToken.trim())) {
+            return res.status(400).json({ success: false, error: 'Invalid bot token format. Expected format: 123456789:ABCdef...' });
+        }
+        // Verify token by calling Telegram getMe API
+        try {
+            const response = await (await Promise.resolve().then(() => __importStar(require('axios')))).default.get(`https://api.telegram.org/bot${botToken.trim()}/getMe`);
+            if (!response.data?.ok) {
+                return res.status(400).json({ success: false, error: 'Invalid bot token - Telegram rejected it' });
+            }
+            const botInfo = response.data.result;
+            // Save to system_settings
+            await systemSettingsService_1.default.set({
+                category: 'telegram',
+                key: 'bot_token',
+                value: botToken.trim(),
+                updated_by: userId
+            });
+            // Also save bot info for display
+            await systemSettingsService_1.default.set({
+                category: 'telegram',
+                key: 'bot_username',
+                value: botInfo.username || '',
+                updated_by: userId
+            });
+            await securityService_1.default.logEvent(userId, 'TELEGRAM_BOT_CONFIGURED', req.ip, req.get('user-agent'), {
+                botUsername: botInfo.username
+            });
+            res.json({
+                success: true,
+                message: 'Bot token saved successfully',
+                data: {
+                    botUsername: botInfo.username,
+                    botName: botInfo.first_name
+                }
+            });
+        }
+        catch (apiError) {
+            return res.status(400).json({ success: false, error: 'Invalid bot token - could not verify with Telegram' });
+        }
+    }
+    catch (error) {
+        logger_1.logger.error('Failed to save bot token', { error: error.message });
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+/**
+ * DELETE /api/security/telegram/bot-token
+ * Remove Telegram Bot Token
+ */
+router.delete('/telegram/bot-token', auth_1.authenticate, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        await systemSettingsService_1.default.delete('telegram', 'bot_token', userId);
+        await systemSettingsService_1.default.delete('telegram', 'bot_username', userId);
+        await securityService_1.default.logEvent(userId, 'TELEGRAM_BOT_REMOVED', req.ip, req.get('user-agent'));
+        // Clear cache so status endpoint reflects immediately
+        systemSettingsService_1.default.clearCache();
+        res.json({ success: true, message: 'Bot token removed' });
+    }
+    catch (error) {
+        logger_1.logger.error('Failed to remove bot token', { error: error.message });
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+/**
  * POST /api/security/telegram/setup
  * Update Telegram Chat ID
  */
@@ -116,12 +225,14 @@ router.get('/telegram/status', auth_1.authenticate, async (req, res) => {
         let botToken = await systemSettingsService_1.default.get('telegram', 'bot_token');
         if (!botToken)
             botToken = process.env.TELEGRAM_BOT_TOKEN;
+        const botUsername = await systemSettingsService_1.default.get('telegram', 'bot_username');
         res.json({
             success: true,
             data: {
                 connected: !!chatId,
                 chatId: chatId || null,
-                systemConfigured: !!botToken
+                systemConfigured: !!botToken,
+                botUsername: botUsername || null
             }
         });
     }

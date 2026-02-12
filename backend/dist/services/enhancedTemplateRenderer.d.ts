@@ -20,6 +20,15 @@ declare class EnhancedTemplateRenderer {
     render(template: string, context: RenderContext): string;
     private processGroups;
     private processLoops;
+    /**
+     * Process simple inline conditionals like {{#if PropertyName}}...{{/if}}
+     */
+    private processInlineConditionals;
+    /**
+     * Process conditionals that may contain loops
+     * Handles patterns like: {{#if @length > 0}}{{#each items}}...{{/each}}{{/if}}{{#if @length == 0}}...{{/if}}
+     */
+    private processConditionalWithLoops;
     private processConditionals;
     private evaluateCondition;
     private resolveValue;

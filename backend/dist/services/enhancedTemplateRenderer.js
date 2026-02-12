@@ -24,11 +24,12 @@ class EnhancedTemplateRenderer {
             return '';
         const contextData = context.data || [];
         let result = template;
-        // 1. Process Loop Blocks (must be before item property replacement)
-        // Group -> Conditional -> Loop
+        // 1. Process in correct order:
+        // First: Groups (they contain their own loops/conditionals)
         result = this.processGroups(result, contextData, context);
-        result = this.processConditionals(result, context);
-        result = this.processLoops(result, contextData);
+        // Second: Process outer conditionals that wrap loops (like {{#if @length > 0}}...{{#each}}...{{/each}}...{{/if}})
+        // We need to handle this specially - extract and process conditional blocks that contain loops
+        result = this.processConditionalWithLoops(result, contextData, context);
         // 2. Process Global and Built-in Variables
         // 2. Process Global and Built-in Variables
         const builtIn = {
@@ -50,11 +51,13 @@ class EnhancedTemplateRenderer {
         if (context.data && context.data.length > 0) {
             result = this.replaceItemProperties(result, context.data[0]);
         }
+        // 4. Clean up excessive newlines (3+ consecutive newlines → 2 newlines)
+        result = result.replace(/\n{3,}/g, '\n\n');
         return result.trim();
     }
     processGroups(template, data, context) {
         // More flexible regex: supports by="tipe" or by "tipe" or by=tipe
-        const groupRegex = /{{\s*#group\s+by\s*=?\s*["']?([^"'\s}]+)["']?\s*}}([\s\S]*?){{\s*\/group\s*}}/g;
+        const groupRegex = /\{\{\s*#group\s+by\s*=?\s*["']?([^"'\s}]+)["']?\s*\}\}([\s\S]*?)\{\{\s*\/group\s*\}\}/g;
         return template.replace(groupRegex, (match, groupBy, groupContent) => {
             if (!data || data.length === 0)
                 return '';
@@ -74,8 +77,10 @@ class EnhancedTemplateRenderer {
         });
     }
     processLoops(template, data) {
-        const loopRegex = /{{\s*#each(?:\s+([\w.]+))?\s*}}([\s\S]*?){{\s*\/each\s*}}/g;
+        // Match {{#each}} or {{#each items}} or {{ #each items }}
+        const loopRegex = /\{\{\s*#each(?:\s+([\w.]+))?\s*\}\}([\s\S]*?)\{\{\s*\/each\s*\}\}/g;
         return template.replace(loopRegex, (match, varName, loopContent) => {
+            // varName could be "items" or undefined - we ignore it and always use passed data
             if (!data || !Array.isArray(data) || data.length === 0) {
                 console.log('⚠️ [Loop] No data to iterate');
                 return '';
@@ -94,16 +99,65 @@ class EnhancedTemplateRenderer {
                 };
                 // Replace loop vars first
                 Object.entries(loopVars).forEach(([key, val]) => {
-                    const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+                    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const regex = new RegExp(`\\{\\{\\s*${escapedKey}\\s*\\}\\}`, 'g');
                     rendered = rendered.replace(regex, String(val));
                 });
+                // Process inline conditionals within the loop (like {{#if Keterangan}})
+                rendered = this.processInlineConditionals(rendered, item);
                 // Replace item properties
                 return this.replaceItemProperties(rendered, item);
             }).join('\n');
         });
     }
+    /**
+     * Process simple inline conditionals like {{#if PropertyName}}...{{/if}}
+     */
+    processInlineConditionals(template, item) {
+        const inlineIfRegex = /\{\{\s*#if\s+(\w+)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
+        return template.replace(inlineIfRegex, (match, propName, content) => {
+            // Check if the property exists and has a truthy value
+            const value = item[propName];
+            const hasValue = value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
+            return hasValue ? content : '';
+        });
+    }
+    /**
+     * Process conditionals that may contain loops
+     * Handles patterns like: {{#if @length > 0}}{{#each items}}...{{/each}}{{/if}}{{#if @length == 0}}...{{/if}}
+     */
+    processConditionalWithLoops(template, data, context) {
+        let result = template;
+        // Process all {{#if ...}}...{{/if}} blocks
+        const processIfBlocks = (text) => {
+            // Match {{#if condition}}content{{/if}}
+            const simpleIfRegex = /\{\{\s*#if\s+([^}]+)\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
+            let processed = text;
+            let match;
+            let iterations = 0;
+            // Keep replacing until no more matches
+            while ((match = simpleIfRegex.exec(processed)) !== null && iterations < 20) {
+                iterations++;
+                const [fullMatch, condition, content] = match;
+                const isTrue = this.evaluateCondition(condition.trim(), context);
+                let replacement = '';
+                if (isTrue) {
+                    // Process loops inside this block
+                    replacement = this.processLoops(content, data);
+                }
+                // Replace the match and reset regex
+                processed = processed.replace(fullMatch, replacement);
+                simpleIfRegex.lastIndex = 0; // Reset to start from beginning
+            }
+            return processed;
+        };
+        result = processIfBlocks(result);
+        // Process any remaining loops not wrapped in conditionals
+        result = this.processLoops(result, data);
+        return result;
+    }
     processConditionals(template, context) {
-        const ifElseRegex = /{{\s*#if\s+([^}]+)\s*}}([\s\S]*?)(?:{{\s*else\s*}}([\s\S]*?))?{{\s*\/if\s*}}/g;
+        const ifElseRegex = /\{\{\s*#if\s+([^}]+)\s*\}\}([\s\S]*?)(?:\{\{\s*else\s*\}\}([\s\S]*?))?\{\{\s*\/if\s*\}\}/g;
         return template.replace(ifElseRegex, (match, condition, ifContent, elseContent) => {
             const isTrue = this.evaluateCondition(condition.trim(), context);
             return isTrue ? (ifContent || '') : (elseContent || '');
@@ -125,6 +179,8 @@ class EnhancedTemplateRenderer {
                 case 'contains': return left.includes(right);
                 case '>': return Number(leftValue) > Number(rightValue);
                 case '<': return Number(leftValue) < Number(rightValue);
+                case '>=': return Number(leftValue) >= Number(rightValue);
+                case '<=': return Number(leftValue) <= Number(rightValue);
             }
         }
         // Truthy check
@@ -223,6 +279,40 @@ class EnhancedTemplateRenderer {
             case 'truncate':
                 const len = parseInt(param) || 50;
                 return valStr.length > len ? valStr.substring(0, len) + '...' : valStr;
+            case 'urgency':
+                // Format deadline with urgency indicator
+                try {
+                    const deadlineDate = smartSheetsProcessor_1.default['parseDate'](value);
+                    if (!deadlineDate)
+                        return valStr;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    deadlineDate.setHours(0, 0, 0, 0);
+                    const diffTime = deadlineDate.getTime() - today.getTime();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    const formattedDate = (0, date_fns_1.format)(deadlineDate, 'dd/MM/yyyy');
+                    if (diffDays < 0) {
+                        return `⚫ ${formattedDate} (Lewat ${Math.abs(diffDays)} hari)`;
+                    }
+                    else if (diffDays === 0) {
+                        return `🔴 ${formattedDate} (HARI INI!)`;
+                    }
+                    else if (diffDays === 1) {
+                        return `🟠 ${formattedDate} (Besok)`;
+                    }
+                    else if (diffDays === 2) {
+                        return `🟡 ${formattedDate} (Lusa)`;
+                    }
+                    else if (diffDays <= 3) {
+                        return `🟢 ${formattedDate} (${diffDays} hari lagi)`;
+                    }
+                    else {
+                        return `⚪ ${formattedDate} (${diffDays} hari lagi)`;
+                    }
+                }
+                catch {
+                    return valStr;
+                }
             default: return value;
         }
     }

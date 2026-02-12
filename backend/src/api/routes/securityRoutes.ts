@@ -92,6 +92,89 @@ router.get('/logs', authenticate, async (req, res) => {
 });
 
 /**
+ * POST /api/security/telegram/bot-token
+ * Save Telegram Bot Token to system settings
+ */
+router.post('/telegram/bot-token', authenticate, async (req, res) => {
+    try {
+        const { botToken } = req.body;
+        const userId = req.user!.id;
+
+        if (!botToken || !botToken.trim()) {
+            return res.status(400).json({ success: false, error: 'Bot token is required' });
+        }
+
+        // Validate token format (basic check: contains colon, starts with numbers)
+        if (!/^\d+:.+$/.test(botToken.trim())) {
+            return res.status(400).json({ success: false, error: 'Invalid bot token format. Expected format: 123456789:ABCdef...' });
+        }
+
+        // Verify token by calling Telegram getMe API
+        try {
+            const response = await (await import('axios')).default.get(`https://api.telegram.org/bot${botToken.trim()}/getMe`);
+            if (!response.data?.ok) {
+                return res.status(400).json({ success: false, error: 'Invalid bot token - Telegram rejected it' });
+            }
+
+            const botInfo = response.data.result;
+
+            // Save to system_settings
+            await systemSettingsService.set({
+                category: 'telegram',
+                key: 'bot_token',
+                value: botToken.trim(),
+                updated_by: userId
+            });
+
+            // Also save bot info for display
+            await systemSettingsService.set({
+                category: 'telegram',
+                key: 'bot_username',
+                value: botInfo.username || '',
+                updated_by: userId
+            });
+
+            await securityService.logEvent(userId, 'TELEGRAM_BOT_CONFIGURED', req.ip, req.get('user-agent'), {
+                botUsername: botInfo.username
+            });
+
+            res.json({
+                success: true,
+                message: 'Bot token saved successfully',
+                data: {
+                    botUsername: botInfo.username,
+                    botName: botInfo.first_name
+                }
+            });
+        } catch (apiError: any) {
+            return res.status(400).json({ success: false, error: 'Invalid bot token - could not verify with Telegram' });
+        }
+    } catch (error: any) {
+        logger.error('Failed to save bot token', { error: error.message });
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+/**
+ * DELETE /api/security/telegram/bot-token
+ * Remove Telegram Bot Token
+ */
+router.delete('/telegram/bot-token', authenticate, async (req, res) => {
+    try {
+        const userId = req.user!.id;
+        await systemSettingsService.delete('telegram', 'bot_token', userId);
+        await systemSettingsService.delete('telegram', 'bot_username', userId);
+        await securityService.logEvent(userId, 'TELEGRAM_BOT_REMOVED', req.ip, req.get('user-agent'));
+        // Clear cache so status endpoint reflects immediately
+        systemSettingsService.clearCache();
+        res.json({ success: true, message: 'Bot token removed' });
+    } catch (error: any) {
+        logger.error('Failed to remove bot token', { error: error.message });
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+/**
  * POST /api/security/telegram/setup
  * Update Telegram Chat ID
  */
@@ -127,12 +210,15 @@ router.get('/telegram/status', authenticate, async (req, res) => {
         let botToken = await systemSettingsService.get('telegram', 'bot_token');
         if (!botToken) botToken = process.env.TELEGRAM_BOT_TOKEN;
 
+        const botUsername = await systemSettingsService.get('telegram', 'bot_username');
+
         res.json({
             success: true,
             data: {
                 connected: !!chatId,
                 chatId: chatId || null,
-                systemConfigured: !!botToken
+                systemConfigured: !!botToken,
+                botUsername: botUsername || null
             }
         });
     } catch (error: any) {

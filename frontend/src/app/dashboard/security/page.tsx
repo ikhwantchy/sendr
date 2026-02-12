@@ -29,7 +29,11 @@ import {
     Check,
     X,
     Copy,
-    ExternalLink
+    ExternalLink,
+    Eye,
+    EyeOff,
+    Bot,
+    Settings
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -38,6 +42,8 @@ function SecurityContent() {
     const [mounted, setMounted] = useState(false)
     const [activeSection, setActiveSection] = useState<'sessions' | '2fa' | 'alerts' | 'logs'>('sessions')
     const [telegramChatId, setTelegramChatId] = useState('')
+    const [botTokenInput, setBotTokenInput] = useState('')
+    const [showBotToken, setShowBotToken] = useState(false)
     const queryClient = useQueryClient()
 
     // Read tab from URL on mount and when searchParams change
@@ -132,6 +138,33 @@ function SecurityContent() {
             setTelegramChatId('')
         },
         onError: () => toast.error('Failed to setup Telegram')
+    })
+
+    // Save Bot Token Mutation
+    const saveBotToken = useMutation({
+        mutationFn: async (botToken: string) => {
+            const response = await api.post('/security/telegram/bot-token', { botToken })
+            return response.data
+        },
+        onSuccess: (data) => {
+            toast.success(`Bot @${data.data?.botUsername || 'connected'} configured successfully`)
+            queryClient.invalidateQueries({ queryKey: ['security', 'telegram'] })
+            setBotTokenInput('')
+            setShowBotToken(false)
+        },
+        onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to save bot token')
+    })
+
+    // Remove Bot Token Mutation
+    const removeBotToken = useMutation({
+        mutationFn: async () => {
+            await api.delete('/security/telegram/bot-token')
+        },
+        onSuccess: () => {
+            toast.success('Bot token removed')
+            queryClient.invalidateQueries({ queryKey: ['security', 'telegram'] })
+        },
+        onError: () => toast.error('Failed to remove bot token')
     })
 
     // Calculate stats
@@ -397,33 +430,113 @@ function SecurityContent() {
                             )}
                         </div>
 
-                        <div className="p-4 sm:p-6">
-                            {telegramStatus?.systemConfigured === false && (
-                                <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-amber-500/5 border border-amber-500/20 rounded-lg flex items-start gap-3">
-                                    <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-                                    <div>
-                                        <h4 className="font-medium text-amber-400 text-xs sm:text-sm">System Not Configured</h4>
-                                        <p className="text-[10px] sm:text-xs text-amber-500/70 leading-relaxed mt-1">
-                                            Telegram Bot Token is not configured on the server. Contact your administrator.
+                        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                            {/* Step 1: Bot Token Configuration */}
+                            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4 sm:p-5">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-bold">1</div>
+                                        <h4 className="text-xs sm:text-sm font-medium text-zinc-300">Bot Token</h4>
+                                    </div>
+                                    {telegramStatus?.systemConfigured ? (
+                                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3" /> Configured
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">
+                                            Required
+                                        </span>
+                                    )}
+                                </div>
+
+                                {telegramStatus?.systemConfigured ? (
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <Bot className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                            <span className="text-sm text-zinc-300 truncate">
+                                                @{telegramStatus.botUsername || 'telegram_bot'}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                if (confirm('Remove bot token? Telegram alerts will stop working.')) {
+                                                    removeBotToken.mutate()
+                                                }
+                                            }}
+                                            disabled={removeBotToken.isPending}
+                                            className="text-[10px] text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded transition-all flex-shrink-0"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <input
+                                                    type={showBotToken ? 'text' : 'password'}
+                                                    placeholder="123456789:ABCdefGHI..."
+                                                    value={botTokenInput}
+                                                    onChange={(e) => setBotTokenInput(e.target.value)}
+                                                    className="w-full bg-zinc-950 border border-zinc-800/50 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500/50 transition-all pr-10"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowBotToken(!showBotToken)}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-1"
+                                                >
+                                                    {showBotToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                </button>
+                                            </div>
+                                            <button
+                                                onClick={() => saveBotToken.mutate(botTokenInput)}
+                                                disabled={!botTokenInput.trim() || saveBotToken.isPending}
+                                                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-medium rounded-lg transition-all text-sm flex-shrink-0"
+                                            >
+                                                {saveBotToken.isPending ? 'Verifying...' : 'Save'}
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] sm:text-xs text-zinc-600 leading-relaxed">
+                                            Create a bot via{' '}
+                                            <a href="https://t.me/BotFather" target="_blank" className="text-blue-400 hover:underline font-medium">
+                                                @BotFather
+                                            </a>
+                                            {' '}on Telegram, then paste the token here.
                                         </p>
                                     </div>
+                                )}
+                            </div>
+
+                            {/* Step 2: Chat ID Link */}
+                            <div className={`bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-4 sm:p-5 ${!telegramStatus?.systemConfigured ? 'opacity-50 pointer-events-none' : ''}`}>
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-bold">2</div>
+                                        <h4 className="text-xs sm:text-sm font-medium text-zinc-300">Link Chat ID</h4>
+                                    </div>
+                                    {telegramStatus?.connected ? (
+                                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3" /> Linked
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-500">
+                                            Not Linked
+                                        </span>
+                                    )}
                                 </div>
-                            )}
 
                             {telegramStatusLoading ? (
-                                <div className="flex items-center justify-center py-12">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+                                <div className="flex items-center justify-center py-8">
+                                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent"></div>
                                 </div>
                             ) : telegramStatus?.connected ? (
-                                <div className="space-y-4 sm:space-y-6">
-                                    <div className="bg-emerald-500/5 border border-emerald-500/20 p-4 sm:p-5 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                        <div className="flex items-center gap-3 sm:gap-4">
-                                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                                                <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
-                                            </div>
+                                <div className="space-y-3">
+                                    <div className="bg-emerald-500/5 border border-emerald-500/20 p-3 sm:p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
                                             <div>
-                                                <h4 className="font-semibold text-emerald-400 text-sm sm:text-base">Connected & Active</h4>
-                                                <p className="text-[10px] sm:text-xs text-emerald-500/60 font-mono mt-0.5">Chat ID: {telegramStatus.chatId}</p>
+                                                <h4 className="font-semibold text-emerald-400 text-sm">Connected & Active</h4>
+                                                <p className="text-[10px] text-emerald-500/60 font-mono mt-0.5">Chat ID: {telegramStatus.chatId}</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -432,13 +545,13 @@ function SecurityContent() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-wrap gap-2 sm:gap-3">
+                                    <div className="flex flex-wrap gap-2">
                                         <button
                                             onClick={() => testTelegram.mutate()}
                                             disabled={testTelegram.isPending}
-                                            className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 font-medium rounded-lg transition-all disabled:opacity-50 border border-zinc-800 text-xs sm:text-sm"
+                                            className="inline-flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 font-medium rounded-lg transition-all disabled:opacity-50 border border-zinc-800 text-xs"
                                         >
-                                            <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                            <Send className="w-3.5 h-3.5" />
                                             {testTelegram.isPending ? 'Sending...' : 'Test Alert'}
                                         </button>
                                         <button
@@ -448,47 +561,41 @@ function SecurityContent() {
                                                 }
                                             }}
                                             disabled={unlinkTelegram.isPending}
-                                            className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium rounded-lg transition-all disabled:opacity-50 text-xs sm:text-sm"
+                                            className="inline-flex items-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium rounded-lg transition-all disabled:opacity-50 text-xs"
                                         >
-                                            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                            <Trash2 className="w-3.5 h-3.5" />
                                             {unlinkTelegram.isPending ? 'Unlinking...' : 'Unlink'}
                                         </button>
                                     </div>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="text-[10px] sm:text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2 block">Your Telegram Chat ID</label>
-                                        <div className="flex gap-2 sm:gap-3">
-                                            <input
-                                                type="text"
-                                                placeholder="Enter your Chat ID"
-                                                value={telegramChatId}
-                                                onChange={(e) => setTelegramChatId(e.target.value)}
-                                                className="flex-1 bg-zinc-900/50 border border-zinc-800/50 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm focus:outline-none focus:border-zinc-700 transition-all"
-                                            />
-                                            <button
-                                                onClick={() => setupTelegram.mutate(telegramChatId)}
-                                                disabled={!telegramChatId || setupTelegram.isPending}
-                                                className="px-4 sm:px-5 py-2 sm:py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-medium rounded-lg transition-all text-sm"
-                                            >
-                                                {setupTelegram.isPending ? 'Linking...' : 'Link'}
-                                            </button>
-                                        </div>
+                                <div className="space-y-3">
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Enter your Chat ID"
+                                            value={telegramChatId}
+                                            onChange={(e) => setTelegramChatId(e.target.value)}
+                                            className="flex-1 bg-zinc-950 border border-zinc-800/50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500/50 transition-all"
+                                        />
+                                        <button
+                                            onClick={() => setupTelegram.mutate(telegramChatId)}
+                                            disabled={!telegramChatId || setupTelegram.isPending}
+                                            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-medium rounded-lg transition-all text-sm"
+                                        >
+                                            {setupTelegram.isPending ? 'Linking...' : 'Link'}
+                                        </button>
                                     </div>
-
-                                    <div className="p-3 sm:p-4 bg-zinc-900/30 border border-zinc-800/50 rounded-lg flex items-start gap-3">
-                                        <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                                        <p className="text-[10px] sm:text-xs text-zinc-500 leading-relaxed">
-                                            To find your Chat ID, send any message to{' '}
-                                            <a href="https://t.me/userinfobot" target="_blank" className="text-blue-400 hover:underline font-medium">
-                                                @userinfobot
-                                            </a>{' '}
-                                            on Telegram.
-                                        </p>
-                                    </div>
+                                    <p className="text-[10px] sm:text-xs text-zinc-600 leading-relaxed">
+                                        Send any message to{' '}
+                                        <a href="https://t.me/userinfobot" target="_blank" className="text-blue-400 hover:underline font-medium">
+                                            @userinfobot
+                                        </a>
+                                        {' '}to get your Chat ID.
+                                    </p>
                                 </div>
                             )}
+                            </div>
                         </div>
                     </div>
 
