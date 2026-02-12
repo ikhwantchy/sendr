@@ -71,8 +71,8 @@ class SystemSettingsService {
      */
     async getCategory(category: string, includePrivate: boolean = false): Promise<Record<string, any>> {
         const whereClause = includePrivate
-            ? 'WHERE category = $1'
-            : 'WHERE category = $1 AND is_public = true';
+            ? 'WHERE category = ?'
+            : 'WHERE category = ? AND is_public = 1';
 
         const result = await query(
             `SELECT key, value, data_type as value_type FROM system_settings ${whereClause}`,
@@ -91,7 +91,7 @@ class SystemSettingsService {
      * Get all settings (grouped by category)
      */
     async getAll(includePrivate: boolean = false): Promise<Record<string, Record<string, any>>> {
-        const whereClause = includePrivate ? '' : 'WHERE is_public = true';
+        const whereClause = includePrivate ? '' : 'WHERE is_public = 1';
 
         const result = await query(
             `SELECT category, key, value, data_type as value_type, description, is_public 
@@ -126,20 +126,30 @@ class SystemSettingsService {
 
         // Determine value type
         const value_type = this.inferType(value);
+        const now = new Date().toISOString();
 
-        // Update or insert (SQLite UPSERT)
-        await query(
-            `INSERT INTO system_settings (id, category, key, value, data_type, updated_by, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-             ON CONFLICT (key) 
-             DO UPDATE SET 
-                value = excluded.value,
-                data_type = excluded.data_type,
-                category = excluded.category,
-                updated_by = excluded.updated_by,
-                updated_at = datetime('now')`,
-            [require('uuid').v4(), category, key, value, value_type, updated_by]
+        // Check if setting already exists (sql.js has issues with UPSERT)
+        const existing = await query(
+            'SELECT key FROM system_settings WHERE key = ?',
+            [key]
         );
+
+        if (existing.rows.length > 0) {
+            // UPDATE existing
+            await query(
+                `UPDATE system_settings 
+                 SET value = ?, data_type = ?, category = ?, updated_by = ?, updated_at = ?
+                 WHERE key = ?`,
+                [value, value_type, category, updated_by, now, key]
+            );
+        } else {
+            // INSERT new
+            await query(
+                `INSERT INTO system_settings (id, category, key, value, data_type, updated_by, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [require('uuid').v4(), category, key, value, value_type, updated_by, now]
+            );
+        }
 
         // Clear cache
         this.cache.delete(`${category}.${key}`);
