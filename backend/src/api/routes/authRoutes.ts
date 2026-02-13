@@ -50,6 +50,18 @@ router.post('/login', async (req, res) => {
             if (!user) {
                 await securityService.logEvent(null, 'LOGIN_FAILED', req.ip, req.get('user-agent'), { email, reason: 'user_not_found' });
                 logger.warn('User login failed: Not found or inactive', { email });
+
+                // Send Telegram alert for failed login (unknown user)
+                try {
+                    await securityService.sendTelegramAlert(null,
+                        `<b>⚠️ Failed Login Attempt</b>\n\n` +
+                        `📧 <b>Email:</b> <code>${email}</code>\n` +
+                        `❌ <b>Reason:</b> User not found\n` +
+                        `🌐 <b>IP:</b> <code>${req.ip || 'Unknown'}</code>\n` +
+                        `📱 <b>Device:</b> <i>${req.get('user-agent') || 'Unknown'}</i>`
+                    );
+                } catch (e) { /* ignore */ }
+
                 return res.status(401).json({
                     success: false,
                     error: 'Invalid credentials',
@@ -62,6 +74,18 @@ router.post('/login', async (req, res) => {
             if (!validPassword) {
                 await securityService.logEvent(user.id, 'LOGIN_FAILED', req.ip, req.get('user-agent'), { email, reason: 'invalid_password' });
                 logger.warn('User login failed: Password mismatch', { email });
+
+                // Send Telegram alert for failed login (wrong password)
+                try {
+                    await securityService.sendTelegramAlert(user.id,
+                        `<b>⚠️ Failed Login Attempt</b>\n\n` +
+                        `👤 <b>User:</b> ${user.name || 'Unknown'} (${email})\n` +
+                        `❌ <b>Reason:</b> Wrong password\n` +
+                        `🌐 <b>IP:</b> <code>${req.ip || 'Unknown'}</code>\n` +
+                        `📱 <b>Device:</b> <i>${req.get('user-agent') || 'Unknown'}</i>`
+                    );
+                } catch (e) { /* ignore */ }
+
                 return res.status(401).json({
                     success: false,
                     error: 'Invalid credentials',
@@ -101,6 +125,17 @@ router.post('/login', async (req, res) => {
 
             // Create Session Tracking
             await securityService.createSession(user.id, token, req.ip, req.get('user-agent'));
+
+            // Send Telegram alert for successful login
+            try {
+                await securityService.sendTelegramAlert(user.id,
+                    `<b>🔔 Login Alert</b>\n\n` +
+                    `👤 <b>User:</b> ${user.name || 'Unknown'} (${user.email})\n` +
+                    `✅ <b>Status:</b> Successful login\n` +
+                    `🌐 <b>IP:</b> <code>${req.ip || 'Unknown'}</code>\n` +
+                    `📱 <b>Device:</b> <i>${req.get('user-agent') || 'Unknown'}</i>`
+                );
+            } catch (e) { /* ignore */ }
 
             logger.info('Login successful', { email: user.email, id: user.id });
 

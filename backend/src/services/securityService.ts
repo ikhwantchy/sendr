@@ -54,20 +54,7 @@ export class SecurityService {
                 logger.error('Failed to log login in global audit log', { error: err.message });
             }
 
-            // Send Alert
-            const userDetails = await query('SELECT name, email FROM users WHERE id = ?', [userId]);
-            const userName = userDetails.rows[0]?.name || 'Unknown User';
-            const userEmail = userDetails.rows[0]?.email || '';
-
-            const safeIP = ipAddress || 'Unknown';
-            const safeUA = userAgent || 'Unknown';
-
-            await this.sendTelegramAlert(userId,
-                `<b>🔔 Login Alert</b>\n\n` +
-                `👤 <b>User:</b> ${userName} (${userEmail})\n` +
-                `🌐 <b>IP:</b> <code>${safeIP}</code>\n` +
-                `📱 <b>Device:</b> <i>${safeUA}</i>`
-            );
+            // Telegram alert is now handled in authRoutes.ts to ensure it fires reliably
 
             return id;
         } catch (error: any) {
