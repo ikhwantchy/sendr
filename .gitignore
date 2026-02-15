@@ -4,7 +4,7 @@ node_modules/
 .pnp.js
 
 # Build outputs
-frontend/.next/
+frontend/.next/cache/
 frontend/out/
 backend/dist/
 
