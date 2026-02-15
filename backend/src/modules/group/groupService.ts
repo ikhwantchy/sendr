@@ -22,36 +22,17 @@ class GroupService {
             // 1. Get socket for this bot
             let sock = whatsappAdapter.getSocket(botId);
 
-            // If socket not found, maybe bot needs re-initialization
-            if (!sock) {
-                logger.warn('No socket found for bot, checking bot status in DB...', { bot_id: botId });
-                const botResult = await query('SELECT status FROM bots WHERE id = ?', [botId]);
-                const botStatus = botResult.rows[0]?.status;
-
-                if (botStatus === 'connected') {
-                    logger.info('Bot status is connected but socket missing. Re-initializing...', { bot_id: botId });
-                    try {
-                        await whatsappAdapter.initializeBot(botId);
-                        // Wait for initialization to complete (max 10s)
-                        for (let i = 0; i < 5; i++) {
-                            await new Promise(resolve => setTimeout(resolve, 2000));
-                            sock = whatsappAdapter.getSocket(botId);
-                            if (sock) break;
-                        }
-                    } catch (initErr: any) {
-                        logger.error('Failed to auto-reinitialize bot during sync', { bot_id: botId, error: initErr.message });
-                    }
-                }
-            }
-
-            // If still no socket after attempt
+            // If socket not found, just skip - don't try to re-initialize!
+            // Re-initializing creates a duplicate connection which triggers
+            // 'connectionReplaced' (440) and disconnects the bot.
+            // The normal reconnection flow will handle it.
             if (!sock) {
                 if (retryCount < 2) {
-                    logger.warn('Still no socket found, final retry attempt...', { bot_id: botId, retry: retryCount });
-                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    logger.warn('No socket found for bot, waiting before retry...', { bot_id: botId, retry: retryCount });
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                     return this.syncGroupsForBot(botId, retryCount + 1);
                 }
-                logger.error('No socket found for bot after all recovery attempts', { bot_id: botId });
+                logger.warn('No socket found for bot after retries, skipping group sync', { bot_id: botId });
                 return 0;
             }
 

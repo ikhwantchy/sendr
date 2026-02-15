@@ -50,12 +50,20 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
      * Initialize a bot session
      */
     public async initializeBot(botId: string): Promise<void> {
+        // Initialization lock - prevent concurrent inits that cause connectionReplaced
+        if (this.reconnecting.has(botId)) {
+            logger.warn('Initialization already in progress, skipping', { bot_id: botId });
+            return;
+        }
+
         // Check if already initialized
         const existingSocket = this.sockets.get(botId);
         if (existingSocket) {
             logger.warn('Bot already initialized - reusing existing socket', { bot_id: botId });
             return;
         }
+
+        this.reconnecting.add(botId);
 
         // Remove from paused bots if resuming
         this.pausedBots.delete(botId);
@@ -124,10 +132,14 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             this.setupEventHandlers(sock, bot, saveCreds);
 
             logger.info('Event handlers registered successfully', { bot_id: botId });
+
+            // Release init lock after a short delay (let connection establish)
+            setTimeout(() => this.reconnecting.delete(botId), 10000);
         } catch (error) {
             logger.error('Failed to initialize bot', { error, bot_id: botId });
             // Cleanup on failure
             this.sockets.delete(botId);
+            this.reconnecting.delete(botId);
             throw error;
         }
     }
@@ -313,10 +325,10 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                         logger.info('⏳ Will attempt reconnect in 30 seconds...', { bot_id: botId });
                         setTimeout(() => {
                             logger.info('🔄 Attempting to reconnect...', { bot_id: botId });
+                            // Clear lock BEFORE calling initializeBot (it has its own check)
+                            this.reconnecting.delete(botId);
                             this.initializeBot(botId).catch(err => {
                                 logger.error('Failed to reconnect', { error: err, bot_id: botId });
-                            }).finally(() => {
-                                this.reconnecting.delete(botId);
                             });
                         }, 30000); // 30 seconds delay (safer than 5 seconds)
                     }
