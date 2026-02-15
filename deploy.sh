@@ -50,7 +50,7 @@ echo "   ✅ Code updated"
 # Step 3: Install dependencies if needed
 echo ""
 echo "📦 Step 3: Checking dependencies..."
-cd backend && npm install --production --no-audit --no-fund 2>/dev/null && cd ..
+cd backend && npm install --no-audit --no-fund 2>/dev/null && cd ..
 echo "   ✅ Dependencies OK"
 
 # Step 4: Restart services
