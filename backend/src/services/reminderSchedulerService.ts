@@ -31,6 +31,7 @@ class ReminderSchedulerService {
 
     /**
      * Check if bot is still connected before sending
+     * Uses a lightweight check that does NOT modify connection state
      */
     private async isBotConnected(botId: string): Promise<boolean> {
         try {
@@ -40,6 +41,18 @@ class ReminderSchedulerService {
         } catch {
             return false;
         }
+    }
+
+    /**
+     * Check bot connection before a batch send - only check once, not per-message
+     * This avoids excessive status polling that could interfere with the connection
+     */
+    private async ensureBotConnected(botId: string): Promise<boolean> {
+        const connected = await this.isBotConnected(botId);
+        if (!connected) {
+            console.error(`❌ Bot ${botId} is not connected. Aborting reminder send.`);
+        }
+        return connected;
     }
 
     /**
@@ -227,19 +240,18 @@ class ReminderSchedulerService {
                 let successCount = 0;
                 let failCount = 0;
 
+                // Check connection once before starting batch
+                if (!(await this.ensureBotConnected(reminder.bot_id))) {
+                    await this.logExecution(reminderId, 'failed', 'Bot not connected');
+                    return;
+                }
+
                 for (let i = 0; i < sheetRows.length; i++) {
                     const row = sheetRows[i];
                     const phone = this.extractPhoneNumber(row);
                     if (!phone) {
                         console.warn('⚠️ No phone number found in row, skipping...', row);
                         continue;
-                    }
-
-                    // Check connection before sending
-                    if (!(await this.isBotConnected(reminder.bot_id))) {
-                        console.error(`❌ Bot ${reminder.bot_id} disconnected, aborting remaining sends`);
-                        failCount += sheetRows.length - i;
-                        break;
                     }
 
                     const targetJid = phone.includes('@') ? phone : `${phone.replace(/\D/g, '')}@s.whatsapp.net`;
@@ -251,6 +263,12 @@ class ReminderSchedulerService {
                     } catch (err: any) {
                         console.error(`❌ Failed to send to ${targetJid}:`, err.message);
                         failCount++;
+                        // If connection error, stop the batch
+                        if (err.message?.includes('not connected') || err.message?.includes('not initialized')) {
+                            console.error(`❌ Connection lost, aborting remaining ${sheetRows.length - i - 1} sends`);
+                            failCount += sheetRows.length - i - 1;
+                            break;
+                        }
                     }
 
                     // Anti-spam delay between sends (skip after last message)
@@ -302,16 +320,16 @@ class ReminderSchedulerService {
                     console.log('📤 Processing manual contacts with variables...');
                     console.log('📤 Manual contacts data:', JSON.stringify(templateConfig.manualContacts));
 
+                    // Check connection once before starting batch
+                    if (!(await this.ensureBotConnected(reminder.bot_id))) {
+                        await this.logExecution(reminderId, 'failed', 'Bot not connected');
+                        return;
+                    }
+
                     for (let i = 0; i < templateConfig.manualContacts.length; i++) {
                         const contact = templateConfig.manualContacts[i];
                         const targetJid = contact.jid || contact.phone;
                         if (!targetJid) continue;
-
-                        // Check connection before sending
-                        if (!(await this.isBotConnected(reminder.bot_id))) {
-                            console.error(`❌ Bot ${reminder.bot_id} disconnected, aborting remaining sends`);
-                            break;
-                        }
 
                         // Process template with contact data (includes Name, Jabatan, etc.)
                         const personalizedMessage = templateEngineService.processTemplate(templateText, contact);
@@ -321,6 +339,11 @@ class ReminderSchedulerService {
                             await this.sendMessageWithRetry(reminder.bot_id, targetJid, personalizedMessage, templateConfig.image_url);
                         } catch (sendError: any) {
                             console.error(`❌ Failed to send to ${targetJid}:`, sendError.message);
+                            // If connection error, stop the batch
+                            if (sendError.message?.includes('not connected') || sendError.message?.includes('not initialized')) {
+                                console.error(`❌ Connection lost, aborting remaining sends`);
+                                break;
+                            }
                         }
 
                         // Anti-spam delay between sends (skip after last message)
@@ -347,12 +370,6 @@ class ReminderSchedulerService {
                 for (let i = 0; i < targetIds.length; i++) {
                     const targetJid = targetIds[i].trim();
                     if (!targetJid) continue;
-
-                    // Check connection before sending (only for multi-target)
-                    if (targetIds.length > 1 && !(await this.isBotConnected(reminder.bot_id))) {
-                        console.error(`❌ Bot ${reminder.bot_id} disconnected, aborting remaining sends`);
-                        break;
-                    }
 
                     try {
                         await this.sendMessageWithRetry(reminder.bot_id, targetJid, finalMessage, templateConfig.image_url);

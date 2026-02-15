@@ -25,6 +25,7 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
     private sockets: Map<string, WASocket> = new Map();
     private qrCodes: Map<string, { qr_code: string; expires_at: string }> = new Map();
     private pausedBots: Set<string> = new Set(); // Track paused bots
+    private reconnecting: Set<string> = new Set(); // Guard against concurrent reconnects
     private lidToPhone: Map<string, string> = new Map(); // Cache LID -> phone number mapping
     private sessionPath: string;
 
@@ -76,6 +77,13 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 auth: state,
                 printQRInTerminal: false,
                 markOnlineOnConnect: true,  // ✅ IMPORTANT!
+                // getMessage is required for message retry mechanism stability
+                // Without it, Baileys can have protocol-level issues causing disconnects
+                getMessage: async (key) => {
+                    // Return undefined - we don't cache messages, but providing
+                    // the callback prevents Baileys from throwing errors
+                    return undefined;
+                },
                 logger: {
                     level: 'silent' as any,
                     fatal: () => { },
@@ -296,14 +304,22 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
 
                 // Don't auto-reconnect if bot was paused by user
                 if (shouldReconnect && !wasPaused) {
-                    // Auto-reconnect with longer delay to avoid WhatsApp anti-spam
-                    logger.info('⏳ Will attempt reconnect in 30 seconds...', { bot_id: botId });
-                    setTimeout(() => {
-                        logger.info('🔄 Attempting to reconnect...', { bot_id: botId });
-                        this.initializeBot(botId).catch(err => {
-                            logger.error('Failed to reconnect', { error: err, bot_id: botId });
-                        });
-                    }, 30000); // 30 seconds delay (safer than 5 seconds)
+                    // Guard against concurrent reconnect attempts (prevents connectionReplaced)
+                    if (this.reconnecting.has(botId)) {
+                        logger.warn('⏳ Reconnect already in progress, skipping duplicate attempt', { bot_id: botId });
+                    } else {
+                        this.reconnecting.add(botId);
+                        // Auto-reconnect with longer delay to avoid WhatsApp anti-spam
+                        logger.info('⏳ Will attempt reconnect in 30 seconds...', { bot_id: botId });
+                        setTimeout(() => {
+                            logger.info('🔄 Attempting to reconnect...', { bot_id: botId });
+                            this.initializeBot(botId).catch(err => {
+                                logger.error('Failed to reconnect', { error: err, bot_id: botId });
+                            }).finally(() => {
+                                this.reconnecting.delete(botId);
+                            });
+                        }, 30000); // 30 seconds delay (safer than 5 seconds)
+                    }
                 } else if (wasPaused) {
                     logger.info('⏸️ Bot was paused by user - not auto-reconnecting', { bot_id: botId });
                 } else if (disconnectReason === DisconnectReason.connectionReplaced) {
@@ -663,18 +679,14 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
         const connectionState = sock.ws?.readyState;
 
         // WebSocket.OPEN = 1, WebSocket.CLOSED = 3
+        // NOTE: Do NOT delete socket or update DB here - this method should be
+        // read-only. Destructive cleanup is handled by the 'connection.close' event.
+        // Deleting the socket here caused race conditions where transient states
+        // during sends would permanently destroy the connection.
         if (connectionState !== 1) {
             logger.warn('Socket exists but WebSocket is not open', {
                 bot_id: botId,
                 ws_state: connectionState
-            });
-
-            // Clean up disconnected socket
-            this.sockets.delete(botId);
-
-            // Update database status
-            await botRepository.update(botId, {
-                status: 'disconnected',
             });
 
             return { status: 'disconnected' };
@@ -772,35 +784,55 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
 
             // Re-initialize if: (1) connected status, OR (2) has valid session file
             if (bot && (bot.status === 'connected' || hasSession)) {
-                logger.info('🔄 Attempting to re-initialize bot...', {
-                    bot_id: botId,
-                    bot_name: bot.name,
-                    bot_status: bot.status,
-                    has_valid_session: hasSession
-                });
-
-                // Re-initialize the bot
-                await this.initializeBot(botId);
-
-                // Wait for connection to establish with retries
-                let connected = false;
-                for (let i = 0; i < 10; i++) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    sock = this.sockets.get(botId);
-                    if (sock) {
-                        // Also check if connection is actually open
-                        const botStatus = await botRepository.findById(botId);
-                        if (botStatus?.status === 'connected') {
-                            connected = true;
-                            logger.info('✅ Bot re-initialized and connected', { bot_id: botId, attempt: i + 1 });
-                            break;
+                // Skip if reconnect is already in progress
+                if (this.reconnecting.has(botId)) {
+                    logger.warn('⏳ Reconnect already in progress, waiting...', { bot_id: botId });
+                    // Wait for ongoing reconnect to finish (up to 35 seconds)
+                    for (let i = 0; i < 70; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        sock = this.sockets.get(botId);
+                        if (sock) {
+                            const botStatus = await botRepository.findById(botId);
+                            if (botStatus?.status === 'connected') {
+                                logger.info('✅ Reconnect completed, proceeding with send', { bot_id: botId });
+                                break;
+                            }
                         }
                     }
-                }
+                    if (!sock) {
+                        throw new Error(`Bot reconnection in progress but timed out: ${botId}`);
+                    }
+                } else {
+                    logger.info('🔄 Attempting to re-initialize bot...', {
+                        bot_id: botId,
+                        bot_name: bot.name,
+                        bot_status: bot.status,
+                        has_valid_session: hasSession
+                    });
 
-                if (!connected || !sock) {
-                    logger.error('❌ Re-initialization failed - bot not connected after retries', { bot_id: botId });
-                    throw new Error(`Bot not connected: ${botId}. Please wait for connection or reconnect.`);
+                    // Re-initialize the bot
+                    await this.initializeBot(botId);
+
+                    // Wait for connection to establish with retries
+                    let connected = false;
+                    for (let i = 0; i < 10; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        sock = this.sockets.get(botId);
+                        if (sock) {
+                            // Also check if connection is actually open
+                            const botStatus = await botRepository.findById(botId);
+                            if (botStatus?.status === 'connected') {
+                                connected = true;
+                                logger.info('✅ Bot re-initialized and connected', { bot_id: botId, attempt: i + 1 });
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!connected || !sock) {
+                        logger.error('❌ Re-initialization failed - bot not connected after retries', { bot_id: botId });
+                        throw new Error(`Bot not connected: ${botId}. Please wait for connection or reconnect.`);
+                    }
                 }
             } else {
                 logger.error('❌ Bot not initialized - no socket and no valid session!', {
