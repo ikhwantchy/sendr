@@ -174,8 +174,20 @@ export class SecurityService {
                 }
             }
 
+            // Last resort: find ANY admin/owner with a telegram_chat_id
             if (!chatId) {
-                logger.warn('Skipping Telegram alert: No Telegram Chat ID found (Admin or User)', { userId });
+                const adminResult = await query(
+                    "SELECT telegram_chat_id FROM users WHERE role IN ('OWNER', 'ADMIN') AND telegram_chat_id IS NOT NULL AND telegram_chat_id != '' LIMIT 1"
+                );
+                chatId = adminResult.rows[0]?.telegram_chat_id;
+
+                if (chatId) {
+                    logger.debug('Using Admin/Owner fallback Chat ID', { chatId });
+                }
+            }
+
+            if (!chatId) {
+                logger.warn('Skipping Telegram alert: No Telegram Chat ID found anywhere', { userId });
                 return;
             }
 
