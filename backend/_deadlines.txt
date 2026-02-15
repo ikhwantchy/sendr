@@ -1,0 +1,8 @@
+"Matkul","Deadline","Tugas ","Keterangan","","","",""
+"BQT","2026-02-19","makalah","","","","",""
+"Design Grafis","2026-02-10","Catet","","","","",""
+"Design Grafis","2026-02-18","Catet","","","","",""
+"technopreneurship","2026-02-17","bikin video","","","","",""
+"MPPL","2026-02-16","","","","","",""
+"BQT","2026-02-19","makalah","","","","",""
+"Design Grafis, technopreneurship, MPPL","","Catet, bikin video","","","","",""

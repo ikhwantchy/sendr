@@ -19,7 +19,8 @@ Deadline	2026-01-21	Presentasi Teknokewirausahaan	Kelompok 10 - Materi 10
 2. Klik **+** di bawah (add new sheet)
 3. Rename jadi **"daily_digest"**
 4. Copy data di atas, paste di sheet
-5. Done! ✅
+5. **PENTING:** Set sharing ke "Anyone with link can view"
+6. Done! ✅
 
 ---
 
@@ -61,11 +62,11 @@ Selected Groups: [Pilih group kuliah lu]
 ☑️ Google Sheets Monitor
 
 Google Sheets URL: [Paste URL sheet lu]
-Tab Name: daily_digest
+Tab Name: daily_digest (pilih dari dropdown)
 
-☐ Use Advanced Filters (kosong, ambil semua data)
+☐ Use Advanced Filters (kosong dulu, ambil semua data)
 
-☑️ Digest Mode (PENTING!)
+☑️ Digest Mode (WAJIB aktifkan!)
 ```
 
 ### 4. Schedule
@@ -75,32 +76,49 @@ Time: 07:00
 Timezone: Asia/Jakarta
 ```
 
-### 5. Message Template
+### 5. Message Template (Digest Mode - 3 Bagian)
 
-**Copy-paste template ini:**
+Setelah Digest Mode aktif, akan muncul **3 field** terpisah:
 
-```handlebars
+#### 🟪 Quick Template Presets
+Klik salah satu preset untuk auto-fill:
+- **📚 Jadwal + Deadline** — Template akademik/kuliah
+- **📝 Simple List** — Daftar umum
+- **⏰ Deadline Tracker** — H-3 reminder
+
+Atau isi manual:
+
+#### a) Digest Header
+```
 📋 *DAILY DIGEST*
-{{@today}}
+📅 {{@todayFull}}
 
 ━━━━━━━━━━━━━━━━━━━━
-
-{{#each items}}
-{{tipe}} *{{nama}}*
-⏰ {{waktu}}
-📝 {{detail}}
-
-{{/each}}
-
-━━━━━━━━━━━━━━━━━━━━
-_Auto-update dari Google Sheets_
 ```
 
-### 6. Save & Test
+#### b) Row Template (per item)
+```
+{{@index}}. *{{nama}}*
+⏰ {{waktu}}
+📝 {{detail}}
+```
+
+#### c) Empty Message (jika data kosong)
+```
+✅ Tidak ada jadwal atau deadline hari ini.
+
+Enjoy your free time! 🎉
+```
+
+### 6. Live Preview
+Setelah ketiga field diisi, preview otomatis muncul di panel kanan!
+Preview menggunakan data real dari Google Sheets.
+
+### 7. Save & Test
 ```
 1. Klik "Create Reminder"
 2. Wait for success message
-3. Check WhatsApp group (harusnya langsung terkirim kalau schedule = "now")
+3. Check WhatsApp group
 ```
 
 ---
@@ -109,29 +127,54 @@ _Auto-update dari Google Sheets_
 
 ```
 📋 DAILY DIGEST
-Sabtu, 18 Januari 2026
+📅 Sabtu, 15 Februari 2026
 
 ━━━━━━━━━━━━━━━━━━━━
 
-Jadwal *Keamanan Bisnis*
+1. *Keamanan Bisnis*
 ⏰ 18:20-20:00
 📝 Ruang Kelas Widya
 
-Jadwal *Interaksi Manusia dan Komputer*
+2. *Interaksi Manusia dan Komputer*
 ⏰ 18:20-20:00
 📝 Dosen Wira Persada
 
-Deadline *Presentasi IMK*
+3. *Presentasi IMK*
 ⏰ 2026-01-20
 📝 Kelompok 7 - Materi 9
-
-Deadline *Presentasi Teknokewirausahaan*
-⏰ 2026-01-21
-📝 Kelompok 10 - Materi 10
-
-━━━━━━━━━━━━━━━━━━━━
-Auto-update dari Google Sheets
 ```
+
+---
+
+## 🔗 Available Variables
+
+### Built-in Variables (Biru)
+| Variable | Deskripsi | Contoh Output |
+|----------|-----------|---------------|
+| `{{@today}}` | Tanggal dd/MM/yyyy | 15/02/2026 |
+| `{{@todayFull}}` | Hari, tanggal lengkap | Sabtu, 15 Februari 2026 |
+| `{{@dayName}}` | Nama hari | Sabtu |
+| `{{@index}}` | Nomor urut (di dalam loop) | 1, 2, 3... |
+| `{{@length}}` | Total jumlah data | 5 |
+
+### Sheet Variables (Hijau)
+Auto-detected dari kolom Google Sheets lu:
+| Variable | Source |
+|----------|--------|
+| `{{tipe}}` | Kolom "tipe" |
+| `{{waktu}}` | Kolom "waktu" |
+| `{{nama}}` | Kolom "nama" |
+| `{{detail}}` | Kolom "detail" |
+
+💡 **Tips:** Klik variable di panel UI untuk auto-copy!
+
+### Formatters
+| Format | Contoh | Output |
+|--------|--------|--------|
+| `| urgency` | `{{waktu \| urgency}}` | Smart date formatting |
+| `| date:dd/MM/yyyy` | `{{waktu \| date:dd/MM/yyyy}}` | Custom date format |
+| `| uppercase` | `{{nama \| uppercase}}` | KEAMANAN BISNIS |
+| `| capitalize` | `{{nama \| capitalize}}` | Keamanan Bisnis |
 
 ---
 
@@ -172,17 +215,14 @@ Auto-update dari Google Sheets
 
 ## 🎨 Customization (Optional)
 
-### Tambah Emoji Custom:
-```handlebars
-{{#each items}}
-{{#if (eq tipe "Jadwal")}}📚{{else}}🚨{{/if}} *{{nama}}*
+### Tambah Emoji Custom (Row Template):
+```
+{{#if tipe == "Jadwal"}}📚{{/if}}{{#if tipe == "Deadline"}}🚨{{/if}} *{{nama}}*
 ⏰ {{waktu}}
 📝 {{detail}}
-
-{{/each}}
 ```
 
-### Filter by Type (Jadwal Only):
+### Filter by Type (Jadwal Only) - Advanced Filters:
 ```
 Advanced Filters:
 - Column: tipe
@@ -190,12 +230,39 @@ Advanced Filters:
 - Value: Jadwal
 ```
 
-### Filter by Date (Deadline H-3):
+### Filter by Date (Deadline H-3) - Advanced Filters:
 ```
 Advanced Filters:
 - Column: waktu
 - Operator: date_within_days
 - Value: 3
+```
+
+### Grouped Digest (Jadwal + Deadline terpisah):
+Gunakan full template (bukan digest mode) dengan:
+```handlebars
+📋 *DAILY DIGEST*
+📅 {{@todayFull}}
+
+━━━━━━━━━━━━━━━━━━━━
+📚 *JADWAL HARI INI*
+━━━━━━━━━━━━━━━━━━━━
+
+{{#filter items tipe="Jadwal"}}
+{{@index}}. *{{nama}}*
+⏰ {{waktu}}
+📝 {{detail}}
+{{/filter}}
+
+━━━━━━━━━━━━━━━━━━━━
+🚨 *DEADLINE*
+━━━━━━━━━━━━━━━━━━━━
+
+{{#filter items tipe="Deadline"}}
+{{@index}}. *{{nama}}*
+📅 {{waktu | urgency}}
+📝 {{detail}}
+{{/filter}}
 ```
 
 ---
@@ -206,7 +273,9 @@ Advanced Filters:
 - [ ] Data copied from schedules & deadlines
 - [ ] Sheet set to "Anyone with link can view"
 - [ ] Reminder created in dashboard
-- [ ] Template pasted correctly
+- [ ] Digest Mode enabled
+- [ ] Quick Template preset applied OR manual fields filled
+- [ ] Live preview shows correct data
 - [ ] Schedule set to Daily 07:00
 - [ ] Test message sent successfully
 
@@ -221,13 +290,22 @@ Advanced Filters:
 → Hapus row dengan #N/A atau formula error
 
 ### Template variables gak work
-→ Pastikan column names exact match: `tipe`, `waktu`, `nama`, `detail`
+→ Pastikan column names di Sheet cocok dengan variable.
+   Variables auto-detected di panel hijau "Variables from Sheet"
 
 ### Message gak terkirim
 → Cek bot connected & group JID benar
+
+### Preview kosong / tidak muncul
+→ Pastikan ketiga field Digest (Header, Row Template, Empty) sudah diisi.
+   Preview butuh waktu ~1.5 detik untuk fetch data.
+
+### Variables tidak muncul di panel
+→ Pastikan tab name sudah dipilih dan sheet accessible (public).
+   Columns auto-detect setelah 1 detik.
 
 ---
 
 **Need help?** Check `GOOGLE_SHEETS_STRUCTURE_GUIDE.md` 📚
 
-**Last Updated:** 18 Januari 2026
+**Last Updated:** 15 Februari 2026

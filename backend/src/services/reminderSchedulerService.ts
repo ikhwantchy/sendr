@@ -167,6 +167,7 @@ class ReminderSchedulerService {
 
             // 1. Data Source Logic
             let sheetRows: any[] = [];
+            let rawSheetsData: Record<string, any[]> = {};
             let isFromSheet = false;
 
             // Handle both legacy dataSourceId and new direct googleSheetsUrl in templateConfig
@@ -180,7 +181,9 @@ class ReminderSchedulerService {
                 isFromSheet = true;
                 console.log('🔍 [DEBUG] isFromSheet = true, fetching data...');
                 try {
-                    sheetRows = await this.fetchAndFilterSheetData(reminder, templateConfig);
+                    const result = await this.fetchAndFilterSheetData(reminder, templateConfig, templateText);
+                    sheetRows = result.items;
+                    rawSheetsData = result.sheetsData;
                     console.log(`📊 Fetched ${sheetRows.length} relevant rows from sheet`);
                     if (sheetRows.length > 0) {
                         console.log('🔍 [DEBUG] First row:', JSON.stringify(sheetRows[0]));
@@ -229,7 +232,7 @@ class ReminderSchedulerService {
                     console.log('🔍 [DEBUG] Digest Mode is ON');
                     // Smarter renderer selection
                     const isModernTemplate = /{{.*(@|==|contains|\|).*}}/.test(templateText);
-                    const hasModernBlocks = /\{\{\s*#(if|each|group)\s/.test(templateText);
+                    const hasModernBlocks = /\{\{\s*#(if|each|group|section)\s/.test(templateText);
                     console.log('🔍 [DEBUG] isModernTemplate:', isModernTemplate, 'hasModernBlocks:', hasModernBlocks);
 
                     if (isModernTemplate || hasModernBlocks || !/{{.*#/.test(templateText)) {
@@ -237,6 +240,7 @@ class ReminderSchedulerService {
                         console.log('🔍 [DEBUG] Passing data to renderer:', sheetRows.length, 'rows');
                         finalMessage = enhancedTemplateRenderer.render(templateText, {
                             data: sheetRows,
+                            sheetsData: rawSheetsData,
                             globalVars: {
                                 RUN_TIME: new Date().toLocaleTimeString(),
                                 TODAY: new Date().toLocaleDateString('id-ID', {
@@ -261,22 +265,22 @@ class ReminderSchedulerService {
                     // --- CASE C: Manual Contacts with Variables ---
                     console.log('📤 Processing manual contacts with variables...');
                     console.log('📤 Manual contacts data:', JSON.stringify(templateConfig.manualContacts));
-                    
+
                     for (const contact of templateConfig.manualContacts) {
                         const targetJid = contact.jid || contact.phone;
                         if (!targetJid) continue;
-                        
+
                         // Process template with contact data (includes Name, Jabatan, etc.)
                         const personalizedMessage = templateEngineService.processTemplate(templateText, contact);
                         console.log(`📤 Sending to ${targetJid}: "${personalizedMessage}"`);
-                        
+
                         try {
                             await this.sendMessageWithRetry(reminder.bot_id, targetJid, personalizedMessage, templateConfig.image_url);
                         } catch (sendError: any) {
                             console.error(`❌ Failed to send to ${targetJid}:`, sendError.message);
                         }
                     }
-                    
+
                     await this.logExecution(reminderId, 'success', `Sent to ${templateConfig.manualContacts.length} contacts`);
                     console.log(`✅ Reminder processed successfully: ${reminderId}`);
                     return; // Early return since we already handled everything
@@ -307,40 +311,63 @@ class ReminderSchedulerService {
             console.log(`✅ Reminder processed successfully: ${reminderId}`);
         } catch (error: any) {
             console.error(`❌ Error executing reminder ${reminderId}:`, error);
-            await this.logExecution(reminderId, 'failed', error.message);
+            try { await this.logExecution(reminderId, 'failed', error.message); } catch { }
         }
     }
 
     /**
-     * Fetch and filter data from Google Sheets
+     * Fetch and filter data from Google Sheets (Multi-Sheet Support)
      */
-    private async fetchAndFilterSheetData(reminder: any, templateConfig: any): Promise<any[]> {
+    private async fetchAndFilterSheetData(reminder: any, templateConfig: any, templateText: string = ''): Promise<{ items: any[], sheetsData: Record<string, any[]> }> {
         const googleSheetsUrl = templateConfig.googleSheetsUrl || reminder.google_sheets_url;
         const spreadsheetId = googleSheetsService.extractSpreadsheetId(googleSheetsUrl);
-        if (!spreadsheetId) return [];
+        if (!spreadsheetId) return { items: [], sheetsData: {} };
 
-        const sheetName = templateConfig.selectedSheets?.[0] || templateConfig.sheetName || 'Sheet1';
-        const sheetData = await googleSheetsService.fetchSheetData(spreadsheetId, sheetName);
-        if (!sheetData) return [];
+        // 1. Determine all sheets to fetch
+        const primarySheetName = templateConfig.selectedSheets?.[0] || templateConfig.sheetName || 'Sheet1';
+        const sheetsToFetch = new Set<string>([primarySheetName]);
 
-        let items = googleSheetsService.convertToObjects(sheetData);
+        // Detect {{#section "SheetName"}} tags
+        const sectionNameRegex = /\{\{\s*#section\s+(?:["']([^"']+)["']|([^\s"'}]+))/g;
+        let sMatch;
+        while ((sMatch = sectionNameRegex.exec(templateText)) !== null) {
+            const sectionSheet = (sMatch[1] || sMatch[2]).trim();
+            if (sectionSheet) sheetsToFetch.add(sectionSheet);
+        }
+
+        console.log(`📋 [Data] Fetching sheets: ${Array.from(sheetsToFetch).join(', ')}`);
+
+        // 2. Fetch all sheets
+        const allSheets = await googleSheetsService.fetchMultipleSheets(spreadsheetId, Array.from(sheetsToFetch));
+
+        // 3. Convert to Objects Map
+        const sheetsData: Record<string, any[]> = {};
+        for (const sheet of allSheets) {
+            sheetsData[sheet.sheetName] = googleSheetsService.convertToObjects(sheet);
+        }
+
+        // 4. Get Primary Sheet Data (legacy 'items')
+        const primaryKey = Object.keys(sheetsData).find(k => k.toLowerCase() === primarySheetName.toLowerCase()) || primarySheetName;
+        const items = sheetsData[primaryKey] || [];
+
+        // 5. Apply Legacy Filtering to Primary Items (if not Advanced Digest)
         const now = new Date();
         const todayStr = format(now, 'dd/MM/yyyy');
         const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const todayDay = dayNames[now.getDay()];
 
-        // If it's a Daily Digest AND no Advanced Filters, apply legacy "today" filtering
-        // If Advanced Filters are enabled, skip this and let Advanced Filters handle everything
         const hasAdvancedFilters = templateConfig.filters && Array.isArray(templateConfig.filters) && templateConfig.filters.length > 0;
+        const hasSections = /\{\{\s*#section/.test(templateText);
 
-        if (templateConfig.isDigestMode && !hasAdvancedFilters) {
+        let filteredItems = items;
+
+        if (templateConfig.isDigestMode && !hasAdvancedFilters && !hasSections) {
             console.log(`📅 [Digest Filter] Today is: ${todayDay} (${todayStr})`);
 
-            const filteredItems = items.filter(item => {
+            filteredItems = items.filter(item => {
                 const tipe = String(item.tipe || '').toLowerCase();
                 const itemName = String(item.nama || item.name || 'Unknown');
 
-                // 1. Check for Day Name match (for JADWAL KULIAH)
                 if (tipe.includes('jadwal')) {
                     const dayKeys = ['hari', 'day', 'jadwal'];
                     for (const key of dayKeys) {
@@ -351,65 +378,27 @@ class ReminderSchedulerService {
                             return true;
                         }
                     }
-                    console.log(`❌ [Filter] JADWAL "${itemName}" → Doesn't match today → EXCLUDED`);
-                    return false;
                 }
 
-                // 2. For other types (including DEADLINE), check if it has a date that matches today
-                // NOTE: Advanced date filtering (like "within N days") should be done via Advanced Filters
-                const dateKeys = ['tanggal', 'date', 'deadline', 'waktu'];
+                const dateKeys = ['tanggal', 'date', 'deadline', 'waktu', 'due'];
                 for (const key of dateKeys) {
                     const val = String(item[key] || '').trim();
-                    if (!val) continue;
-
-                    if (val.includes(todayStr)) {
-                        console.log(`✅ [Filter] "${itemName}" → Date matches today → INCLUDED`);
-                        return true;
-                    }
-                    const usToday = format(now, 'M/d/yyyy');
-                    const usToday2 = format(now, 'MM/dd/yyyy');
-                    if (val.includes(usToday) || val.includes(usToday2)) {
-                        console.log(`✅ [Filter] "${itemName}" → Date matches today (US format) → INCLUDED`);
+                    if (val.includes(todayStr) || val === format(now, 'yyyy-MM-dd')) {
+                        console.log(`✅ [Filter] DATE "${itemName}" (${val}) → Matches today (${todayStr}) → INCLUDED`);
                         return true;
                     }
                 }
-
-                console.log(`❌ [Filter] "${itemName}" (type: ${tipe}) → No match → EXCLUDED`);
                 return false;
             });
-            console.log(`✅ [Digest Filter] Sheets has ${items.length} rows. Filtered down to ${filteredItems.length} valid rows for today.`);
-            items = filteredItems;
         }
-
-        // Apply Advanced Filters (New System)
-        if (hasAdvancedFilters) {
-            console.log(`🔍 Applying ${templateConfig.filters.length} advanced filters...`);
-
-            items = smartSheetsProcessor.processData(items, {
+        else if (hasAdvancedFilters) {
+            filteredItems = smartSheetsProcessor.processData(items, {
                 filters: templateConfig.filters,
-                sort: templateConfig.sort,
-                limit: templateConfig.limit,
-                offset: templateConfig.offset
+                sort: templateConfig.sort
             });
-
-            console.log(`✅ Filtered to ${items.length} rows`);
-            return items;
         }
 
-        // 3. Legacy Filter by Trigger Logic (Backward Compatibility)
-        if (templateConfig.triggerColumn && templateConfig.triggerValue) {
-            const col = templateConfig.triggerColumn;
-            const val = templateConfig.triggerValue.toLowerCase();
-
-            items = items.filter(row => {
-                const cellVal = String(row[col] || '').toLowerCase();
-                return cellVal === val;
-            });
-
-            console.log(`✅ Legacy trigger filter applied: ${items.length} rows`);
-        }
-
-        return items;
+        return { items: filteredItems, sheetsData };
     }
 
     /**
@@ -518,8 +507,8 @@ class ReminderSchedulerService {
             // Log message to database with source = 'reminder'
             const { v4: uuidv4 } = require('uuid');
             await query(`
-                INSERT INTO messages (id, bot_id, wa_message_id, direction, source, message_type, content, created_at)
-                VALUES (?, ?, ?, 'outbound', 'reminder', ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO messages(id, bot_id, wa_message_id, direction, source, message_type, content, created_at)
+                VALUES(?, ?, ?, 'outbound', 'reminder', ?, ?, CURRENT_TIMESTAMP)
             `, [
                 uuidv4(),
                 botId,
@@ -541,8 +530,8 @@ class ReminderSchedulerService {
     private async logExecution(reminderId: string, status: 'success' | 'failed' | 'skipped', details: string) {
         try {
             await query(`
-                INSERT INTO reminder_logs (id, reminder_id, status, executed_at, error_message)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+                INSERT INTO reminder_logs(id, reminder_id, status, executed_at, error_message)
+                VALUES(?, ?, ?, CURRENT_TIMESTAMP, ?)
             `, [require('uuid').v4(), reminderId, status, details]);
 
             // Get reminder info to check if it's a "Once" type

@@ -168,6 +168,8 @@ export const api = {
     // Sheets
     sheets: {
         getTabs: (url: string) => apiClient.get(`/sheets/tabs?url=${encodeURIComponent(url)}`),
+        getColumns: (url: string, tab?: string) => apiClient.get(`/sheets/columns?url=${encodeURIComponent(url)}${tab ? `&tab=${encodeURIComponent(tab)}` : ''}`),
+        previewDigest: (data: any) => apiClient.post('/sheets/preview-digest', data),
         previewEnhanced: (data: any) => apiClient.post('/sheets/preview-enhanced', data),
         renderPreview: (data: any) => apiClient.post('/sheets/render-preview', data),
     },

@@ -41,34 +41,45 @@ const FILTER_OPERATORS = [
     { value: 'date_after', label: 'Date After', category: 'date', icon: Calendar },
     { value: 'date_today', label: 'Is Today', category: 'date', icon: Calendar },
     { value: 'date_within_days', label: 'Within X Days', category: 'date', icon: Calendar },
-];
-
-const FILTER_PRESETS = [
-    {
-        name: 'H-3 Deadline',
-        description: 'Deadlines within 3 days',
-        filters: [
-            { column: 'waktu', operator: 'date_within_days', value: 3 },
-            { column: 'done', operator: 'equals', value: 'FALSE', caseInsensitive: true }
-        ]
-    },
-    {
-        name: 'Today Only',
-        description: 'Items for today',
-        filters: [
-            { column: 'Hari', operator: 'equals', value: '{{@today_name}}' }
-        ]
-    },
-    {
-        name: 'Active Items',
-        description: 'Status is active',
-        filters: [
-            { column: 'Status', operator: 'equals', value: 'Active', caseInsensitive: true }
-        ]
-    }
+    { value: 'date_within_hours', label: 'Within X Hours', category: 'date', icon: Calendar },
+    { value: 'day_equals_today', label: 'Day = Today (Hari Ini)', category: 'date', icon: Calendar },
 ];
 
 export default function AdvancedFilters({ filters, onChange, availableColumns = [] }: AdvancedFiltersProps) {
+
+    // Generate dynamic presets based on available columns
+    const FILTER_PRESETS = (() => {
+        // Try to find a date-like column (Deadline, Tanggal, Date, Waktu, etc.)
+        const dateCol = availableColumns.find(c => /deadline|tanggal|date|waktu|due/i.test(c)) || availableColumns[1] || 'Deadline';
+        // Try to find a status/done column
+        const statusCol = availableColumns.find(c => /done|status|selesai|complete/i.test(c)) || '';
+
+        const presets: { name: string; description: string; filters: FilterCondition[] }[] = [
+            {
+                name: 'H-3 Deadline',
+                description: `Deadlines within 3 days (using "${dateCol}")`,
+                filters: [
+                    { column: dateCol, operator: 'date_within_days', value: 3 },
+                    ...(statusCol ? [{ column: statusCol, operator: 'equals', value: 'FALSE', caseInsensitive: true }] : [])
+                ]
+            },
+            {
+                name: 'Today Only',
+                description: 'Items for today (matches day name)',
+                filters: [
+                    { column: availableColumns.find(c => /hari|day/i.test(c)) || 'Hari', operator: 'day_equals_today', value: '' }
+                ]
+            },
+            {
+                name: 'Active Items',
+                description: 'Status is active',
+                filters: [
+                    { column: statusCol || 'Status', operator: 'equals', value: 'Active', caseInsensitive: true }
+                ]
+            }
+        ];
+        return presets;
+    })();
 
     const addFilter = () => {
         onChange([...filters, { column: '', operator: 'equals', value: '' }]);
@@ -89,7 +100,7 @@ export default function AdvancedFilters({ filters, onChange, availableColumns = 
     };
 
     const needsValue = (operator: string) => {
-        return !['is_empty', 'not_empty', 'date_today'].includes(operator);
+        return !['is_empty', 'not_empty', 'date_today', 'day_equals_today'].includes(operator);
     };
 
     const needsValue2 = (operator: string) => {
@@ -130,15 +141,25 @@ export default function AdvancedFilters({ filters, onChange, availableColumns = 
                                     {availableColumns.map(col => (
                                         <option key={col} value={col}>{col}</option>
                                     ))}
+                                    {/* Also show current value if it's not in the list (e.g. from old config) */}
+                                    {filter.column && !availableColumns.includes(filter.column) && (
+                                        <option value={filter.column} className="text-red-400">⚠️ {filter.column} (not found)</option>
+                                    )}
                                 </select>
                             ) : (
                                 <input
                                     type="text"
                                     value={filter.column}
                                     onChange={e => updateFilter(index, { column: e.target.value })}
-                                    placeholder="e.g. waktu, done, Status"
+                                    placeholder="e.g. Deadline, Status"
                                     className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded text-white text-sm focus:ring-1 focus:ring-emerald-500/50 outline-none"
                                 />
+                            )}
+                            {/* Warning for invalid column */}
+                            {filter.column && availableColumns.length > 0 && !availableColumns.includes(filter.column) && (
+                                <div className="text-[10px] text-amber-400 flex items-center gap-1">
+                                    ⚠️ Column "{filter.column}" not found in sheet
+                                </div>
                             )}
                         </div>
 
@@ -192,8 +213,8 @@ export default function AdvancedFilters({ filters, onChange, availableColumns = 
                                 <button
                                     onClick={() => updateFilter(index, { caseInsensitive: !filter.caseInsensitive })}
                                     className={`px-2 py-2 text-xs rounded border transition-colors ${filter.caseInsensitive
-                                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                                            : 'bg-zinc-900 border-zinc-800 text-zinc-500'
+                                        ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                                        : 'bg-zinc-900 border-zinc-800 text-zinc-500'
                                         }`}
                                     title="Case Insensitive"
                                 >

@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { getSheetTabs, previewDigest, renderPreview } from '../controllers/sheetsController';
+import { getSheetTabs, previewDigest, renderPreview, getSheetColumns } from '../controllers/sheetsController';
 import {
     testFilter,
     testTemplate,
@@ -56,5 +56,12 @@ router.post('/preview-enhanced', previewEnhanced);
  * Render Handlebars template with sample Google Sheets data
  */
 router.post('/render-preview', renderPreview);
+
+/**
+ * GET /api/sheets/columns
+ * Get column headers and sample data from a sheet tab
+ * Query params: url (Google Sheets URL), tab (optional tab/sheet name)
+ */
+router.get('/columns', getSheetColumns);
 
 export default router;

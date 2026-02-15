@@ -104,6 +104,8 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
     const [isPreviewOpen, setIsPreviewOpen] = useState(false)
     const [availableTabs, setAvailableTabs] = useState<Array<{ gid: string; name: string }>>([])
     const [isLoadingTabs, setIsLoadingTabs] = useState(false)
+    const [sheetColumns, setSheetColumns] = useState<string[]>([])
+    const [isLoadingColumns, setIsLoadingColumns] = useState(false)
 
     const [isEditorExpanded, setIsEditorExpanded] = useState(false)
 
@@ -272,28 +274,10 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                     let digestHeader = '📚 *REMINDER*\n📅 {{@today}}\n\n⏰ *Data:*'
                     let digestRowTemplate = '{{@index}}. *{{}}* — {{}}'
                     let digestEmptyMessage = '✅ Tidak ada data.'
-                    
-                    if (templateConfig.isDigestMode && templateConfig.body) {
-                        // Try to parse the combined template back into parts
-                        const body = templateConfig.body as string
-                        
-                        // Extract header (everything before {{#if @length)
-                        const headerMatch = body.match(/^([\s\S]*?)(?=\n\n\{\{#if @length)/m)
-                        if (headerMatch) {
-                            digestHeader = headerMatch[1].trim()
-                        }
-                        
-                        // Extract row template (between {{#each items}} and {{/each}})
-                        const rowMatch = body.match(/\{\{#each items\}\}\n([\s\S]*?)\n\{\{\/each\}\}/)
-                        if (rowMatch) {
-                            digestRowTemplate = rowMatch[1].trim()
-                        }
-                        
-                        // Extract empty message (between {{#if @length == 0}} and {{/if}} at the end)
-                        const emptyMatch = body.match(/\{\{#if @length == 0\}\}\n([\s\S]*?)\n\{\{\/if\}\}$/)
-                        if (emptyMatch) {
-                            digestEmptyMessage = emptyMatch[1].trim()
-                        }
+
+                    if (templateConfig.isDigestMode) {
+                        // Legacy support: Use body as message
+                        // We no longer split into header/row/footer
                     }
 
                     setFormData({
@@ -422,6 +406,39 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         return () => clearTimeout(timeoutId)
     }, [formData.contactSheetUrl, formData.dataSource])
 
+    // Auto-fetch columns when sheet URL and tab name are set
+    useEffect(() => {
+        const fetchColumns = async () => {
+            const url = formData.contactSheetUrl
+            const tab = formData.sheetName
+
+            if (!url || !tab || formData.dataSource !== 'google_sheets') {
+                return
+            }
+
+            // Validate URL format
+            const match = url.match(/\/d\/([\w-]+)/)
+            if (!match || !match[1]) return
+
+            setIsLoadingColumns(true)
+            try {
+                const response = await api.sheets.getColumns(url, tab)
+                const data = response.data
+                if (data.success && data.columns) {
+                    setSheetColumns(data.columns)
+                    console.log('[Columns] Auto-detected:', data.columns)
+                }
+            } catch (error) {
+                console.error('Column detection error:', error)
+            } finally {
+                setIsLoadingColumns(false)
+            }
+        }
+
+        const timeoutId = setTimeout(fetchColumns, 1000)
+        return () => clearTimeout(timeoutId)
+    }, [formData.contactSheetUrl, formData.sheetName, formData.dataSource])
+
 
 
     // Auto-render preview when message or sheet data changes
@@ -463,31 +480,52 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
 
 
 
-    // Live Preview Fetcher
+    // Build combined template from digest parts (reused in preview + save)
+    // Build combined template from digest parts (reused in preview + save)
+    const buildDigestTemplate = () => {
+        return formData.message || '';
+    }
+
+    // Live Preview Fetcher - now works with Digest Mode's 3-part UI
     useEffect(() => {
         const fetchPreview = async () => {
-            if (!formData.isDigestMode || !formData.contactSheetUrl || !formData.sheetName || !formData.message) {
+            if (!formData.isDigestMode || !formData.contactSheetUrl || !formData.sheetName) {
+                setPreviewText('')
+                return
+            }
+
+            // Build the combined template from the 3 digest parts
+            const combinedTemplate = buildDigestTemplate()
+            if (!combinedTemplate.trim() || combinedTemplate.trim() === '{{#if @length > 0}}\n{{#each items}}\n\n{{/each}}\n{{/if}}\n{{#if @length == 0}}\n✅ Tidak ada data.\n{{/if}}') {
                 setPreviewText('')
                 return
             }
 
             setIsPreviewLoading(true)
             try {
+                const payload = {
+                    url: formData.contactSheetUrl,
+                    selectedSheets: [formData.sheetName],
+                    template: combinedTemplate,
+                    timezone: 'Asia/Jakarta',
+                    triggerColumn: formData.triggerColumn,
+                    triggerValue: formData.triggerValue,
+                    filters: formData.useAdvancedFilters ? formData.filters : undefined,
+                    sort: formData.sort || undefined
+                }
+                console.log('[Digest Preview] Sending:', { sheet: formData.sheetName, templateLen: combinedTemplate.length, template: combinedTemplate.substring(0, 200) })
+
                 const response = await fetch(`${API_URL}/api/sheets/preview-digest`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        url: formData.contactSheetUrl,
-                        selectedSheets: [formData.sheetName],
-                        template: formData.message,
-                        timezone: 'Asia/Jakarta',
-                        triggerColumn: formData.triggerColumn,
-                        triggerValue: formData.triggerValue
-                    })
+                    body: JSON.stringify(payload)
                 })
                 const data = await response.json()
+                console.log('[Digest Preview] Response:', { success: data.success, itemsCount: data.itemsCount, renderer: data.renderer, previewLen: data.preview?.length })
                 if (data.success) {
                     setPreviewText(data.preview)
+                } else {
+                    console.error('[Digest Preview] Failed:', data.message)
                 }
             } catch (error) {
                 console.error('Preview fetch error:', error)
@@ -496,9 +534,43 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
             }
         }
 
-        const timeoutId = setTimeout(fetchPreview, 1000)
+        const timeoutId = setTimeout(fetchPreview, 1200)
         return () => clearTimeout(timeoutId)
-    }, [formData.isDigestMode, formData.contactSheetUrl, formData.sheetName, formData.message])
+    }, [
+        formData.isDigestMode, formData.contactSheetUrl, formData.sheetName,
+        formData.triggerColumn, formData.triggerValue,
+        formData.useAdvancedFilters, formData.filters, formData.sort
+    ])
+
+    // Sync Advanced Filters to Smart College Template (Realtime Update)
+    useEffect(() => {
+        if (!formData.useAdvancedFilters || !formData.filters) return;
+
+        const dFilter = formData.filters.find(f =>
+            /deadline|tenggat|due/i.test(f.column) &&
+            String(f.operator).includes('days') &&
+            f.value
+        );
+
+        if (dFilter) {
+            const days = parseInt(String(dFilter.value)) || 3;
+            setFormData(prev => {
+                // Only update if the message has the Smart College signature pattern
+                if (prev.message && prev.message.includes('filter:Deadline=within')) {
+                    // Update both the filter param and the visible title
+                    const newMsg = prev.message
+                        .replace(/filter:Deadline=within\d+days/g, `filter:Deadline=within${days}days`)
+                        .replace(/DEADLINE \(\d+ HARI/g, `DEADLINE (${days} HARI`);
+
+                    if (newMsg !== prev.message) {
+                        return { ...prev, message: newMsg };
+                    }
+                }
+                return prev;
+            });
+        }
+    }, [formData.filters, formData.useAdvancedFilters]);
+
 
     // Create Mutation
     const createMutation = useMutation({
@@ -509,18 +581,12 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
             // 2. Prepare Template Config (declare early so we can add manualContacts)
             // For Digest Mode, combine the 3 parts into proper template syntax
             let messageBody = formData.message;
-            
+
             if (formData.isDigestMode && formData.dataSource === 'google_sheets') {
                 // Build the combined template from the 3 simplified parts
-                const header = formData.digestHeader || '';
-                const rowTemplate = formData.digestRowTemplate || '';
-                const emptyMessage = formData.digestEmptyMessage || '✅ Tidak ada data.';
-                
-                // Combine into proper Handlebars-style template
-                // Format: Header + {{#if @length > 0}}{{#each items}}RowTemplate{{/each}}{{/if}}{{#if @length == 0}}EmptyMessage{{/if}}
-                messageBody = `${header}\n\n{{#if @length > 0}}\n{{#each items}}\n${rowTemplate}\n{{/each}}\n{{/if}}\n{{#if @length == 0}}\n${emptyMessage}\n{{/if}}`;
+                messageBody = buildDigestTemplate();
             }
-            
+
             const templateConfig: any = {
                 body: messageBody,
             };
@@ -726,10 +792,10 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
         }
         if (formData.dataSource === 'google_sheets') {
             const headers = formData.csvPreview.length > 0 ? formData.csvPreview[0].split(',').map(c => c.trim()) : []
-            const helpers = ['TODAY', '#LOOP', '/LOOP', 'Nama', 'Status', 'index', 'TODAY_DATE', 'TODAY_NAME', 'SCHEDULE_TODAY', 'TASKS_URGENT']
+            const helpers = ['TODAY', '#each', '/each', '#section', '/section', '#LOOP', '/LOOP', 'Nama', 'Status', 'index', 'TODAY_DATE', 'TODAY_NAME', 'SCHEDULE_TODAY', 'TASKS_URGENT']
             return Array.from(new Set([...headers, ...helpers]))
         }
-        return ['TODAY', '#LOOP', '/LOOP', 'Nama', 'Status', 'index', 'TODAY_DATE', 'TODAY_NAME', 'SCHEDULE_TODAY', 'TASKS_URGENT']
+        return ['TODAY', '#each', '/each', '#section', '/section', '#LOOP', '/LOOP', 'Nama', 'Status', 'index', 'TODAY_DATE', 'TODAY_NAME', 'SCHEDULE_TODAY', 'TASKS_URGENT']
     }, [formData.targetType, formData.contactMethod, formData.tableColumns, formData.dataSource, formData.csvPreview])
 
     const extraToolbarItems = (
@@ -1319,23 +1385,39 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                                     <AdvancedFilters
                                                         filters={formData.filters}
                                                         onChange={(filters) => setFormData({ ...formData, filters })}
-                                                        availableColumns={formData.csvPreview.length > 0 ? formData.csvPreview[0].split(',').map(c => c.trim()) : []}
+                                                        availableColumns={sheetColumns.length > 0 ? sheetColumns : (formData.csvPreview.length > 0 ? formData.csvPreview[0].split(',').map(c => c.trim().replace(/^"|"$/g, '')).filter(Boolean) : [])}
                                                     />
 
                                                     {/* Sorting */}
                                                     <div className="mt-4 p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg">
                                                         <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 block">Sort Results (Optional)</label>
                                                         <div className="grid grid-cols-2 gap-3">
-                                                            <input
-                                                                type="text"
-                                                                value={formData.sort?.column || ''}
-                                                                onChange={e => setFormData({
-                                                                    ...formData,
-                                                                    sort: e.target.value ? { column: e.target.value, order: formData.sort?.order || 'asc' } : null
-                                                                })}
-                                                                placeholder="Column name (e.g. waktu)"
-                                                                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:ring-1 focus:ring-emerald-500/50 outline-none"
-                                                            />
+                                                            {sheetColumns.length > 0 ? (
+                                                                <select
+                                                                    value={formData.sort?.column || ''}
+                                                                    onChange={e => setFormData({
+                                                                        ...formData,
+                                                                        sort: e.target.value ? { column: e.target.value, order: formData.sort?.order || 'asc' } : null
+                                                                    })}
+                                                                    className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:ring-1 focus:ring-emerald-500/50 outline-none"
+                                                                >
+                                                                    <option value="">No sorting</option>
+                                                                    {sheetColumns.map(col => (
+                                                                        <option key={col} value={col}>{col}</option>
+                                                                    ))}
+                                                                </select>
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={formData.sort?.column || ''}
+                                                                    onChange={e => setFormData({
+                                                                        ...formData,
+                                                                        sort: e.target.value ? { column: e.target.value, order: formData.sort?.order || 'asc' } : null
+                                                                    })}
+                                                                    placeholder="Column name (e.g. Deadline)"
+                                                                    className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:ring-1 focus:ring-emerald-500/50 outline-none"
+                                                                />
+                                                            )}
                                                             <select
                                                                 value={formData.sort?.order || 'asc'}
                                                                 onChange={e => setFormData({
@@ -1525,199 +1607,266 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                                 </div>
                             )}
 
-                            {/* Simplified Digest Mode UI */}
-                            {formData.isDigestMode && formData.dataSource === 'google_sheets' ? (
-                                <div className="mt-4 space-y-5 animate-in fade-in slide-in-from-top-2">
-                                    {/* Available Variables - Prominent Display */}
-                                    <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <Database size={14} className="text-emerald-400" />
-                                            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Variables from Sheet</span>
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {/* Built-in variables */}
-                                            <button
-                                                type="button"
-                                                onClick={() => navigator.clipboard.writeText('{{@today}}')}
-                                                className="px-2.5 py-1.5 bg-blue-500/10 text-blue-400 text-xs font-mono rounded border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-                                                title="Click to copy"
-                                            >
-                                                @today
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => navigator.clipboard.writeText('{{@index}}')}
-                                                className="px-2.5 py-1.5 bg-blue-500/10 text-blue-400 text-xs font-mono rounded border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-                                                title="Click to copy"
-                                            >
-                                                @index
-                                            </button>
-                                            {/* Sheet columns */}
-                                            {formData.csvPreview.length > 0 && formData.csvPreview[0].split(',').map((col, i) => {
-                                                const colName = col.trim()
-                                                if (!colName) return null
-                                                return (
+                            {/* Simplified Digest Mode - Presets Only (UI Logic Changed: We use single editor now) */}
+                            {formData.isDigestMode && formData.dataSource === 'google_sheets' && (
+                                <div className="mt-4 mb-4 space-y-5 animate-in fade-in slide-in-from-top-2">
+                                    {/* Quick Template Presets */}
+                                    {(() => {
+                                        // Get actual columns from sheet (API-detected or csvPreview fallback)
+                                        const cols = sheetColumns.length > 0 ? sheetColumns : (
+                                            formData.csvPreview.length > 0 ? formData.csvPreview[0].split(',').map(c => c.trim().replace(/^"|"$/g, '')).filter(Boolean) : []
+                                        )
+                                        // Smart mapping: col[0] = title/name, col[1] = date/time, col[2] = description, col[3]+ = extra
+                                        const c1 = cols[0] || 'nama'
+                                        const c2 = cols[1] || 'waktu'
+                                        const c3 = cols[2] || 'detail'
+                                        const c4 = cols[3] || ''
+                                        const extraLine = c4 ? `\n📎 {{${c4}}}` : ''
+
+                                        return (
+                                            <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4">
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <Wand2 size={14} className="text-purple-400" />
+                                                    <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Quick Templates</span>
+                                                    {cols.length > 0 && (
+                                                        <span className="text-[10px] text-purple-400/50">
+                                                            (using: {cols.slice(0, 3).join(', ')})
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                                                    {/* Smart Multi-Section Digest */}
+                                                    {availableTabs.some(t => /jadwal|schedule|schedules/i.test(t.name)) && availableTabs.some(t => /tugas|deadline|deadlines|pr/i.test(t.name)) && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const sTab = availableTabs.find(t => /jadwal|schedule|schedules/i.test(t.name))?.name || 'schedules';
+                                                                const dTab = availableTabs.find(t => /tugas|deadline|deadlines|pr/i.test(t.name))?.name || 'deadlines';
+
+                                                                // Dynamic Filter: Check UI filters for deadline days
+                                                                let days = 3;
+                                                                if (formData.useAdvancedFilters && formData.filters?.length > 0) {
+                                                                    const dFilter = formData.filters.find(f =>
+                                                                        /deadline|tenggat|due/i.test(f.column) &&
+                                                                        String(f.operator).includes('days')
+                                                                    );
+                                                                    if (dFilter && dFilter.value) {
+                                                                        days = parseInt(String(dFilter.value)) || 3;
+                                                                    }
+                                                                }
+
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    message: `📋 *DAILY DIGEST*\n📅 {{@todayFull}}\n\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+                                                                        `📚 *JADWAL KULIAH HARI INI ({{@dayName}})*\n\n{{#section "${sTab}" filter:Hari=@dayName}}\n{{#if @length > 0}}\n{{#each}}\n{{@index}}. *{{Mata Kuliah}}*\n   🕐 {{Jam & Ruangan}}\n{{/each}}\n{{/if}}\n{{#if @length == 0}}\n🎉 Tidak ada kuliah hari ini!\n{{/if}}\n{{/section}}\n\n━━━━━━━━━━━━━━━━━━━━\n📝 *DEADLINE (${days} HARI KE DEPAN)*\n\n{{#section "${dTab}" filter:Deadline=within${days}days}}\n{{#if @length > 0}}\n{{#each}}\n{{@index}}. *{{Matkul}}* — {{Tugas}}\n   📆 {{Deadline}}\n{{/each}}\n{{/if}}\n{{#if @length == 0}}\n✅ Tidak ada deadline mendesak.\n{{/if}}\n{{/section}}`,
+                                                                    digestHeader: '', digestRowTemplate: '', digestEmptyMessage: ''
+                                                                }));
+                                                            }}
+                                                            className="flex items-center gap-2 px-3 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium rounded-lg border border-emerald-500/20 transition-all group col-span-1 sm:col-span-2 lg:col-span-1"
+                                                        >
+                                                            <span className="text-base">🎓</span>
+                                                            <div className="text-left">
+                                                                <div className="font-semibold">Smart College</div>
+                                                                <div className="text-[10px] text-emerald-400/60">Jadwal + Deadline</div>
+                                                            </div>
+                                                        </button>
+                                                    )}
                                                     <button
-                                                        key={i}
                                                         type="button"
-                                                        onClick={() => navigator.clipboard.writeText(`{{${colName}}}`)}
-                                                        className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 text-xs font-mono rounded border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
-                                                        title="Click to copy"
+                                                        onClick={() => setFormData(prev => ({
+                                                            ...prev,
+                                                            message: `📋 *DAILY DIGEST*\n📅 {{@todayFull}}\n\n━━━━━━━━━━━━━━━━━━━━\n\n{{#if @length > 0}}\n{{#each items}}\n` +
+                                                                `{{@index}}. *{{${c1}}}*\n⏰ {{${c2}}}\n📝 {{${c3}}}${extraLine}` +
+                                                                `\n{{/each}}\n{{/if}}\n{{#if @length == 0}}\n` +
+                                                                `✅ Tidak ada jadwal atau deadline hari ini.\n\nEnjoy your free time! 🎉` +
+                                                                `\n{{/if}}`,
+                                                            digestHeader: '', digestRowTemplate: '', digestEmptyMessage: ''
+                                                        }))}
+                                                        className="flex items-center gap-2 px-3 py-2.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-xs font-medium rounded-lg border border-purple-500/20 transition-all group"
                                                     >
-                                                        {colName}
-                                                    </button>
-                                                )
-                                            })}
-                                        </div>
-                                        <p className="text-[10px] text-zinc-500 mt-2">Click variable to copy. Use <code className="text-purple-400">| urgency</code> after date columns for smart formatting.</p>
-                                    </div>
-
-                                    {/* 1. Header */}
-                                    <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-semibold text-white">
-                                            <span className="w-6 h-6 bg-purple-500/20 text-purple-400 rounded-full flex items-center justify-center text-xs">1</span>
-                                            Header (Tampil di atas)
-                                        </label>
-                                        <textarea
-                                            value={formData.digestHeader}
-                                            onChange={e => setFormData({ ...formData, digestHeader: e.target.value })}
-                                            rows={3}
-                                            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm font-mono focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 outline-none resize-none transition-all"
-                                            placeholder="📚 *REMINDER*&#10;📅 {{@today}}&#10;⏰ Data:"
-                                        />
-                                    </div>
-
-                                    {/* 2. Row Template */}
-                                    <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-semibold text-white">
-                                            <span className="w-6 h-6 bg-purple-500/20 text-purple-400 rounded-full flex items-center justify-center text-xs">2</span>
-                                            Format Tiap Baris (diulang per data)
-                                        </label>
-                                        <textarea
-                                            value={formData.digestRowTemplate}
-                                            onChange={e => setFormData({ ...formData, digestRowTemplate: e.target.value })}
-                                            rows={3}
-                                            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm font-mono focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 outline-none resize-none transition-all"
-                                            placeholder="{{@index}}. *{{Matkul}}* — {{Tugas}}&#10;📆 {{Deadline | urgency}}"
-                                        />
-                                        <p className="text-[10px] text-zinc-500">Template ini akan diulang untuk setiap baris data yang match filter.</p>
-                                    </div>
-
-                                    {/* 3. Empty Message */}
-                                    <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-semibold text-white">
-                                            <span className="w-6 h-6 bg-purple-500/20 text-purple-400 rounded-full flex items-center justify-center text-xs">3</span>
-                                            Jika Tidak Ada Data
-                                        </label>
-                                        <textarea
-                                            value={formData.digestEmptyMessage}
-                                            onChange={e => setFormData({ ...formData, digestEmptyMessage: e.target.value })}
-                                            rows={2}
-                                            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm font-mono focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 outline-none resize-none transition-all"
-                                            placeholder="✅ Tidak ada data yang match filter."
-                                        />
-                                    </div>
-
-                                    {/* Auto-generated template preview */}
-                                    <div className="bg-zinc-900/80 border border-zinc-800 rounded-lg p-4">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Code size={14} className="text-zinc-500" />
-                                            <span className="text-xs font-medium text-zinc-500">Generated Template (Auto)</span>
-                                        </div>
-                                        <pre className="text-[10px] text-zinc-600 font-mono whitespace-pre-wrap break-all">
-                                            {formData.digestHeader}{'\n\n'}{'{{#if @length > 0}}\n{{#each items}}\n'}{formData.digestRowTemplate}{'\n{{/each}}\n{{/if}}\n{{#if @length == 0}}\n'}{formData.digestEmptyMessage}{'\n{{/if}}'}
-                                        </pre>
-                                    </div>
-                                </div>
-                            ) : (
-                                /* Regular Message Editor (Non-Digest or Static) */
-                                <div className="mt-5 bg-zinc-800/50 border border-zinc-700 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-600/50 transition-all">
-
-
-                                    {/* Shared Editor - Dual View */}
-                                    <div className="relative">
-                                        <SharedMessageEditor
-                                            value={formData.message}
-                                            onChange={(val) => setFormData({ ...formData, message: val })}
-                                            variables={currentVariables}
-                                            isExpanded={false}
-                                            onToggleExpand={() => setIsEditorExpanded(true)}
-                                            variableWrapper={['{{', '}}']}
-                                            extraToolbarItems={extraToolbarItems}
-                                            placeholder="Type your reminder message here..."
-                                        />
-                                        {isEditorExpanded && (
-                                            <>
-                                                <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsEditorExpanded(false)} />
-                                                <div className="fixed top-[5vh] bottom-[5vh] left-1/2 -translate-x-1/2 w-[95vw] max-w-5xl z-[200] flex flex-col animate-in zoom-in-95 duration-300">
-                                                    <SharedMessageEditor
-                                                        value={formData.message}
-                                                        onChange={(val) => setFormData({ ...formData, message: val })}
-                                                        variables={currentVariables}
-                                                        isExpanded={true}
-                                                        onToggleExpand={() => setIsEditorExpanded(false)}
-                                                        variableWrapper={['{{', '}}']}
-                                                        extraToolbarItems={extraToolbarItems}
-                                                        placeholder="Type your reminder message here..."
-                                                    />
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-
-                                    {/* Image Attachment - Styled like Campaign */}
-                                    <div className="p-4 border-t border-zinc-700/50 bg-zinc-900/30">
-                                        {!formData.imagePreview ? (
-                                            <label className="flex items-center justify-center gap-3 w-full py-4 bg-zinc-800/50 border-2 border-dashed border-zinc-700/50 rounded-xl cursor-pointer hover:bg-zinc-800 transition-all group hover:border-blue-500/40">
-                                                <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
-                                                    <ImageIcon size={20} className="text-zinc-500 group-hover:text-blue-500 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[-10deg]" />
-                                                </div>
-                                                <div className="text-left">
-                                                    <span className="text-sm font-bold text-zinc-300 group-hover:text-white block">Attach Media</span>
-                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-tighter">Images, flyers, or promo banners</span>
-                                                </div>
-                                                <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
-                                            </label>
-                                        ) : (
-                                            <div className="flex items-center justify-between p-3 bg-zinc-950 border border-zinc-800 rounded-xl group animate-in slide-in-from-top-2 duration-300">
-                                                <div className="flex items-center gap-4">
-                                                    <div
-                                                        className="w-14 h-14 rounded-lg border border-zinc-800 overflow-hidden cursor-pointer hover:border-blue-500/50 transition-colors shrink-0"
-                                                        onClick={() => window.open(formData.imagePreview as string, '_blank')}
-                                                    >
-                                                        <img src={formData.imagePreview} className="w-full h-full object-cover" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-2 mb-0.5">
-                                                            <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold rounded uppercase tracking-wider border border-emerald-500/20">Media Attached</div>
-                                                            <span className="text-xs font-bold text-zinc-300">Image file selected</span>
+                                                        <span className="text-base">📚</span>
+                                                        <div className="text-left">
+                                                            <div className="font-semibold">Jadwal + Deadline</div>
+                                                            <div className="text-[10px] text-purple-400/60">Akademik / Kuliah</div>
                                                         </div>
-                                                        <p className="text-[10px] text-zinc-500">This media will be sent as a caption.</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => window.open(formData.imagePreview as string, '_blank')}
-                                                        className="flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-bold transition-all border border-zinc-800 focus:ring-2 focus:ring-blue-500/20"
-                                                    >
-                                                        <Eye size={14} />
-                                                        View
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => setFormData({ ...formData, imageFile: null, imagePreview: null })}
-                                                        className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
-                                                        title="Remove media"
+                                                        onClick={() => setFormData(prev => ({
+                                                            ...prev,
+                                                            message: `📬 *DATA UPDATE*\n📅 {{@todayFull}}\n\n{{#if @length > 0}}\n{{#each items}}\n` +
+                                                                `{{@index}}. {{${c1}}} — {{${c3}}}` +
+                                                                `\n{{/each}}\n{{/if}}\n{{#if @length == 0}}\n` +
+                                                                `✅ Tidak ada data.` +
+                                                                `\n{{/if}}`,
+                                                            digestHeader: '', digestRowTemplate: '', digestEmptyMessage: ''
+                                                        }))}
+                                                        className="flex items-center gap-2 px-3 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs font-medium rounded-lg border border-blue-500/20 transition-all group"
                                                     >
-                                                        <Trash2 size={16} />
+                                                        <span className="text-base">📝</span>
+                                                        <div className="text-left">
+                                                            <div className="font-semibold">Simple List</div>
+                                                            <div className="text-[10px] text-blue-400/60">Daftar umum</div>
+                                                        </div>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData(prev => ({
+                                                            ...prev,
+                                                            message: `🚨 *DEADLINE TRACKER*\n📅 {{@todayFull}}\n\n⏳ Deadline mendatang:\n\n{{#if @length > 0}}\n{{#each items}}\n` +
+                                                                `{{@index}}. *{{${c1}}}*\n📆 {{${c2} | urgency}}\n📝 {{${c3}}}${extraLine}` +
+                                                                `\n{{/each}}\n{{/if}}\n{{#if @length == 0}}\n` +
+                                                                `✅ Tidak ada deadline mendesak.\n\nSemangat! 💪` +
+                                                                `\n{{/if}}`,
+                                                            digestHeader: '', digestRowTemplate: '', digestEmptyMessage: ''
+                                                        }))}
+                                                        className="flex items-center gap-2 px-3 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-medium rounded-lg border border-amber-500/20 transition-all group"
+                                                    >
+                                                        <span className="text-base">⏰</span>
+                                                        <div className="text-left">
+                                                            <div className="font-semibold">Deadline Tracker</div>
+                                                            <div className="text-[10px] text-amber-400/60">H-3 reminder</div>
+                                                        </div>
                                                     </button>
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
+                                        )
+                                    })()}
                                 </div>
                             )}
+
+                            {/* Variables (Visible for Sheets or Contact Table) */}
+                            {(formData.dataSource === 'google_sheets') && (
+                                <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 mb-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Database size={14} className="text-emerald-400" />
+                                        <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Variables from Sheet</span>
+                                        {isLoadingColumns && (
+                                            <span className="text-[10px] text-emerald-400/60 animate-pulse">detecting...</span>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[
+                                            { name: '#each items', desc: 'Start looping through data rows' },
+                                            { name: '/each', desc: 'End looping' },
+                                            { name: '@today', desc: 'Tanggal hari ini (dd/MM/yyyy)' },
+                                            { name: '@todayFull', desc: 'Hari, tanggal lengkap' },
+                                            { name: '@dayName', desc: 'Nama hari (Senin, Selasa, ...)' },
+                                            { name: '@index', desc: 'Nomor urut (1, 2, 3, ...)' },
+                                            { name: '@length', desc: 'Total jumlah data' },
+                                        ].map(v => (
+                                            <button
+                                                key={v.name}
+                                                type="button"
+                                                onClick={() => { navigator.clipboard.writeText(`{{${v.name}}}`); toast.success(`Copied {{${v.name}}}`) }}
+                                                className="px-2.5 py-1.5 bg-blue-500/10 text-blue-400 text-xs font-mono rounded border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                                                title={v.desc}
+                                            >
+                                                {v.name}
+                                            </button>
+                                        ))}
+                                        {(sheetColumns.length > 0 ? sheetColumns : (
+                                            formData.csvPreview.length > 0 ? formData.csvPreview[0].split(',').map(c => c.trim()).filter(Boolean) : []
+                                        )).map((colName, i) => (
+                                            <button
+                                                key={i}
+                                                type="button"
+                                                onClick={() => { navigator.clipboard.writeText(`{{${colName}}}`); toast.success(`Copied {{${colName}}}`) }}
+                                                className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 text-xs font-mono rounded border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                                                title={`Column: ${colName}`}
+                                            >
+                                                {colName}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-[10px] text-zinc-500 mt-2">Click variable to copy. Use <code className="text-purple-400">| urgency</code> after date columns for smart formatting.</p>
+                                </div>
+                            )}
+
+                            {/* Unified Message Editor */}
+                            <div className="mt-5 bg-zinc-800/50 border border-zinc-700 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-600/50 transition-all">
+                                <div className="relative">
+                                    <SharedMessageEditor
+                                        value={formData.message}
+                                        onChange={(val) => setFormData({ ...formData, message: val })}
+                                        variables={currentVariables}
+                                        isExpanded={false}
+                                        onToggleExpand={() => setIsEditorExpanded(true)}
+                                        variableWrapper={['{{', '}}']}
+                                        extraToolbarItems={extraToolbarItems}
+                                        placeholder={formData.isDigestMode ? "Type your digest template... (Use {{#each items}} to loop through data)" : "Type your reminder message..."}
+                                    />
+                                    {isEditorExpanded && (
+                                        <>
+                                            <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsEditorExpanded(false)} />
+                                            <div className="fixed top-[5vh] bottom-[5vh] left-1/2 -translate-x-1/2 w-[95vw] max-w-5xl z-[200] flex flex-col animate-in zoom-in-95 duration-300">
+                                                <SharedMessageEditor
+                                                    value={formData.message}
+                                                    onChange={(val) => setFormData({ ...formData, message: val })}
+                                                    variables={currentVariables}
+                                                    isExpanded={true}
+                                                    onToggleExpand={() => setIsEditorExpanded(false)}
+                                                    variableWrapper={['{{', '}}']}
+                                                    extraToolbarItems={extraToolbarItems}
+                                                    placeholder={formData.isDigestMode ? "Type your digest template... (Use {{#each items}} to loop through data)" : "Type your reminder message..."}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* Image Attachment - Styled like Campaign */}
+                                <div className="p-4 border-t border-zinc-700/50 bg-zinc-900/30">
+                                    {!formData.imagePreview ? (
+                                        <label className="flex items-center justify-center gap-3 w-full py-4 bg-zinc-800/50 border-2 border-dashed border-zinc-700/50 rounded-xl cursor-pointer hover:bg-zinc-800 transition-all group hover:border-blue-500/40">
+                                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
+                                                <ImageIcon size={20} className="text-zinc-500 group-hover:text-blue-500 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[-10deg]" />
+                                            </div>
+                                            <div className="text-left">
+                                                <span className="text-sm font-bold text-zinc-300 group-hover:text-white block">Attach Media</span>
+                                                <span className="text-[10px] text-zinc-500 uppercase tracking-tighter">Images, flyers, or promo banners</span>
+                                            </div>
+                                            <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                                        </label>
+                                    ) : (
+                                        <div className="flex items-center justify-between p-3 bg-zinc-950 border border-zinc-800 rounded-xl group animate-in slide-in-from-top-2 duration-300">
+                                            <div className="flex items-center gap-4">
+                                                <div
+                                                    className="w-14 h-14 rounded-lg border border-zinc-800 overflow-hidden cursor-pointer hover:border-blue-500/50 transition-colors shrink-0"
+                                                    onClick={() => window.open(formData.imagePreview as string, '_blank')}
+                                                >
+                                                    <img src={formData.imagePreview} className="w-full h-full object-cover" />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                        <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold rounded uppercase tracking-wider border border-emerald-500/20">Media Attached</div>
+                                                        <span className="text-xs font-bold text-zinc-300">Image file selected</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-zinc-500">This media will be sent as a caption.</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => window.open(formData.imagePreview as string, '_blank')}
+                                                    className="flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-bold transition-all border border-zinc-800 focus:ring-2 focus:ring-blue-500/20"
+                                                >
+                                                    <Eye size={14} />
+                                                    View
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData({ ...formData, imageFile: null, imagePreview: null })}
+                                                    className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                                                    title="Remove media"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </section>
 
                     </div>
@@ -1732,108 +1881,110 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         } <Save size={18} />
                     </button>
                 </div>
-            </div>
+            </div >
 
             {/* --- Right Panel: Preview - Toggle with button --- */}
-            {isPreviewOpen && (
-                <div className="hidden lg:flex w-[380px] shrink-0 bg-[#0b141a] relative flex-col h-full border-l border-zinc-800 animate-in slide-in-from-right-5 duration-200">
-                    <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10">
-                        <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center overflow-hidden">
-                            <img src="/sendr-logo.png" alt="Sendr" className="w-full h-full object-cover" />
+            {
+                isPreviewOpen && (
+                    <div className="hidden lg:flex w-[380px] shrink-0 bg-[#0b141a] relative flex-col h-full border-l border-zinc-800 animate-in slide-in-from-right-5 duration-200">
+                        <div className="h-16 bg-[#202c33] flex items-center px-4 gap-3 border-b border-[#2a3942] z-10">
+                            <div className="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center overflow-hidden">
+                                <img src="/sendr-logo.png" alt="Sendr" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-[#e9edef] text-sm font-medium truncate">{formData.name || 'Sendr Assistant'}</div>
+                                <div className="text-[#8696a0] text-xs">Business Account</div>
+                            </div>
+                            <Search size={20} className="text-[#aebac1]" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="text-[#e9edef] text-sm font-medium truncate">{formData.name || 'Sendr Assistant'}</div>
-                            <div className="text-[#8696a0] text-xs">Business Account</div>
-                        </div>
-                        <Search size={20} className="text-[#aebac1]" />
-                    </div>
 
-                    <div className="flex-1 relative flex flex-col min-h-0">
-                        <div className="absolute inset-0 bg-[url('https://static.whatsapp.net/rsrc.php/v3/yl/r/gi_DckOUM5a.png')] bg-repeat opacity-[0.06] pointer-events-none mix-blend-overlay"></div>
-                        <div className="relative z-10 flex-1 p-6 flex flex-col justify-end gap-3 overflow-y-auto">
-                            <div className="flex justify-center mb-4"><span className="bg-[#182229] text-[#8696a0] text-xs px-3 py-1.5 rounded-lg shadow-sm font-medium">TODAY</span></div>
+                        <div className="flex-1 relative flex flex-col min-h-0">
+                            <div className="absolute inset-0 bg-[url('https://static.whatsapp.net/rsrc.php/v3/yl/r/gi_DckOUM5a.png')] bg-repeat opacity-[0.06] pointer-events-none mix-blend-overlay"></div>
+                            <div className="relative z-10 flex-1 p-6 flex flex-col justify-end gap-3 overflow-y-auto">
+                                <div className="flex justify-center mb-4"><span className="bg-[#182229] text-[#8696a0] text-xs px-3 py-1.5 rounded-lg shadow-sm font-medium">TODAY</span></div>
 
-                            <div className="self-start max-w-[90%] relative group animate-in slide-in-from-left-2">
-                                <div className="bg-[#202c33] p-1 rounded-lg rounded-tl-none shadow border border-white/5 text-[#e9edef] text-sm relative min-w-[120px]">
-                                    {/* Image Preview */}
-                                    {formData.imagePreview && (
-                                        <div className="mb-1 rounded-lg overflow-hidden">
-                                            <img src={formData.imagePreview} alt="Attached" className="w-full h-auto object-cover max-h-60" />
-                                        </div>
-                                    )}
+                                <div className="self-start max-w-[90%] relative group animate-in slide-in-from-left-2">
+                                    <div className="bg-[#202c33] p-1 rounded-lg rounded-tl-none shadow border border-white/5 text-[#e9edef] text-sm relative min-w-[120px]">
+                                        {/* Image Preview */}
+                                        {formData.imagePreview && (
+                                            <div className="mb-1 rounded-lg overflow-hidden">
+                                                <img src={formData.imagePreview} alt="Attached" className="w-full h-auto object-cover max-h-60" />
+                                            </div>
+                                        )}
 
-                                    <div className="px-2 pt-1 pb-6 leading-relaxed">
-                                        {/* Dynamic Preview Logic */}
-                                        {(() => {
-                                            // Handle Digest Preview (Real Data)
-                                            if (formData.isDigestMode) {
-                                                if (isPreviewLoading) {
-                                                    return (
-                                                        <div className="flex items-center gap-2 text-zinc-500 italic py-2">
-                                                            <RefreshCw className="animate-spin w-3 h-3" /> Generating preview from Sheet...
-                                                        </div>
-                                                    )
+                                        <div className="px-2 pt-1 pb-6 leading-relaxed">
+                                            {/* Dynamic Preview Logic */}
+                                            {(() => {
+                                                // Handle Digest Preview (Real Data)
+                                                if (formData.isDigestMode) {
+                                                    if (isPreviewLoading) {
+                                                        return (
+                                                            <div className="flex items-center gap-2 text-zinc-500 italic py-2">
+                                                                <RefreshCw className="animate-spin w-3 h-3" /> Generating preview from Sheet...
+                                                            </div>
+                                                        )
+                                                    }
+                                                    // Only show if we truly have fetched content
+                                                    if (previewText) {
+                                                        return <div dangerouslySetInnerHTML={{ __html: formatWhatsAppText(previewText) }} />
+                                                    }
                                                 }
-                                                // Only show if we truly have fetched content
-                                                if (previewText) {
-                                                    return <div dangerouslySetInnerHTML={{ __html: formatWhatsAppText(previewText) }} />
-                                                }
-                                            }
 
-                                            // Fallback: Legacy / Local Simulation
-                                            let finalMsg = formData.message || '';
+                                                // Fallback: Legacy / Local Simulation
+                                                let finalMsg = formData.message || '';
 
-                                            // 1. Basic Variables
-                                            finalMsg = finalMsg
-                                                .replace(/{TODAY}/g, new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }))
-                                                .replace(/{NAME}/g, getPreviewContactName());
+                                                // 1. Basic Variables
+                                                finalMsg = finalMsg
+                                                    .replace(/{TODAY}/g, new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }))
+                                                    .replace(/{NAME}/g, getPreviewContactName());
 
-                                            // 2. Replace ContactTable variables ({{ColumnName}} format)
-                                            const replacements = getPreviewReplacements();
-                                            Object.entries(replacements).forEach(([key, value]) => {
-                                                const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
-                                                finalMsg = finalMsg.replace(regex, value);
-                                            });
-
-                                            // 3. Digest Loop Simulation (Legacy)
-                                            if (formData.isDigestMode) {
-                                                const loopRegex = /{{#LOOP}}([\s\S]*?){{\/LOOP}}/g;
-                                                finalMsg = finalMsg.replace(loopRegex, (_, template) => {
-                                                    // Simulate 3 items
-                                                    const mockData = formData.csvPreview.length > 0 ? formData.csvPreview.slice(0, 3) : ['Item A', 'Item B', 'Item C'];
-
-                                                    return mockData.map((row, i) => {
-                                                        let itemText = template;
-                                                        // Naive replacement
-                                                        itemText = itemText.replace(/{.*?}/g, (match: string) => {
-                                                            return typeof row === 'string' ? row : match;
-                                                        });
-                                                        return itemText;
-                                                    }).join('\n');
+                                                // 2. Replace ContactTable variables ({{ColumnName}} format)
+                                                const replacements = getPreviewReplacements();
+                                                Object.entries(replacements).forEach(([key, value]) => {
+                                                    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'gi');
+                                                    finalMsg = finalMsg.replace(regex, value);
                                                 });
-                                            }
 
-                                            if (!finalMsg) {
-                                                return <span className="text-white/30 italic">Start typing to preview...</span>
-                                            }
+                                                // 3. Digest Loop Simulation (Legacy)
+                                                if (formData.isDigestMode) {
+                                                    const loopRegex = /{{#(?:LOOP|each\s+items)}}([\s\S]*?){{\/(?:LOOP|each)}}/g;
+                                                    finalMsg = finalMsg.replace(loopRegex, (_, template) => {
+                                                        // Simulate 3 items
+                                                        const mockData = formData.csvPreview.length > 0 ? formData.csvPreview.slice(0, 3) : ['Item A', 'Item B', 'Item C'];
 
-                                            return <div dangerouslySetInnerHTML={{ __html: formatWhatsAppText(finalMsg) }} />
-                                        })()}
+                                                        return mockData.map((row, i) => {
+                                                            let itemText = template;
+                                                            // Naive replacement
+                                                            itemText = itemText.replace(/{.*?}/g, (match: string) => {
+                                                                return typeof row === 'string' ? row : match;
+                                                            });
+                                                            return itemText;
+                                                        }).join('\n');
+                                                    });
+                                                }
+
+                                                if (!finalMsg) {
+                                                    return <span className="text-white/30 italic">Start typing to preview...</span>
+                                                }
+
+                                                return <div dangerouslySetInnerHTML={{ __html: formatWhatsAppText(finalMsg) }} />
+                                            })()}
+                                        </div>
+                                        <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">{formData.time}</div>
                                     </div>
-                                    <div className="absolute right-2 bottom-1 text-[10px] text-[#8696a0]">{formData.time}</div>
+                                    <div className="absolute top-0 -left-2 w-0 h-0 border-t-[10px] border-t-[#202c33] border-l-[10px] border-l-transparent transform scale-x-[-1]"></div>
                                 </div>
-                                <div className="absolute top-0 -left-2 w-0 h-0 border-t-[10px] border-t-[#202c33] border-l-[10px] border-l-transparent transform scale-x-[-1]"></div>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="h-[62px] bg-[#202c33] px-3 flex items-center gap-3 shrink-0 border-t border-[#2a3942] mt-auto relative z-20">
-                        <Upload size={24} className="text-[#8696a0]" />
-                        <div className="flex-1 bg-[#2a3942] rounded-lg h-9 px-3 flex items-center text-[#8696a0] text-sm">Type a message</div>
-                        <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white"><ArrowRight size={16} /></div>
+                        <div className="h-[62px] bg-[#202c33] px-3 flex items-center gap-3 shrink-0 border-t border-[#2a3942] mt-auto relative z-20">
+                            <Upload size={24} className="text-[#8696a0]" />
+                            <div className="flex-1 bg-[#2a3942] rounded-lg h-9 px-3 flex items-center text-[#8696a0] text-sm">Type a message</div>
+                            <div className="w-8 h-8 rounded-full bg-[#00a884] flex items-center justify-center text-white"><ArrowRight size={16} /></div>
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     )
 }

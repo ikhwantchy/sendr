@@ -16,6 +16,7 @@ export interface RenderContext {
     data: any[];
     globalVars?: Record<string, any>;
     timezone?: string;
+    sheetsData?: Record<string, any[]>; // Multi-sheet data: { 'schedules': [...], 'deadlines': [...] }
 }
 
 class EnhancedTemplateRenderer {
@@ -28,20 +29,35 @@ class EnhancedTemplateRenderer {
         const contextData = context.data || [];
         let result = template;
 
+        // 0. Process {{#section}} blocks first (multi-sheet support)
+        if (context.sheetsData) {
+            result = this.processSectionBlocks(result, context);
+        }
+
         // 1. Process in correct order:
-        // First: Groups (they contain their own loops/conditionals)
+        // First: Filter blocks (they filter data inline before looping)
+        result = this.processFilterBlocks(result, contextData, context);
+
+        // Second: Groups (they contain their own loops/conditionals)
         result = this.processGroups(result, contextData, context);
-        
-        // Second: Process outer conditionals that wrap loops (like {{#if @length > 0}}...{{#each}}...{{/each}}...{{/if}})
+
+        // Third: Process outer conditionals that wrap loops (like {{#if @length > 0}}...{{#each}}...{{/each}}...{{/if}})
         // We need to handle this specially - extract and process conditional blocks that contain loops
         result = this.processConditionalWithLoops(result, contextData, context);
 
         // 2. Process Global and Built-in Variables
-        // 2. Process Global and Built-in Variables
-        const builtIn = {
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+        const now = new Date();
+        const builtIn: Record<string, any> = {
             '@length': contextData.length,
-            '@today': format(new Date(), 'dd/MM/yyyy'),
-            '@today_name': ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][new Date().getDay()]
+            '@today': format(now, 'dd/MM/yyyy'),
+            '@today_name': days[now.getDay()],
+            '@todayFull': `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`,
+            '@dayName': days[now.getDay()],
+            '@time': format(now, 'HH:mm'),
+            '@date': format(now, 'dd/MM/yyyy'),
+            '@datetime': format(now, 'dd/MM/yyyy HH:mm'),
         };
 
         const allVars = {
@@ -65,6 +81,131 @@ class EnhancedTemplateRenderer {
         result = result.replace(/\n{3,}/g, '\n\n');
 
         return result.trim();
+    }
+
+    /**
+     * Process {{#filter items column="value"}}...{{/filter}} blocks
+     * Filters data inline and renders the inner content as a sub-digest
+     * Example: {{#filter items tipe="Jadwal"}}{{@index}}. *{{nama}}*{{/filter}}
+     */
+    private processFilterBlocks(template: string, data: any[], context: RenderContext): string {
+        // Match {{#filter items column="value"}} or {{#filter items column=value}}
+        const filterRegex = /\{\{\s*#filter\s+\w+\s+(\w+)\s*=\s*"?([^"}\s]+)"?\s*\}\}([\s\S]*?)\{\{\s*\/filter\s*\}\}/g;
+
+        return template.replace(filterRegex, (match, filterColumn, filterValue, innerContent) => {
+            if (!data || data.length === 0) return '';
+
+            // Filter data by the specified column=value
+            const filtered = data.filter(row => {
+                const allKeys = Object.keys(row);
+                const searchKey = filterColumn.toLowerCase().trim();
+                const actualKey = allKeys.find(k => k.toLowerCase().trim() === searchKey) ||
+                    allKeys.find(k => k.toLowerCase().trim().includes(searchKey)) ||
+                    filterColumn;
+                const cellValue = String(row[actualKey] || '').toLowerCase().trim();
+                return cellValue === filterValue.toLowerCase().trim();
+            });
+
+            if (filtered.length === 0) return '';
+
+            console.log(`🔍 [Filter Block] ${filterColumn}="${filterValue}" → ${filtered.length} rows`);
+
+            // Render inner content with filtered data as a sub-context
+            // The inner content can contain {{#each}}, {{#if}}, etc.
+            return this.render(innerContent, {
+                data: filtered,
+                globalVars: {
+                    ...(context.globalVars || {}),
+                    '@filterName': filterValue,
+                    '@filterCount': filtered.length,
+                },
+                timezone: context.timezone,
+            });
+        });
+    }
+
+    /**
+     * Process {{#section "sheetName"}}...{{/section}} blocks
+     * Each section can reference a different sheet and optionally filter data inline
+     * 
+     * Syntax:
+     *   {{#section schedules}}...{{/section}}
+     *   {{#section schedules filter:Hari=@dayName}}...{{/section}}
+     *   {{#section deadlines filter:Deadline=within3days}}...{{/section}}
+     */
+    private processSectionBlocks(template: string, context: RenderContext): string {
+        // Match {{#section "Sheet Name" [filter:col=val]}}...{{/section}}
+        // Group 1: Quoted sheet name
+        // Group 2: Unquoted sheet name
+        // Group 3: Filter expression (optional)
+        // Group 4: Inner content
+        const sectionRegex = /\{\{\s*#section\s+(?:["']([^"']+)["']|([^\s"'}]+))(?:\s+filter:([^}]+))?\s*\}\}([\s\S]*?)\{\{\s*\/section\s*\}\}/g;
+
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const todayDayName = days[new Date().getDay()].toLowerCase();
+
+        return template.replace(sectionRegex, (match, quotedSheet, unquotedSheet, filterExpr, innerContent) => {
+            const sheetName = (quotedSheet || unquotedSheet).trim();
+            const sheetsData = context.sheetsData || {};
+
+            // Find sheet data (case-insensitive)
+            const sheetKey = Object.keys(sheetsData).find(
+                k => k.toLowerCase() === sheetName.toLowerCase()
+            );
+
+            if (!sheetKey) {
+                console.warn(`⚠️ [Section] Sheet "${sheetName}" not found in sheetsData (available: ${Object.keys(sheetsData).join(', ')})`);
+                return `⚠️ Sheet "${sheetName}" not found`;
+            }
+
+            let sectionData = [...sheetsData[sheetKey]];
+
+            // Apply inline filter if specified
+            if (filterExpr) {
+                const filterMatch = filterExpr.trim().match(/([\w][\w\s&]*)=(.+)/);
+                if (filterMatch) {
+                    const filterCol = filterMatch[1].trim();
+                    let filterVal = filterMatch[2].trim();
+
+                    // Resolve special values
+                    if (filterVal === '@dayName' || filterVal === '@today_name') {
+                        filterVal = todayDayName;
+                    }
+
+                    // Special: within_Xdays filter
+                    const withinDaysMatch = filterVal.match(/^within(\d+)days$/i);
+                    if (withinDaysMatch) {
+                        const daysRange = parseInt(withinDaysMatch[1]);
+                        sectionData = smartSheetsProcessor.processData(sectionData, {
+                            filters: [{ column: filterCol, operator: 'date_within_days', value: daysRange }]
+                        });
+                    } else {
+                        // Regular value filter (case-insensitive)
+                        sectionData = sectionData.filter(row => {
+                            const allKeys = Object.keys(row);
+                            const actualKey = allKeys.find(k => k.toLowerCase().trim() === filterCol.toLowerCase().trim()) ||
+                                allKeys.find(k => k.toLowerCase().trim().includes(filterCol.toLowerCase().trim()));
+                            if (!actualKey) return false;
+                            return String(row[actualKey] || '').toLowerCase().trim() === filterVal.toLowerCase().trim();
+                        });
+                    }
+                }
+            }
+
+            console.log(`📋 [Section] Sheet "${sheetKey}"${filterExpr ? ` (filter: ${filterExpr.trim()})` : ''} → ${sectionData.length} items`);
+
+            // Render inner content with section data
+            return this.render(innerContent, {
+                data: sectionData,
+                globalVars: {
+                    ...(context.globalVars || {}),
+                    '@sectionName': sheetKey,
+                    '@sectionCount': sectionData.length,
+                },
+                timezone: context.timezone,
+                // Don't pass sheetsData to avoid infinite recursion
+            });
+        });
     }
 
     private processGroups(template: string, data: any[], context: RenderContext): string {
@@ -137,7 +278,7 @@ class EnhancedTemplateRenderer {
      */
     private processInlineConditionals(template: string, item: any): string {
         const inlineIfRegex = /\{\{\s*#if\s+(\w+)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
-        
+
         return template.replace(inlineIfRegex, (match, propName, content) => {
             // Check if the property exists and has a truthy value
             const value = item[propName];
@@ -152,42 +293,42 @@ class EnhancedTemplateRenderer {
      */
     private processConditionalWithLoops(template: string, data: any[], context: RenderContext): string {
         let result = template;
-        
+
         // Process all {{#if ...}}...{{/if}} blocks
         const processIfBlocks = (text: string): string => {
             // Match {{#if condition}}content{{/if}}
             const simpleIfRegex = /\{\{\s*#if\s+([^}]+)\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
-            
+
             let processed = text;
             let match;
             let iterations = 0;
-            
+
             // Keep replacing until no more matches
             while ((match = simpleIfRegex.exec(processed)) !== null && iterations < 20) {
                 iterations++;
                 const [fullMatch, condition, content] = match;
-                
+
                 const isTrue = this.evaluateCondition(condition.trim(), context);
-                
+
                 let replacement = '';
                 if (isTrue) {
                     // Process loops inside this block
                     replacement = this.processLoops(content, data);
                 }
-                
+
                 // Replace the match and reset regex
                 processed = processed.replace(fullMatch, replacement);
                 simpleIfRegex.lastIndex = 0; // Reset to start from beginning
             }
-            
+
             return processed;
         };
-        
+
         result = processIfBlocks(result);
-        
+
         // Process any remaining loops not wrapped in conditionals
         result = this.processLoops(result, data);
-        
+
         return result;
     }
 
@@ -336,16 +477,16 @@ class EnhancedTemplateRenderer {
                 try {
                     const deadlineDate = smartSheetsProcessor['parseDate'](value);
                     if (!deadlineDate) return valStr;
-                    
+
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     deadlineDate.setHours(0, 0, 0, 0);
-                    
+
                     const diffTime = deadlineDate.getTime() - today.getTime();
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    
+
                     const formattedDate = format(deadlineDate, 'dd/MM/yyyy');
-                    
+
                     if (diffDays < 0) {
                         return `⚫ ${formattedDate} (Lewat ${Math.abs(diffDays)} hari)`;
                     } else if (diffDays === 0) {

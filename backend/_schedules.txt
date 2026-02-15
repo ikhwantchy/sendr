@@ -1,0 +1,6 @@
+"Hari","Mata Kuliah","Jam & Ruangan"
+"Senin","Pemrograman Web","08.00–10.00 | Lab Komputer"
+"Senin","Basis Data","10.30–12.00 | R.203"
+"Selasa","Sistem Operasi","09.00–11.00 | R.105"
+"Rabu","Rekayasa Perangkat Lunak","13.00–15.00 | R.301"
+"Kamis","Jaringan Komputer","08.00–10.00 | Lab Jaringan"

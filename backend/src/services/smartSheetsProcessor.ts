@@ -12,7 +12,8 @@ export interface FilterCondition {
     column: string;
     operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' |
     'greater_than' | 'less_than' | 'between' | 'in_list' | 'is_empty' | 'not_empty' |
-    'date_equals' | 'date_before' | 'date_after' | 'date_between' | 'date_today' | 'date_within_days';
+    'date_equals' | 'date_before' | 'date_after' | 'date_between' | 'date_today' | 'date_within_days' |
+    'day_equals_today' | 'date_within_hours';
     value?: any;
     value2?: any; // For 'between' and 'date_between'
     caseInsensitive?: boolean;
@@ -96,8 +97,14 @@ class SmartSheetsProcessor {
         const allKeys = Object.keys(row);
         const searchKey = filter.column.toLowerCase().trim();
         const actualKey = allKeys.find(k => k.toLowerCase().trim() === searchKey) ||
-            allKeys.find(k => k.toLowerCase().trim().includes(searchKey)) ||
-            filter.column;
+            allKeys.find(k => k.toLowerCase().trim().includes(searchKey));
+
+        // If column doesn't exist in data, skip this filter (pass = true)
+        // This prevents old/misconfigured filters from silently emptying all results
+        if (!actualKey) {
+            console.warn(`⚠️ [Filter] Column "${filter.column}" not found in data (available: ${allKeys.join(', ')}). Skipping filter.`);
+            return true; // Pass — don't reject rows for missing columns
+        }
 
         const value = row[actualKey];
         const filterValue = filter.value;
@@ -167,6 +174,26 @@ class SmartSheetsProcessor {
             case 'not_empty':
                 return value && String(value).trim() !== '';
 
+            // Day name filter (Senin, Selasa, etc. compared to today)
+            case 'day_equals_today': {
+                const dayNames = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
+                const todayDayName = dayNames[new Date().getDay()];
+                const cellValue = String(value || '').toLowerCase().trim();
+                return cellValue === todayDayName;
+            }
+
+            // Date within hours (for deadline proximity like -12h to +72h)
+            case 'date_within_hours': {
+                const targetDate = this.parseDate(value);
+                if (!targetDate) return false;
+                const now = new Date();
+                const hoursRange = Number(filterValue) || 72;
+                const diffMs = targetDate.getTime() - now.getTime();
+                const diffHours = diffMs / (1000 * 60 * 60);
+                // Include items from -12 hours (slightly past) to +N hours
+                return diffHours >= -12 && diffHours <= hoursRange;
+            }
+
             // Date filters
             case 'date_equals':
             case 'date_before':
@@ -218,8 +245,9 @@ class SmartSheetsProcessor {
                 return isEqual(dateValue, today);
 
             case 'date_within_days':
+                // "N hari" = today + (N-1) more days. E.g. "2 hari" on Feb 15 = Feb 15, 16
                 const days = Number(filter.value);
-                const futureDate = addDays(today, days);
+                const futureDate = addDays(today, days - 1);
                 return (isAfter(dateValue, today) || isEqual(dateValue, today)) &&
                     (isBefore(dateValue, futureDate) || isEqual(dateValue, futureDate));
 
