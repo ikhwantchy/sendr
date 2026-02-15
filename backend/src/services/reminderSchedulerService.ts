@@ -20,6 +20,29 @@ class ReminderSchedulerService {
     private scheduledReminders: Map<string, ScheduledReminder> = new Map();
 
     /**
+     * Anti-spam delay between messages (randomized to look human-like)
+     * WhatsApp can disconnect bots that send too fast
+     */
+    private async antiSpamDelay(minMs = 3000, maxMs = 6000): Promise<void> {
+        const delay = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+        console.log(`⏳ Anti-spam delay: ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    /**
+     * Check if bot is still connected before sending
+     */
+    private async isBotConnected(botId: string): Promise<boolean> {
+        try {
+            const { whatsappAdapter } = await import('../adapters/whatsapp/whatsappAdapter.baileys');
+            const status = await whatsappAdapter.getConnectionStatus(botId);
+            return status?.status === 'connected';
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Initialize scheduler - load all active reminders
      */
     async initialize() {
@@ -204,11 +227,19 @@ class ReminderSchedulerService {
                 let successCount = 0;
                 let failCount = 0;
 
-                for (const row of sheetRows) {
+                for (let i = 0; i < sheetRows.length; i++) {
+                    const row = sheetRows[i];
                     const phone = this.extractPhoneNumber(row);
                     if (!phone) {
                         console.warn('⚠️ No phone number found in row, skipping...', row);
                         continue;
+                    }
+
+                    // Check connection before sending
+                    if (!(await this.isBotConnected(reminder.bot_id))) {
+                        console.error(`❌ Bot ${reminder.bot_id} disconnected, aborting remaining sends`);
+                        failCount += sheetRows.length - i;
+                        break;
                     }
 
                     const targetJid = phone.includes('@') ? phone : `${phone.replace(/\D/g, '')}@s.whatsapp.net`;
@@ -220,6 +251,11 @@ class ReminderSchedulerService {
                     } catch (err: any) {
                         console.error(`❌ Failed to send to ${targetJid}:`, err.message);
                         failCount++;
+                    }
+
+                    // Anti-spam delay between sends (skip after last message)
+                    if (i < sheetRows.length - 1) {
+                        await this.antiSpamDelay();
                     }
                 }
 
@@ -266,9 +302,16 @@ class ReminderSchedulerService {
                     console.log('📤 Processing manual contacts with variables...');
                     console.log('📤 Manual contacts data:', JSON.stringify(templateConfig.manualContacts));
 
-                    for (const contact of templateConfig.manualContacts) {
+                    for (let i = 0; i < templateConfig.manualContacts.length; i++) {
+                        const contact = templateConfig.manualContacts[i];
                         const targetJid = contact.jid || contact.phone;
                         if (!targetJid) continue;
+
+                        // Check connection before sending
+                        if (!(await this.isBotConnected(reminder.bot_id))) {
+                            console.error(`❌ Bot ${reminder.bot_id} disconnected, aborting remaining sends`);
+                            break;
+                        }
 
                         // Process template with contact data (includes Name, Jabatan, etc.)
                         const personalizedMessage = templateEngineService.processTemplate(templateText, contact);
@@ -278,6 +321,11 @@ class ReminderSchedulerService {
                             await this.sendMessageWithRetry(reminder.bot_id, targetJid, personalizedMessage, templateConfig.image_url);
                         } catch (sendError: any) {
                             console.error(`❌ Failed to send to ${targetJid}:`, sendError.message);
+                        }
+
+                        // Anti-spam delay between sends (skip after last message)
+                        if (i < templateConfig.manualContacts.length - 1) {
+                            await this.antiSpamDelay();
                         }
                     }
 
@@ -296,12 +344,25 @@ class ReminderSchedulerService {
                 }
 
                 const targetIds = reminder.target_id.split(',');
-                for (const targetJid of targetIds) {
-                    if (!targetJid.trim()) continue;
+                for (let i = 0; i < targetIds.length; i++) {
+                    const targetJid = targetIds[i].trim();
+                    if (!targetJid) continue;
+
+                    // Check connection before sending (only for multi-target)
+                    if (targetIds.length > 1 && !(await this.isBotConnected(reminder.bot_id))) {
+                        console.error(`❌ Bot ${reminder.bot_id} disconnected, aborting remaining sends`);
+                        break;
+                    }
+
                     try {
-                        await this.sendMessageWithRetry(reminder.bot_id, targetJid.trim(), finalMessage, templateConfig.image_url);
+                        await this.sendMessageWithRetry(reminder.bot_id, targetJid, finalMessage, templateConfig.image_url);
                     } catch (sendError: any) {
                         console.error(`❌ Permanent failure sending message to ${targetJid}:`, sendError);
+                    }
+
+                    // Anti-spam delay between sends (skip after last message)
+                    if (i < targetIds.length - 1) {
+                        await this.antiSpamDelay();
                     }
                 }
 
@@ -470,10 +531,16 @@ class ReminderSchedulerService {
             await this.sendMessage(botId, targetJid, message, imageUrl);
             console.log(`✅ Message sent to ${targetJid}`);
         } catch (error: any) {
-            // If connection closed and we haven't retried yet
-            if (retryCount < 1 && (error.message?.includes('Closed') || error.output?.statusCode === 428)) {
-                console.warn(`⚠️ Connection closed for bot ${botId}, retrying in 3 seconds...`);
-                await new Promise(resolve => setTimeout(resolve, 3000));
+            const isConnectionError = error.message?.includes('Closed') || 
+                                       error.message?.includes('Connection') ||
+                                       error.message?.includes('disconnected') ||
+                                       error.output?.statusCode === 428 ||
+                                       error.output?.statusCode === 408;
+
+            if (retryCount < 3 && isConnectionError) {
+                const waitTime = (retryCount + 1) * 5000; // 5s, 10s, 15s backoff
+                console.warn(`⚠️ Connection issue for bot ${botId}, retry ${retryCount + 1}/3 in ${waitTime / 1000}s...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
                 return this.sendMessageWithRetry(botId, targetJid, message, imageUrl, retryCount + 1);
             }
             throw error;
