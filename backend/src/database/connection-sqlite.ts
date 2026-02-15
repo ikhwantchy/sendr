@@ -4,8 +4,8 @@
  */
 
 import initSqlJs, { Database } from 'sql.js';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, existsSync, copyFileSync, renameSync, mkdirSync, readdirSync, unlinkSync, statSync } from 'fs';
+import { join, dirname } from 'path';
 import { logger } from '../utils/logger';
 
 // Use process.cwd() to ensure consistent path whether running from tsx or compiled JS
@@ -739,10 +739,6 @@ async function initSchema(): Promise<void> {
 export function saveDatabase(): void {
   if (!_db) return;
   try {
-    const { mkdirSync } = require('fs');
-    const { dirname } = require('path');
-
-    // Ensure directory exists
     const dir = dirname(DB_PATH);
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
@@ -750,9 +746,117 @@ export function saveDatabase(): void {
 
     const data = _db.export();
     const buffer = Buffer.from(data);
-    writeFileSync(DB_PATH, buffer);
+
+    // ATOMIC WRITE: Write to temp file first, then rename
+    // renameSync is atomic on Linux (same filesystem)
+    const tmpPath = DB_PATH + '.tmp';
+    writeFileSync(tmpPath, buffer);
+    renameSync(tmpPath, DB_PATH);
   } catch (error) {
     logger.error('❌ Failed to save database to disk', { error });
+    // Clean up temp file if it exists
+    try { unlinkSync(DB_PATH + '.tmp'); } catch (e) { }
+  }
+}
+
+/**
+ * Create a timestamped backup of the database
+ * Keeps max 10 backups, rotates oldest
+ */
+export function backupDatabase(): string | null {
+  if (!existsSync(DB_PATH)) {
+    logger.warn('No database file to backup');
+    return null;
+  }
+  try {
+    const backupDir = join(dirname(DB_PATH), 'backups');
+    if (!existsSync(backupDir)) {
+      mkdirSync(backupDir, { recursive: true });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = join(backupDir, `database_${timestamp}.sqlite`);
+
+    copyFileSync(DB_PATH, backupPath);
+    logger.info(`✅ Database backup created: ${backupPath}`);
+
+    // Rotate: keep only the last 10 backups
+    try {
+      const backups = readdirSync(backupDir)
+        .filter(f => f.startsWith('database_') && f.endsWith('.sqlite'))
+        .map(f => ({ name: f, time: statSync(join(backupDir, f)).mtimeMs }))
+        .sort((a, b) => b.time - a.time);
+
+      if (backups.length > 10) {
+        for (const old of backups.slice(10)) {
+          unlinkSync(join(backupDir, old.name));
+          logger.info(`🗑️ Deleted old backup: ${old.name}`);
+        }
+      }
+    } catch (e) {
+      logger.warn('Failed to rotate backups', { error: e });
+    }
+
+    return backupPath;
+  } catch (error) {
+    logger.error('❌ Failed to backup database', { error });
+    return null;
+  }
+}
+
+/**
+ * Restore database from a backup file
+ */
+export function restoreDatabase(backupPath: string): boolean {
+  try {
+    if (!existsSync(backupPath)) {
+      logger.error('Backup file not found', { backupPath });
+      return false;
+    }
+
+    // Safety: backup current DB before restoring
+    const safetyBackup = DB_PATH + '.pre-restore';
+    if (existsSync(DB_PATH)) {
+      copyFileSync(DB_PATH, safetyBackup);
+    }
+
+    copyFileSync(backupPath, DB_PATH);
+    logger.info(`✅ Database restored from: ${backupPath}`);
+
+    // Reload in-memory database
+    if (_db) {
+      const fileData = readFileSync(DB_PATH);
+      _db = new ((_db as any).constructor)(fileData);
+    }
+
+    return true;
+  } catch (error) {
+    logger.error('❌ Failed to restore database', { error });
+    return false;
+  }
+}
+
+/**
+ * List available backups
+ */
+export function listBackups(): Array<{ name: string, size: number, date: string }> {
+  const backupDir = join(dirname(DB_PATH), 'backups');
+  if (!existsSync(backupDir)) return [];
+
+  try {
+    return readdirSync(backupDir)
+      .filter(f => f.startsWith('database_') && f.endsWith('.sqlite'))
+      .map(f => {
+        const stat = statSync(join(backupDir, f));
+        return {
+          name: f,
+          size: stat.size,
+          date: stat.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  } catch (e) {
+    return [];
   }
 }
 

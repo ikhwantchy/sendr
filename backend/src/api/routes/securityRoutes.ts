@@ -9,6 +9,7 @@ import { authenticate } from '../middleware/auth';
 import securityService from '../../services/securityService';
 import systemSettingsService from '../../services/systemSettingsService';
 import { query } from '../../database/connection';
+import { backupDatabase, listBackups, restoreDatabase } from '../../database/connection-sqlite';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -272,6 +273,97 @@ router.post('/telegram/test', authenticate, async (req, res) => {
     } catch (error: any) {
         logger.error('Failed to send test alert', { error: error.message });
         res.status(500).json({ success: false, error: 'Failed to send alert' });
+    }
+});
+
+// ==========================================
+// DATABASE BACKUP ENDPOINTS
+// ==========================================
+
+/**
+ * POST /api/security/backup/create
+ * Create a database backup (admin only)
+ */
+router.post('/backup/create', authenticate, async (req, res) => {
+    try {
+        if (req.user!.role !== 'OWNER' && req.user!.role !== 'ADMIN') {
+            return res.status(403).json({ success: false, error: 'Admin access required' });
+        }
+
+        const backupPath = backupDatabase();
+        if (backupPath) {
+            logger.info('Manual database backup created', { userId: req.user!.id, backupPath });
+            res.json({ success: true, message: 'Backup created successfully', path: backupPath });
+        } else {
+            res.status(500).json({ success: false, error: 'Failed to create backup' });
+        }
+    } catch (error: any) {
+        logger.error('Backup creation failed', { error: error.message });
+        res.status(500).json({ success: false, error: 'Failed to create backup' });
+    }
+});
+
+/**
+ * GET /api/security/backup/list
+ * List available backups
+ */
+router.get('/backup/list', authenticate, async (req, res) => {
+    try {
+        if (req.user!.role !== 'OWNER' && req.user!.role !== 'ADMIN') {
+            return res.status(403).json({ success: false, error: 'Admin access required' });
+        }
+
+        const backups = listBackups();
+        res.json({
+            success: true,
+            data: backups.map(b => ({
+                ...b,
+                sizeFormatted: (b.size / 1024 / 1024).toFixed(2) + ' MB'
+            }))
+        });
+    } catch (error: any) {
+        logger.error('Failed to list backups', { error: error.message });
+        res.status(500).json({ success: false, error: 'Failed to list backups' });
+    }
+});
+
+/**
+ * POST /api/security/backup/restore
+ * Restore database from a backup (admin only)
+ */
+router.post('/backup/restore', authenticate, async (req, res) => {
+    try {
+        if (req.user!.role !== 'OWNER') {
+            return res.status(403).json({ success: false, error: 'Owner access required' });
+        }
+
+        const { backupName } = req.body;
+        if (!backupName) {
+            return res.status(400).json({ success: false, error: 'Backup name is required' });
+        }
+
+        const { join, dirname } = require('path');
+        const DB_PATH = join(process.cwd(), 'data/database.sqlite');
+        const backupPath = join(dirname(DB_PATH), 'backups', backupName);
+
+        // Safety check: prevent path traversal
+        if (!backupPath.includes('backups') || backupName.includes('..')) {
+            return res.status(400).json({ success: false, error: 'Invalid backup name' });
+        }
+
+        // Create a safety backup before restore
+        backupDatabase();
+
+        const success = restoreDatabase(backupPath);
+        if (success) {
+            logger.info('Database restored from backup', { userId: req.user!.id, backupName });
+            res.json({ success: true, message: 'Database restored. Please restart the server.' });
+        } else {
+            res.status(500).json({ success: false, error: 'Failed to restore backup' });
+        }
+    } catch (error: any) {
+        logger.error('Restore failed', { error: error.message });
+        res.status(500).json({ success: false, error: 'Failed to restore backup' });
     }
 });
 
