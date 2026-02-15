@@ -58,9 +58,9 @@ router.post('/login', async (req, res) => {
                         `📧 <b>Email:</b> <code>${email}</code>\n` +
                         `❌ <b>Reason:</b> User not found\n` +
                         `🌐 <b>IP:</b> <code>${req.ip || 'Unknown'}</code>\n` +
-                        `📱 <b>Device:</b> <i>${req.get('user-agent') || 'Unknown'}</i>`
+                        `📱 <b>Device:</b> ${(req.get('user-agent') || 'Unknown').substring(0, 100)}`
                     );
-                } catch (e) { /* ignore */ }
+                } catch (e: any) { logger.error('Telegram alert failed (login_not_found)', { error: e.message }); }
 
                 return res.status(401).json({
                     success: false,
@@ -82,9 +82,9 @@ router.post('/login', async (req, res) => {
                         `👤 <b>User:</b> ${user.name || 'Unknown'} (${email})\n` +
                         `❌ <b>Reason:</b> Wrong password\n` +
                         `🌐 <b>IP:</b> <code>${req.ip || 'Unknown'}</code>\n` +
-                        `📱 <b>Device:</b> <i>${req.get('user-agent') || 'Unknown'}</i>`
+                        `📱 <b>Device:</b> ${(req.get('user-agent') || 'Unknown').substring(0, 100)}`
                     );
-                } catch (e) { /* ignore */ }
+                } catch (e: any) { logger.error('Telegram alert failed (login_wrong_pw)', { error: e.message }); }
 
                 return res.status(401).json({
                     success: false,
@@ -128,14 +128,17 @@ router.post('/login', async (req, res) => {
 
             // Send Telegram alert for successful login
             try {
+                logger.info('Sending Telegram login alert', { userId: user.id, role: user.role });
                 await securityService.sendTelegramAlert(user.id,
                     `<b>🔔 Login Alert</b>\n\n` +
                     `👤 <b>User:</b> ${user.name || 'Unknown'} (${user.email})\n` +
+                    `🔑 <b>Role:</b> ${user.role}\n` +
                     `✅ <b>Status:</b> Successful login\n` +
                     `🌐 <b>IP:</b> <code>${req.ip || 'Unknown'}</code>\n` +
-                    `📱 <b>Device:</b> <i>${req.get('user-agent') || 'Unknown'}</i>`
+                    `📱 <b>Device:</b> ${(req.get('user-agent') || 'Unknown').substring(0, 100)}`
                 );
-            } catch (e) { /* ignore */ }
+                logger.info('Telegram login alert sent successfully');
+            } catch (e: any) { logger.error('Telegram alert failed (login_success)', { error: e.message, userId: user.id }); }
 
             logger.info('Login successful', { email: user.email, id: user.id });
 
