@@ -11,6 +11,7 @@ import { LLMProvider, LLMMessage, LLMConfig, DataSchema } from './base';
 import { query } from '../../database/connection';
 import { logger } from '../../utils/logger';
 import { aiSheetUpdaterService } from '../aiSheetUpdaterService';
+import { knowledgeBaseService, KnowledgeBaseConfig } from '../knowledgeBaseService';
 
 class LLMService {
     private providers: Map<string, LLMProvider> = new Map();
@@ -102,6 +103,31 @@ class LLMService {
                     }
                 } catch (sheetError: any) {
                     logger.warn('[LLMService] Failed to get sheet data for chat', { error: sheetError.message });
+                }
+            }
+
+            // Knowledge Base context injection (from llm_config.knowledgeBase)
+            if (targetConfigResult.rows.length > 0) {
+                try {
+                    const override = JSON.parse(targetConfigResult.rows[0].llm_config || '{}');
+                    const kbConfig: KnowledgeBaseConfig | undefined = override.knowledgeBase;
+
+                    if (kbConfig && kbConfig.sheets && kbConfig.sheets.length > 0) {
+                        if (knowledgeBaseService.shouldInjectContext(userMessage, kbConfig)) {
+                            const kbContext = await knowledgeBaseService.getContextForChat(kbConfig);
+                            if (kbContext) {
+                                systemPrompt += `\n\n--- KNOWLEDGE BASE ---\nBerikut adalah data referensi real-time dari sumber data yang terhubung. Gunakan data ini untuk menjawab pertanyaan pengguna dengan akurat:\n\n${kbContext}\n--- END KNOWLEDGE BASE ---\n\nGunakan data di atas untuk menjawab pertanyaan. Jawab dengan ringkas dan natural. Format untuk WhatsApp (gunakan bullet points atau numbered list). Jika data tidak relevan dengan pertanyaan, abaikan dan jawab secara umum.`;
+                                logger.info('[LLMService] Injected Knowledge Base context', {
+                                    botId,
+                                    contactId,
+                                    sheetsCount: kbConfig.sheets.length,
+                                    mode: kbConfig.mode,
+                                });
+                            }
+                        }
+                    }
+                } catch (kbError: any) {
+                    logger.warn('[LLMService] Failed to inject Knowledge Base context', { error: kbError.message });
                 }
             }
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { ChevronLeft, Save, Plus, Eye, EyeOff, X, Maximize2, Users, User, ChevronDown, Search, RefreshCw, AlertTriangle, Settings2, FileSpreadsheet, Trash2, Brain, Copy, Smile } from 'lucide-react'
+import { ChevronLeft, Save, Plus, Eye, EyeOff, X, Maximize2, Users, User, ChevronDown, Search, RefreshCw, AlertTriangle, Settings2, FileSpreadsheet, Trash2, Brain, Copy, Smile, BookOpen } from 'lucide-react'
 import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 
 // Quick emoji list for category picker (subset of common emojis)
@@ -92,6 +92,14 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
     const [showFullEmojiPicker, setShowFullEmojiPicker] = useState(false) // Show full emoji categories
     const [selectedEmojiCategory, setSelectedEmojiCategory] = useState<string>('Smileys') // Selected category in full picker
 
+    // Knowledge Base states
+    const [enableKnowledgeBase, setEnableKnowledgeBase] = useState(false)
+    const [kbMode, setKbMode] = useState<'auto' | 'always'>('auto')
+    const [kbSheets, setKbSheets] = useState<Array<{ url: string, sheetName: string, label: string }>>([])
+    const [kbCustomKeywords, setKbCustomKeywords] = useState<string>('')
+    const [kbCacheTTL, setKbCacheTTL] = useState(90)
+    const [kbMaxRows, setKbMaxRows] = useState(30)
+
     // Multi-select targets
     const [selectedTargets, setSelectedTargets] = useState<Array<{ jid: string, name: string, type: 'group' | 'contact' }>>([])
     const [includeAllPersonalChats, setIncludeAllPersonalChats] = useState(false) // Toggle for all personal chats
@@ -167,6 +175,20 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                 is_enabled: existingConfig.is_enabled
             })
             setTargetType(existingConfig.target_type)
+
+            // Load Knowledge Base config if exists
+            if (llmConfig.knowledgeBase && llmConfig.knowledgeBase.sheets && llmConfig.knowledgeBase.sheets.length > 0) {
+                setEnableKnowledgeBase(true)
+                setKbMode(llmConfig.knowledgeBase.mode || 'auto')
+                setKbSheets(llmConfig.knowledgeBase.sheets.map((s: any) => ({
+                    url: s.url || '',
+                    sheetName: s.sheetName || '',
+                    label: s.label || ''
+                })))
+                setKbCustomKeywords((llmConfig.knowledgeBase.customKeywords || []).join(', '))
+                setKbCacheTTL(llmConfig.knowledgeBase.cacheTTLSeconds || 90)
+                setKbMaxRows(llmConfig.knowledgeBase.maxRowsPerSheet || 30)
+            }
 
             // Load linked sheet updater config if silent_collection or hybrid_mode is enabled
             if (llmConfig.behavior?.silentCollection || llmConfig.behavior?.hybridMode) {
@@ -502,7 +524,23 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                     conversationModel: formData.conversation_model,
                     silentCollection: formData.silent_collection,
                     hybridMode: formData.hybrid_mode
-                }
+                },
+                // Knowledge Base config
+                ...(enableKnowledgeBase && kbSheets.length > 0 && kbSheets.some(s => s.url) ? {
+                    knowledgeBase: {
+                        sheets: kbSheets.filter(s => s.url).map(s => ({
+                            url: s.url,
+                            sheetName: s.sheetName || undefined,
+                            label: s.label || undefined
+                        })),
+                        mode: kbMode,
+                        customKeywords: kbCustomKeywords
+                            ? kbCustomKeywords.split(',').map(k => k.trim()).filter(Boolean)
+                            : undefined,
+                        cacheTTLSeconds: kbCacheTTL,
+                        maxRowsPerSheet: kbMaxRows
+                    }
+                } : {})
             })
 
             if (configId) {
@@ -1207,6 +1245,181 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                     </button>
                                 </div>
                             </section>
+
+                            {/* Knowledge Base Settings - Show for all AI modes */}
+                            {(formData.conversation_model || formData.silent_collection || formData.hybrid_mode) && (
+                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-emerald-500/10 rounded-lg">
+                                                <BookOpen className="w-5 h-5 text-emerald-500" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-semibold text-white">Knowledge Base</h3>
+                                                <p className="text-xs text-zinc-500">Hubungkan Google Sheets sebagai sumber data AI</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEnableKnowledgeBase(!enableKnowledgeBase)}
+                                            className={`relative w-10 h-5 rounded-full transition-colors ${enableKnowledgeBase ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+                                        >
+                                            <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${enableKnowledgeBase ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                        </button>
+                                    </div>
+
+                                    {!enableKnowledgeBase ? (
+                                        <p className="text-xs text-zinc-500">
+                                            Aktifkan untuk menghubungkan Google Sheets sebagai referensi data AI. AI akan menggunakan data ini untuk menjawab pertanyaan tentang jadwal, tugas, harga, menu, dll.
+                                        </p>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {/* Injection Mode */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-zinc-400 mb-2">Mode Injeksi Konteks</label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setKbMode('auto')}
+                                                        className={`p-3 rounded-lg border text-left text-sm transition-all ${
+                                                            kbMode === 'auto'
+                                                                ? 'border-emerald-500 bg-emerald-500/10 text-white'
+                                                                : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
+                                                        }`}
+                                                    >
+                                                        <span className="font-medium">Auto</span>
+                                                        <p className="text-[10px] text-zinc-500 mt-1">Inject data hanya saat pertanyaan relevan (hemat token)</p>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setKbMode('always')}
+                                                        className={`p-3 rounded-lg border text-left text-sm transition-all ${
+                                                            kbMode === 'always'
+                                                                ? 'border-emerald-500 bg-emerald-500/10 text-white'
+                                                                : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
+                                                        }`}
+                                                    >
+                                                        <span className="font-medium">Always</span>
+                                                        <p className="text-[10px] text-zinc-500 mt-1">Selalu inject data ke setiap pesan (paling akurat)</p>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Google Sheets Sources */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-zinc-400 mb-2">Sumber Data Google Sheets</label>
+                                                {kbSheets.map((sheet, idx) => (
+                                                    <div key={idx} className="mb-3 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700 space-y-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-zinc-500 shrink-0">#{idx + 1}</span>
+                                                            <input
+                                                                type="text"
+                                                                value={sheet.url}
+                                                                onChange={(e) => {
+                                                                    const updated = [...kbSheets]
+                                                                    updated[idx].url = e.target.value
+                                                                    setKbSheets(updated)
+                                                                }}
+                                                                placeholder="https://docs.google.com/spreadsheets/d/..."
+                                                                className="flex-1 px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setKbSheets(kbSheets.filter((_, i) => i !== idx))}
+                                                                className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={sheet.sheetName}
+                                                                onChange={(e) => {
+                                                                    const updated = [...kbSheets]
+                                                                    updated[idx].sheetName = e.target.value
+                                                                    setKbSheets(updated)
+                                                                }}
+                                                                placeholder="Nama tab (default: Sheet1)"
+                                                                className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                                            />
+                                                            <input
+                                                                type="text"
+                                                                value={sheet.label}
+                                                                onChange={(e) => {
+                                                                    const updated = [...kbSheets]
+                                                                    updated[idx].label = e.target.value
+                                                                    setKbSheets(updated)
+                                                                }}
+                                                                placeholder="Label (opsional, misal: Jadwal Kuliah)"
+                                                                className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setKbSheets([...kbSheets, { url: '', sheetName: '', label: '' }])}
+                                                    className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                    Tambah Sheet
+                                                </button>
+                                            </div>
+
+                                            {/* Custom Keywords (only for auto mode) */}
+                                            {kbMode === 'auto' && (
+                                                <div>
+                                                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                                                        Keyword Tambahan <span className="text-zinc-600">(opsional, pisahkan dengan koma)</span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={kbCustomKeywords}
+                                                        onChange={(e) => setKbCustomKeywords(e.target.value)}
+                                                        placeholder="misal: cek harga, list menu, info produk"
+                                                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                                    />
+                                                    <p className="text-[10px] text-zinc-600 mt-1">Keyword bawaan sudah termasuk: jadwal, tugas, deadline, harga, menu, dll. Tambahkan keyword khusus bisnis Anda di sini.</p>
+                                                </div>
+                                            )}
+
+                                            {/* Advanced Settings */}
+                                            <details className="group">
+                                                <summary className="text-xs text-zinc-500 hover:text-zinc-400 cursor-pointer transition-colors">
+                                                    Pengaturan Lanjutan
+                                                </summary>
+                                                <div className="mt-3 grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="block text-[10px] font-medium text-zinc-500 mb-1">Cache TTL (detik)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={kbCacheTTL}
+                                                            onChange={(e) => setKbCacheTTL(parseInt(e.target.value) || 90)}
+                                                            min={10}
+                                                            max={600}
+                                                            className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                                        />
+                                                        <p className="text-[10px] text-zinc-600 mt-0.5">Berapa lama cache data sheet (default 90 detik)</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-medium text-zinc-500 mb-1">Max Baris per Sheet</label>
+                                                        <input
+                                                            type="number"
+                                                            value={kbMaxRows}
+                                                            onChange={(e) => setKbMaxRows(parseInt(e.target.value) || 30)}
+                                                            min={5}
+                                                            max={100}
+                                                            className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                                        />
+                                                        <p className="text-[10px] text-zinc-600 mt-0.5">Limit baris yang dikirim ke AI (default 30)</p>
+                                                    </div>
+                                                </div>
+                                            </details>
+                                        </div>
+                                    )}
+                                </section>
+                            )}
 
                             {/* Data Collection Settings - Show for all AI modes (Conversation, Silent, Hybrid) */}
                             {(formData.conversation_model || formData.silent_collection || formData.hybrid_mode) && (
