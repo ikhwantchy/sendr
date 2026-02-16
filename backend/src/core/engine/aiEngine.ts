@@ -194,11 +194,24 @@ class AIEngine {
                 message: userMessage.substring(0, 50)
             });
 
-            // Logic: respond if:
-            // 1. Bot is mentioned (@bot / reply) — always respond
-            // 2. Private/DM chat — always respond
-            // 3. conversationModel is true — respond to ALL messages in group (no mention needed)
-            if (isMentioned || isPrivate || isConversationMode) {
+            // Logic for responding:
+            // 1. Bot is mentioned (@bot / reply) → always respond
+            // 2. Private/DM chat → always respond
+            // 3. Group + conversationModel + NOT mentioned → only respond if message looks like a direct query
+            //    (prevents bot from responding to casual chat that happens to contain keywords)
+            let shouldRespond = false;
+
+            if (isMentioned || isPrivate) {
+                shouldRespond = true;
+            } else if (isConversationMode && !isPrivate) {
+                // Group + conversation mode + no mention:
+                // Only respond if the message looks like a direct query, not casual conversation
+                const isQuery = this.isDirectQuery(userMessage);
+                logger.info('AI group query detection', { bot_id, isQuery, message: userMessage.substring(0, 60) });
+                shouldRespond = isQuery;
+            }
+
+            if (shouldRespond) {
                 const conversationPartner = contact_id || payload.from;
                 logger.info('🤖 AI generating response...', { bot_id, conversationPartner });
 
@@ -329,6 +342,80 @@ class AIEngine {
             return true;
         }
 
+        return false;
+    }
+
+    /**
+     * Detect if a message is a direct query/question (not casual conversation)
+     * Used in groups with conversationModel to avoid responding to casual chat
+     * 
+     * Responds to:    "tugas", "ada tugas apa", "jadwal hari ini?", "deadline kapan"
+     * Ignores:        "iya kemaren ada tugas dosennya ngasih", "gue udah kerjain tugas"
+     */
+    private isDirectQuery(message: string): boolean {
+        const msg = message.toLowerCase().trim();
+        const wordCount = msg.split(/\s+/).length;
+
+        // 1. Very short messages (1-3 words) that match keywords → likely a direct query
+        //    e.g. "tugas", "jadwal", "deadline apa", "cek tugas"
+        if (wordCount <= 3) {
+            const shortQueryKeywords = [
+                'tugas', 'jadwal', 'deadline', 'schedule', 'task',
+                'pr', 'ujian', 'uts', 'uas', 'quiz', 'kuis',
+                'pengumuman', 'info', 'update', 'menu', 'harga',
+                'produk', 'stok', 'biaya', 'tarif', 'daftar',
+                'rekap', 'data', 'list', 'cek', 'lihat', 'show',
+            ];
+            if (shortQueryKeywords.some(kw => msg.includes(kw))) {
+                return true;
+            }
+        }
+
+        // 2. Message ends with "?" → it's a question
+        if (msg.endsWith('?')) {
+            return true;
+        }
+
+        // 3. Message starts with question words (Indonesian + English)
+        const questionStarters = [
+            'apa ', 'apaan', 'kapan ', 'berapa ', 'siapa ', 'dimana ', 'mana ',
+            'gimana ', 'bagaimana ', 'kenapa ', 'mengapa ', 'bisa ',
+            'ada gak', 'ada nggak', 'ada tidak', 'ada ga ', 'ada nga',
+            'what ', 'when ', 'how ', 'where ', 'who ', 'which ',
+            'is there', 'are there', 'can you', 'do we', 'any ',
+        ];
+        if (questionStarters.some(qs => msg.startsWith(qs))) {
+            return true;
+        }
+
+        // 4. Contains question patterns mid-sentence
+        //    e.g. "ada tugas apa aja", "deadline nya kapan", "tugas apa"
+        const questionPatterns = [
+            'apa aja', 'apa saja', 'apaan aja', 'apa yang',
+            'ada apa', 'ada gak', 'ada ga ', 'ada nga', 'ada tidak',
+            'yang mana', 'kapan nih', 'kapan ya', 'berapa ya',
+            'tolong ', 'minta ', 'kasih tau', 'kasih tahu',
+            'cek ', 'lihat ', 'tampilkan', 'tunjukkan', 'carikan',
+            'list ', 'show ', 'check ',
+        ];
+        if (questionPatterns.some(qp => msg.includes(qp))) {
+            return true;
+        }
+
+        // 5. Short messages (≤6 words) with action/query verbs at the start
+        if (wordCount <= 6) {
+            const actionVerbs = [
+                'cek', 'lihat', 'tampilkan', 'kasih', 'minta', 'tolong',
+                'carikan', 'show', 'list', 'get', 'check', 'find',
+                'ada', 'rekap', 'ringkas',
+            ];
+            const firstWord = msg.split(/\s+/)[0];
+            if (actionVerbs.includes(firstWord)) {
+                return true;
+            }
+        }
+
+        // If none of the above → probably casual conversation, don't respond
         return false;
     }
 
