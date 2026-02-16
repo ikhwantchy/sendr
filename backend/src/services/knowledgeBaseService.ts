@@ -128,9 +128,61 @@ class KnowledgeBaseService {
 
         for (const sheet of config.sheets) {
             try {
-                const data = await this.fetchSheetWithCache(sheet, cacheTTL, maxRows);
-                if (data) {
-                    results.push(data);
+                // If no sheetName specified, auto-discover ALL tabs from the spreadsheet
+                if (!sheet.sheetName || sheet.sheetName.trim() === '') {
+                    const spreadsheetId = googleSheetsService.extractSpreadsheetId(sheet.url);
+                    if (!spreadsheetId) {
+                        logger.warn('[KnowledgeBase] Invalid Google Sheets URL for auto-discover', { url: sheet.url });
+                        continue;
+                    }
+
+                    // Check cache for tab names to avoid re-discovering every time
+                    const tabsCacheKey = `tabs:${spreadsheetId}`;
+                    const cachedTabs = this.cache.get(tabsCacheKey);
+                    let tabNames: string[];
+
+                    if (cachedTabs && (Date.now() - cachedTabs.fetchedAt) < cacheTTL) {
+                        tabNames = cachedTabs.data.headers; // Re-use headers field to store tab names
+                        logger.debug('[KnowledgeBase] Tabs cache hit', { spreadsheetId, tabs: tabNames });
+                    } else {
+                        tabNames = await googleSheetsService.getSheetNames(spreadsheetId);
+                        if (tabNames.length > 0) {
+                            // Cache tab names
+                            this.cache.set(tabsCacheKey, {
+                                data: { label: 'tabs', sheetName: 'tabs', headers: tabNames, totalRows: 0, formatted: '' },
+                                fetchedAt: Date.now(),
+                            });
+                        }
+                        logger.info('[KnowledgeBase] Auto-discovered tabs', { spreadsheetId, tabs: tabNames });
+                    }
+
+                    if (tabNames.length === 0) {
+                        // Fallback to Sheet1
+                        tabNames = ['Sheet1'];
+                    }
+
+                    // Fetch data from each tab
+                    for (const tabName of tabNames) {
+                        try {
+                            const tabSheet: KnowledgeBaseSheet = {
+                                url: sheet.url,
+                                sheetName: tabName,
+                                label: sheet.label ? `${sheet.label} - ${tabName}` : tabName,
+                            };
+                            const data = await this.fetchSheetWithCache(tabSheet, cacheTTL, maxRows);
+                            if (data && data.totalRows > 0) {
+                                results.push(data);
+                            }
+                        } catch (tabErr: any) {
+                            logger.warn('[KnowledgeBase] Failed to fetch tab', { tabName, error: tabErr.message });
+                        }
+                    }
+                } else {
+                    // Specific sheet name provided
+                    const data = await this.fetchSheetWithCache(sheet, cacheTTL, maxRows);
+                    if (data) {
+                        results.push(data);
+                    }
                 }
             } catch (err: any) {
                 logger.warn('[KnowledgeBase] Failed to fetch sheet', {

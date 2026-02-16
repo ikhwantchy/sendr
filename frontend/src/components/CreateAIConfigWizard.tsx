@@ -1340,7 +1340,7 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                                     updated[idx].sheetName = e.target.value
                                                                     setKbSheets(updated)
                                                                 }}
-                                                                placeholder="Nama tab (default: Sheet1)"
+                                                                placeholder="Kosongkan = baca semua tab"
                                                                 className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                                                             />
                                                             <input

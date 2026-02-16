@@ -170,19 +170,35 @@ class AIEngine {
                 return;
             }
 
-            // Check if AI should respond (must be mentioned or in hybrid mode)
+            // Check if AI should respond
             const isMentioned = this.isBotMentioned(payload, bot.name, bot.phone_number, bot.lid);
             const isPrivate = !context.group_id;
+
+            // Check per-target behavior config (conversationModel = respond to ALL messages)
+            let isConversationMode = false;
+            const targetJid2 = context.group_id || contact_id;
+            const targetBehaviorResult = await query(
+                'SELECT llm_config FROM llm_allowed_targets WHERE bot_id = ? AND target_jid = ? AND is_enabled = 1 LIMIT 1',
+                [bot_id, targetJid2]
+            );
+            if (targetBehaviorResult.rows.length > 0) {
+                const tConfig = JSON.parse(targetBehaviorResult.rows[0].llm_config || '{}');
+                isConversationMode = tConfig.behavior?.conversationModel === true;
+            }
 
             logger.info('AI evaluating fallback response', {
                 bot_id,
                 isPrivate,
                 isMentioned,
+                isConversationMode,
                 message: userMessage.substring(0, 50)
             });
 
-            // Logic: respond if mentioned (@bot / reply) OR always in DM
-            if (isMentioned || isPrivate) {
+            // Logic: respond if:
+            // 1. Bot is mentioned (@bot / reply) — always respond
+            // 2. Private/DM chat — always respond
+            // 3. conversationModel is true — respond to ALL messages in group (no mention needed)
+            if (isMentioned || isPrivate || isConversationMode) {
                 const conversationPartner = contact_id || payload.from;
                 logger.info('🤖 AI generating response...', { bot_id, conversationPartner });
 
