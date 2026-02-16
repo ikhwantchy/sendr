@@ -22,6 +22,9 @@ import './queue/messageWorker';
 // ✅ Import campaign worker (Bull queue) - SEPARATE from reminder
 import './queue/campaignWorker';
 
+// ✅ Import Bro-Bot Service (Student Utility)
+import './services/broBotService';
+
 // ✅ Import group integration
 import { initializeGroupIntegration } from './integrations/groupIntegration';
 
@@ -146,9 +149,9 @@ const server = app.listen(PORT, async () => {
         const { whatsappAdapter } = await import('./adapters/whatsapp/whatsappAdapter.baileys');
 
         const allBots = await botRepository.findAll();
-        
+
         // Filter to bots that are connected OR have valid session files
-        const botsToInitialize = allBots.filter(bot => 
+        const botsToInitialize = allBots.filter(bot =>
             bot.status === 'connected' || whatsappAdapter.hasValidSession(bot.id)
         );
 
@@ -158,7 +161,7 @@ const server = app.listen(PORT, async () => {
             try {
                 const hasSession = whatsappAdapter.hasValidSession(bot.id);
                 logger.info(`🔄 Initializing bot: ${bot.name} (status: ${bot.status}, hasSession: ${hasSession})`);
-                
+
                 await whatsappAdapter.initializeBot(bot.id);
                 logger.info(`✅ Bot initialized: ${bot.name} (${bot.id})`);
             } catch (error: any) {

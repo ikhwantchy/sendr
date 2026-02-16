@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GoogleGeminiProvider } from './providers/google';
 import { OpenAIProvider } from './providers/openai';
 import { GroqProvider } from './providers/groq';
+import { NvidiaProvider } from './providers/nvidia';
 import { LLMProvider, LLMMessage, LLMConfig, DataSchema } from './base';
 import { query } from '../../database/connection';
 import { logger } from '../../utils/logger';
@@ -23,6 +24,10 @@ class LLMService {
         this.providers.set('gemini', googleProvider); // Alias for consistency
         this.providers.set('openai', new OpenAIProvider());
         this.providers.set('groq', new GroqProvider());
+
+        const nvidiaProvider = new NvidiaProvider();
+        this.providers.set('nvidia', nvidiaProvider);
+        this.providers.set('nim', nvidiaProvider);
     }
 
     /**
@@ -88,17 +93,17 @@ class LLMService {
 
             // Build base system prompt
             let systemPrompt = activeConfig.systemPrompt || 'You are a helpful assistant.';
-            
+
             // Check if user is querying sheet data and inject context if available
             if (aiSheetUpdaterService.isQueryingSheetData(userMessage)) {
                 try {
                     const sheetData = await aiSheetUpdaterService.getSheetDataForChat(botId, contactId);
                     if (sheetData && sheetData.data) {
                         systemPrompt += `\n\n--- DATA REFERENCE ---\nThe following is real-time data from the connected spreadsheet. Use this to answer questions about tasks, deadlines, or recorded information:\n\n${sheetData.data}\n--- END DATA ---\n\nWhen answering about this data, be concise and helpful. Format nicely for WhatsApp (use bullet points or numbered lists).`;
-                        logger.info('[LLMService] Injected sheet data into system prompt', { 
-                            botId, 
-                            contactId, 
-                            sheetName: sheetData.sheetName 
+                        logger.info('[LLMService] Injected sheet data into system prompt', {
+                            botId,
+                            contactId,
+                            sheetName: sheetData.sheetName
                         });
                     }
                 } catch (sheetError: any) {
