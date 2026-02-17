@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import SharedMessageEditor from '@/components/SharedMessageEditor'
-import { X, Image as ImageIcon, Trash2, MessageSquare, Zap, Globe, Users, User, Plus, Search, ArrowRight, Upload, Save, ChevronLeft, Eye, RefreshCw, Check, ChevronDown } from 'lucide-react'
+import { X, Image as ImageIcon, Trash2, MessageSquare, Zap, Globe, Users, User, Plus, Search, ArrowRight, Upload, Save, ChevronLeft, Eye, RefreshCw, Check, ChevronDown, FileSpreadsheet, Table } from 'lucide-react'
 
 interface CreateRuleWizardProps {
     botId?: string
@@ -77,6 +77,18 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
     // Global Config State (Everyone)
     const [globalConfig, setGlobalConfig] = useState({ private: true, group: true })
 
+    // Reply Type: 'text' or 'sheet'
+    const [replyType, setReplyType] = useState<'text' | 'sheet'>('text')
+
+    // Sheet Data Config (when replyType === 'sheet')
+    const [sheetConfig, setSheetConfig] = useState({
+        spreadsheet_url: '',
+        sheet_name: '',
+        header_text: '',
+        footer_text: '',
+        max_rows: 20
+    })
+
     // UI Helper State
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
@@ -132,10 +144,24 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                         ? JSON.parse(ruleData.actions)
                         : ruleData.actions
 
-                    const sendAction = actions.find((a: any) => a.type === 'SEND_TEXT' || a.type === 'SEND_IMAGE')
-                    if (sendAction && sendAction.config) {
-                        replyMessage = sendAction.config.message || ''
-                        mediaUrl = sendAction.config.url || null
+                    // Check for SEND_SHEET_DATA action first
+                    const sheetAction = actions.find((a: any) => a.type === 'SEND_SHEET_DATA')
+                    if (sheetAction && sheetAction.config) {
+                        setReplyType('sheet')
+                        setSheetConfig({
+                            spreadsheet_url: sheetAction.config.spreadsheet_url || '',
+                            sheet_name: sheetAction.config.sheet_name || '',
+                            header_text: sheetAction.config.header_text || '',
+                            footer_text: sheetAction.config.footer_text || '',
+                            max_rows: sheetAction.config.max_rows || 20
+                        })
+                    } else {
+                        setReplyType('text')
+                        const sendAction = actions.find((a: any) => a.type === 'SEND_TEXT' || a.type === 'SEND_IMAGE')
+                        if (sendAction && sendAction.config) {
+                            replyMessage = sendAction.config.message || ''
+                            mediaUrl = sendAction.config.url || null
+                        }
                     }
                 } catch (e) {
                     console.error('Failed to parse actions into wizard:', e)
@@ -215,14 +241,25 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                 scope: scope,
                 scope_target: scopeTarget,
                 priority: 10, // Default priority
-                actions: [{
-                    type: mediaUrl ? 'SEND_IMAGE' : 'SEND_TEXT',
-                    config: {
-                        message: data.reply,
-                        url: mediaUrl,
-                        variables: {}
-                    }
-                }],
+                actions: replyType === 'sheet'
+                    ? [{
+                        type: 'SEND_SHEET_DATA',
+                        config: {
+                            spreadsheet_url: sheetConfig.spreadsheet_url,
+                            sheet_name: sheetConfig.sheet_name || undefined,
+                            header_text: sheetConfig.header_text || undefined,
+                            footer_text: sheetConfig.footer_text || undefined,
+                            max_rows: sheetConfig.max_rows || 20
+                        }
+                    }]
+                    : [{
+                        type: mediaUrl ? 'SEND_IMAGE' : 'SEND_TEXT',
+                        config: {
+                            message: data.reply,
+                            url: mediaUrl,
+                            variables: {}
+                        }
+                    }],
                 metadata: {
                     reply_in_private: globalConfig.private,
                     reply_in_group: globalConfig.group
@@ -275,14 +312,25 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                 match_type: data.match_type === 'exact' ? 'equals' : data.match_type,
                 scope: scope,
                 scope_target: scopeTarget,
-                actions: [{
-                    type: mediaUrl ? 'SEND_IMAGE' : 'SEND_TEXT',
-                    config: {
-                        message: data.reply,
-                        url: mediaUrl,
-                        variables: {}
-                    }
-                }],
+                actions: replyType === 'sheet'
+                    ? [{
+                        type: 'SEND_SHEET_DATA',
+                        config: {
+                            spreadsheet_url: sheetConfig.spreadsheet_url,
+                            sheet_name: sheetConfig.sheet_name || undefined,
+                            header_text: sheetConfig.header_text || undefined,
+                            footer_text: sheetConfig.footer_text || undefined,
+                            max_rows: sheetConfig.max_rows || 20
+                        }
+                    }]
+                    : [{
+                        type: mediaUrl ? 'SEND_IMAGE' : 'SEND_TEXT',
+                        config: {
+                            message: data.reply,
+                            url: mediaUrl,
+                            variables: {}
+                        }
+                    }],
                 metadata: {
                     reply_in_private: globalConfig.private,
                     reply_in_group: globalConfig.group
@@ -307,8 +355,16 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
-        if (!formData.trigger || !formData.reply) {
-            toast.error('Trigger and Reply message are required')
+        if (!formData.trigger) {
+            toast.error('Trigger keyword is required')
+            return
+        }
+        if (replyType === 'text' && !formData.reply) {
+            toast.error('Reply message is required')
+            return
+        }
+        if (replyType === 'sheet' && !sheetConfig.spreadsheet_url) {
+            toast.error('Google Sheet URL is required')
             return
         }
         if (ruleId) {
@@ -658,6 +714,27 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                         <section className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm dark:shadow-none">
                             <SectionHeader step={botId ? 3 : 4} title="Response Message" desc="What should the bot reply when triggered?" />
 
+                            {/* Reply Type Toggle */}
+                            <div className="flex bg-zinc-100 dark:bg-zinc-800/50 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700 w-fit mb-6">
+                                {[
+                                    { id: 'text', label: 'Pesan Teks', icon: MessageSquare },
+                                    { id: 'sheet', label: 'Data dari Sheet', icon: FileSpreadsheet }
+                                ].map(t => (
+                                    <button
+                                        key={t.id}
+                                        type="button"
+                                        onClick={() => setReplyType(t.id as any)}
+                                        className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all group ${replyType === t.id
+                                            ? 'bg-blue-600 text-white shadow-sm'
+                                            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                                            }`}
+                                    >
+                                        <t.icon size={14} className="transition-transform duration-300 group-hover:scale-110" /> {t.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {replyType === 'text' ? (
                             <div className="space-y-4">
                                 <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Reply Message *</label>
 
@@ -693,26 +770,26 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                                 {/* Image Attachment */}
                                 <div className="mt-4">
                                     {!previewUrl ? (
-                                        <label className="flex items-center justify-center gap-3 w-full py-4 bg-zinc-900/30 border-2 border-dashed border-zinc-800 rounded-2xl cursor-pointer hover:bg-zinc-900/50 transition-all group hover:border-blue-500/40">
-                                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
+                                        <label className="flex items-center justify-center gap-3 w-full py-4 bg-zinc-50 dark:bg-zinc-900/30 border-2 border-dashed border-zinc-300 dark:border-zinc-800 rounded-2xl cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-900/50 transition-all group hover:border-blue-500/40">
+                                            <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
                                                 <ImageIcon size={20} className="text-zinc-500 group-hover:text-blue-500 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[-10deg]" />
                                             </div>
                                             <div className="text-left">
-                                                <span className="text-sm font-bold text-zinc-300 group-hover:text-white block">Attach Media</span>
+                                                <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white block">Attach Media</span>
                                                 <span className="text-[10px] text-zinc-500 uppercase tracking-tighter">Images, flyers, or promo banners</span>
                                             </div>
                                             <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                                         </label>
                                     ) : (
-                                        <div className="flex items-center justify-between p-4 bg-zinc-950 border border-zinc-800 rounded-2xl group animate-in slide-in-from-top-2 duration-300">
+                                        <div className="flex items-center justify-between p-4 bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl group animate-in slide-in-from-top-2 duration-300">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-14 h-14 rounded-xl border border-zinc-800 overflow-hidden cursor-pointer hover:border-blue-500/50 transition-colors shrink-0">
+                                                <div className="w-14 h-14 rounded-xl border border-zinc-300 dark:border-zinc-800 overflow-hidden cursor-pointer hover:border-blue-500/50 transition-colors shrink-0">
                                                     <img src={previewUrl} className="w-full h-full object-cover" />
                                                 </div>
                                                 <div>
                                                     <div className="flex items-center gap-2 mb-0.5">
-                                                        <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold rounded uppercase tracking-wider border border-emerald-500/20">Media Attached</div>
-                                                        <span className="text-xs font-bold text-zinc-300">Image file selected</span>
+                                                        <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold rounded uppercase tracking-wider border border-emerald-500/20">Media Attached</div>
+                                                        <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Image file selected</span>
                                                     </div>
                                                     <p className="text-[10px] text-zinc-500">This media will be sent as a caption.</p>
                                                 </div>
@@ -722,9 +799,8 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                                                 onClick={() => {
                                                     setPreviewUrl(null);
                                                     setFormData({ ...formData, media: null });
-                                                    // Also reset file input if possible (via ref), but not critical as onChange handles new files
                                                 }}
-                                                className="p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-colors border border-zinc-800 hover:border-red-500/50"
+                                                className="p-2 bg-zinc-200 dark:bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-colors border border-zinc-300 dark:border-zinc-800 hover:border-red-500/50"
                                             >
                                                 <X size={16} />
                                             </button>
@@ -732,6 +808,81 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                                     )}
                                 </div>
                             </div>
+                            ) : (
+                            /* Sheet Data Config */
+                            <div className="space-y-4 animate-in fade-in">
+                                <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                                    <p className="text-xs text-blue-400">
+                                        <FileSpreadsheet size={12} className="inline mr-1" />
+                                        Bot akan mengambil data terbaru dari Google Sheet setiap kali keyword dipicu. Sheet harus bersifat publik (Anyone with the link can view).
+                                    </p>
+                                </div>
+
+                                {/* Google Sheet URL */}
+                                <div>
+                                    <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Google Sheet URL *</label>
+                                    <input
+                                        type="url"
+                                        value={sheetConfig.spreadsheet_url}
+                                        onChange={(e) => setSheetConfig({ ...sheetConfig, spreadsheet_url: e.target.value })}
+                                        placeholder="https://docs.google.com/spreadsheets/d/..."
+                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-mono"
+                                    />
+                                </div>
+
+                                {/* Sheet Tab Name */}
+                                <div>
+                                    <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Nama Tab (Opsional)</label>
+                                    <input
+                                        type="text"
+                                        value={sheetConfig.sheet_name}
+                                        onChange={(e) => setSheetConfig({ ...sheetConfig, sheet_name: e.target.value })}
+                                        placeholder="Kosongkan = baca semua tab"
+                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                                    />
+                                    <p className="text-[10px] text-zinc-500 mt-1">Contoh: "Sheet1", "Tugas", "Jadwal". Kosongkan untuk baca semua tab.</p>
+                                </div>
+
+                                {/* Header Text */}
+                                <div>
+                                    <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Teks Header (Opsional)</label>
+                                    <input
+                                        type="text"
+                                        value={sheetConfig.header_text}
+                                        onChange={(e) => setSheetConfig({ ...sheetConfig, header_text: e.target.value })}
+                                        placeholder="Contoh: 📋 *Daftar Tugas Terbaru*"
+                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                                    />
+                                    <p className="text-[10px] text-zinc-500 mt-1">Ditampilkan di atas data. Gunakan *teks* untuk bold.</p>
+                                </div>
+
+                                {/* Footer Text */}
+                                <div>
+                                    <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Teks Footer (Opsional)</label>
+                                    <input
+                                        type="text"
+                                        value={sheetConfig.footer_text}
+                                        onChange={(e) => setSheetConfig({ ...sheetConfig, footer_text: e.target.value })}
+                                        placeholder="Contoh: _Diperbarui setiap hari_"
+                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                                    />
+                                </div>
+
+                                {/* Max Rows */}
+                                <div>
+                                    <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Max Data Ditampilkan</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={100}
+                                        value={sheetConfig.max_rows}
+                                        onChange={(e) => setSheetConfig({ ...sheetConfig, max_rows: parseInt(e.target.value) || 20 })}
+                                        className="w-24 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                                    />
+                                    <span className="text-[10px] text-zinc-500 ml-2">baris (default: 20)</span>
+                                </div>
+                            </div>
+                            )}
                         </section>
                     </div>
                 </div >

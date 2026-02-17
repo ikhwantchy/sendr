@@ -163,7 +163,7 @@ export interface WaDisconnectedPayload {
  * Action Configuration Types
  */
 export interface ActionConfig {
-    type: 'SEND_TEXT' | 'SEND_IMAGE' | 'FETCH_SPREADSHEET' | 'COMPOSE_MESSAGE' | 'TRIGGER_REMINDER';
+    type: 'SEND_TEXT' | 'SEND_IMAGE' | 'FETCH_SPREADSHEET' | 'COMPOSE_MESSAGE' | 'TRIGGER_REMINDER' | 'SEND_SHEET_DATA';
     config: Record<string, any>;
 }
 
@@ -193,4 +193,12 @@ export interface ComposeMessageActionConfig {
 export interface TriggerReminderActionConfig {
     reminder_id: string;
     delay_seconds?: number;
+}
+
+export interface SendSheetDataActionConfig {
+    spreadsheet_url: string;
+    sheet_name?: string; // empty = all tabs
+    header_text?: string; // text prepended before data
+    max_rows?: number; // default 20
+    footer_text?: string; // text appended after data
 }

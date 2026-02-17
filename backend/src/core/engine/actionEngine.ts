@@ -13,6 +13,7 @@
  * - FETCH_SPREADSHEET: Fetch data from spreadsheet
  * - COMPOSE_MESSAGE: Compose message from template + data
  * - TRIGGER_REMINDER: Schedule a reminder
+ * - SEND_SHEET_DATA: Fetch Google Sheet data and send as formatted text
  */
 
 import { eventBus } from '../events/eventBus';
@@ -28,6 +29,7 @@ import { logger } from '../../utils/logger';
 import { whatsappAdapter } from '../../adapters/whatsapp/whatsappAdapter.baileys';
 import { dataSourceService } from '../../modules/datasource/dataSourceService';
 import { templateEngine } from '../../utils/templateEngine';
+import { googleSheetsService } from '../../services/googleSheetsService';
 
 class ActionExecutionEngine {
     constructor() {
@@ -141,6 +143,10 @@ class ActionExecutionEngine {
 
                 case 'TRIGGER_REMINDER':
                     result = await this.executeTriggerReminder(context, action.config);
+                    break;
+
+                case 'SEND_SHEET_DATA':
+                    result = await this.executeSendSheetData(context, action.config);
                     break;
 
                 default:
@@ -313,6 +319,145 @@ class ActionExecutionEngine {
         });
 
         return { reminder_id, scheduled: true };
+    }
+
+    /**
+     * Execute SEND_SHEET_DATA action
+     * Fetches data from Google Sheet and sends formatted text
+     */
+    private async executeSendSheetData(context: any, config: any): Promise<any> {
+        const { spreadsheet_url, sheet_name, header_text, max_rows = 20, footer_text } = config;
+
+        if (!spreadsheet_url) {
+            throw new Error('spreadsheet_url is required for SEND_SHEET_DATA action');
+        }
+
+        // Extract spreadsheet ID from URL
+        const spreadsheetId = googleSheetsService.extractSpreadsheetId(spreadsheet_url);
+        if (!spreadsheetId) {
+            throw new Error(`Invalid Google Sheets URL: ${spreadsheet_url}`);
+        }
+
+        logger.info('SEND_SHEET_DATA: Fetching sheet data', {
+            spreadsheetId,
+            sheet_name: sheet_name || '(all tabs)',
+            max_rows
+        });
+
+        // Determine which sheets to fetch
+        let sheetsToFetch: string[] = [];
+        if (sheet_name && sheet_name.trim()) {
+            sheetsToFetch = [sheet_name.trim()];
+        } else {
+            // Auto-discover all tabs
+            try {
+                sheetsToFetch = await googleSheetsService.getSheetNames(spreadsheetId);
+                logger.info('SEND_SHEET_DATA: Discovered sheets', { sheets: sheetsToFetch });
+            } catch (err) {
+                // Fallback to default sheet name
+                sheetsToFetch = ['Sheet1'];
+                logger.warn('SEND_SHEET_DATA: Could not discover sheets, using Sheet1', { error: err });
+            }
+        }
+
+        // Fetch all sheets
+        const allSheets = await googleSheetsService.fetchMultipleSheets(spreadsheetId, sheetsToFetch);
+
+        // Format the data
+        let formattedMessage = '';
+
+        // Add header if provided
+        if (header_text && header_text.trim()) {
+            formattedMessage += header_text.trim() + '\n\n';
+        }
+
+        let hasData = false;
+        for (const sheet of allSheets) {
+            if (!sheet || !sheet.rows || sheet.rows.length === 0) continue;
+
+            const headers = sheet.headers || [];
+            const rows = sheet.rows.slice(0, max_rows);
+
+            if (rows.length === 0) continue;
+            hasData = true;
+
+            // Add sheet name header if multiple sheets
+            if (allSheets.length > 1) {
+                formattedMessage += `📋 *${sheet.sheetName || 'Data'}*\n`;
+                formattedMessage += '─'.repeat(20) + '\n';
+            }
+
+            // Smart formatting: detect if it looks like a simple list or complex table
+            if (headers.length <= 3) {
+                // Simple list format
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    const parts: string[] = [];
+                    for (let j = 0; j < headers.length; j++) {
+                        const val = row[j]?.trim();
+                        if (val) {
+                            if (j === 0) {
+                                parts.push(`*${val}*`);
+                            } else {
+                                parts.push(val);
+                            }
+                        }
+                    }
+                    if (parts.length > 0) {
+                        formattedMessage += `${i + 1}. ${parts.join(' — ')}\n`;
+                    }
+                }
+            } else {
+                // Detailed format with labels
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    formattedMessage += `*${i + 1}.*\n`;
+                    for (let j = 0; j < headers.length; j++) {
+                        const val = row[j]?.trim();
+                        if (val) {
+                            formattedMessage += `   ${headers[j]}: ${val}\n`;
+                        }
+                    }
+                    if (i < rows.length - 1) formattedMessage += '\n';
+                }
+            }
+
+            // Show truncation notice
+            if (sheet.rows.length > max_rows) {
+                formattedMessage += `\n_... dan ${sheet.rows.length - max_rows} data lainnya_\n`;
+            }
+
+            if (allSheets.length > 1) formattedMessage += '\n';
+        }
+
+        if (!hasData) {
+            formattedMessage += '_Belum ada data di spreadsheet._\n';
+        }
+
+        // Add footer if provided
+        if (footer_text && footer_text.trim()) {
+            formattedMessage += '\n' + footer_text.trim();
+        }
+
+        // Add signature
+        formattedMessage += '\n\n—\nAutomated Message\npowered by sendr.web.id';
+
+        // Send via WhatsApp
+        const result = await whatsappAdapter.sendMessage(
+            context.bot_id,
+            context.contact_id || context.group_id,
+            {
+                type: 'text',
+                content: formattedMessage.trim(),
+            }
+        );
+
+        // Log to database (non-blocking)
+        this.logMessageToDatabase(context, 'text', formattedMessage.trim(), result).catch(err => {
+            logger.warn('Failed to log sheet data message to database', { error: err.message });
+        });
+
+        return result;
     }
 
     /**
