@@ -197,8 +197,22 @@ export interface TriggerReminderActionConfig {
 
 export interface SendSheetDataActionConfig {
     spreadsheet_url: string;
-    sheet_name?: string; // empty = all tabs
-    header_text?: string; // text prepended before data
-    max_rows?: number; // default 20
-    footer_text?: string; // text appended after data
+    sheet_name?: string; // tab name (empty = auto-detect or Sheet1)
+    message_template: string; // message template with {{variables}} from sheet columns
+    is_digest_mode?: boolean; // true = combine all rows into one message (default true)
+    filter_column?: string; // legacy simple filter: column name
+    filter_value?: string; // legacy simple filter: value to match
+    filters?: Array<{ // advanced filters (same as reminder)
+        column: string;
+        operator: string;
+        value: any;
+        value2?: any;
+        caseInsensitive?: boolean;
+    }>;
+    sort?: { // optional sorting
+        column: string;
+        order: 'asc' | 'desc';
+    };
+    max_rows?: number; // default 50
+    image_url?: string; // optional image to send with message
 }

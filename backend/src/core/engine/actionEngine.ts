@@ -29,7 +29,10 @@ import { logger } from '../../utils/logger';
 import { whatsappAdapter } from '../../adapters/whatsapp/whatsappAdapter.baileys';
 import { dataSourceService } from '../../modules/datasource/dataSourceService';
 import { templateEngine } from '../../utils/templateEngine';
-import { googleSheetsService } from '../../services/googleSheetsService';
+import googleSheetsService from '../../services/googleSheetsService';
+import templateEngineService from '../../services/templateEngineService';
+import enhancedTemplateRenderer from '../../services/enhancedTemplateRenderer';
+import smartSheetsProcessor from '../../services/smartSheetsProcessor';
 
 class ActionExecutionEngine {
     constructor() {
@@ -323,13 +326,29 @@ class ActionExecutionEngine {
 
     /**
      * Execute SEND_SHEET_DATA action
-     * Fetches data from Google Sheet and sends formatted text
+     * Fetches data from Google Sheet, applies filters, renders template, sends formatted message
+     * Works like the Reminder system but triggered by keywords
      */
     private async executeSendSheetData(context: any, config: any): Promise<any> {
-        const { spreadsheet_url, sheet_name, header_text, max_rows = 20, footer_text } = config;
+        const {
+            spreadsheet_url,
+            sheet_name,
+            message_template,
+            is_digest_mode = true,
+            filter_column,
+            filter_value,
+            filters,
+            sort,
+            max_rows = 50,
+            image_url
+        } = config;
 
         if (!spreadsheet_url) {
             throw new Error('spreadsheet_url is required for SEND_SHEET_DATA action');
+        }
+
+        if (!message_template) {
+            throw new Error('message_template is required for SEND_SHEET_DATA action');
         }
 
         // Extract spreadsheet ID from URL
@@ -340,120 +359,178 @@ class ActionExecutionEngine {
 
         logger.info('SEND_SHEET_DATA: Fetching sheet data', {
             spreadsheetId,
-            sheet_name: sheet_name || '(all tabs)',
-            max_rows
+            sheet_name: sheet_name || '(auto)',
+            is_digest_mode,
+            max_rows,
+            has_filters: !!(filters?.length || filter_column)
         });
 
-        // Determine which sheets to fetch
-        let sheetsToFetch: string[] = [];
-        if (sheet_name && sheet_name.trim()) {
-            sheetsToFetch = [sheet_name.trim()];
-        } else {
-            // Auto-discover all tabs
-            try {
-                sheetsToFetch = await googleSheetsService.getSheetNames(spreadsheetId);
-                logger.info('SEND_SHEET_DATA: Discovered sheets', { sheets: sheetsToFetch });
-            } catch (err) {
-                // Fallback to default sheet name
-                sheetsToFetch = ['Sheet1'];
-                logger.warn('SEND_SHEET_DATA: Could not discover sheets, using Sheet1', { error: err });
-            }
+        // 1. Determine which sheet(s) to fetch
+        const primarySheetName = sheet_name?.trim() || 'Sheet1';
+        const sheetsToFetch = new Set<string>([primarySheetName]);
+
+        // Also detect {{#section "SheetName"}} references in the template
+        const sectionRegex = /\{\{\s*#section\s+(?:["']([^"']+)["']|([^\s"'}]+))/g;
+        let sMatch;
+        while ((sMatch = sectionRegex.exec(message_template)) !== null) {
+            const sectionSheet = (sMatch[1] || sMatch[2])?.trim();
+            if (sectionSheet) sheetsToFetch.add(sectionSheet);
         }
 
-        // Fetch all sheets
-        const allSheets = await googleSheetsService.fetchMultipleSheets(spreadsheetId, sheetsToFetch);
+        // 2. Fetch sheet data
+        const allSheets = await googleSheetsService.fetchMultipleSheets(spreadsheetId, Array.from(sheetsToFetch));
 
-        // Format the data
-        let formattedMessage = '';
-
-        // Add header if provided
-        if (header_text && header_text.trim()) {
-            formattedMessage += header_text.trim() + '\n\n';
-        }
-
-        let hasData = false;
+        // 3. Convert to objects
+        const sheetsData: Record<string, any[]> = {};
         for (const sheet of allSheets) {
-            if (!sheet || !sheet.rows || sheet.rows.length === 0) continue;
+            sheetsData[sheet.sheetName] = googleSheetsService.convertToObjects(sheet);
+        }
 
-            const headers = sheet.headers || [];
-            const rows = sheet.rows.slice(0, max_rows);
+        // 4. Get primary sheet items
+        const primaryKey = Object.keys(sheetsData).find(
+            k => k.toLowerCase() === primarySheetName.toLowerCase()
+        ) || primarySheetName;
+        let items = sheetsData[primaryKey] || [];
 
-            if (rows.length === 0) continue;
-            hasData = true;
+        logger.info('SEND_SHEET_DATA: Raw data fetched', {
+            primarySheet: primaryKey,
+            totalRows: items.length,
+            allSheets: Object.keys(sheetsData)
+        });
 
-            // Add sheet name header if multiple sheets
-            if (allSheets.length > 1) {
-                formattedMessage += `📋 *${sheet.sheetName || 'Data'}*\n`;
-                formattedMessage += '─'.repeat(20) + '\n';
-            }
+        // 5. Apply filters
+        const hasAdvancedFilters = filters && Array.isArray(filters) && filters.length > 0;
+        const hasSimpleFilter = filter_column && filter_value;
 
-            // Smart formatting: detect if it looks like a simple list or complex table
-            if (headers.length <= 3) {
-                // Simple list format
-                for (let i = 0; i < rows.length; i++) {
-                    const row = rows[i];
-                    const parts: string[] = [];
-                    for (let j = 0; j < headers.length; j++) {
-                        const val = row[j]?.trim();
-                        if (val) {
-                            if (j === 0) {
-                                parts.push(`*${val}*`);
-                            } else {
-                                parts.push(val);
-                            }
-                        }
-                    }
-                    if (parts.length > 0) {
-                        formattedMessage += `${i + 1}. ${parts.join(' — ')}\n`;
-                    }
-                }
+        if (hasAdvancedFilters) {
+            // Advanced filters via smartSheetsProcessor
+            items = smartSheetsProcessor.processData(items, {
+                filters,
+                sort: sort || undefined
+            });
+            logger.info('SEND_SHEET_DATA: Advanced filter applied', { filtered: items.length });
+        } else if (hasSimpleFilter) {
+            // Simple column=value filter
+            items = items.filter(item => {
+                const val = String(item[filter_column] || '').trim().toLowerCase();
+                return val === String(filter_value).trim().toLowerCase();
+            });
+            logger.info('SEND_SHEET_DATA: Simple filter applied', {
+                column: filter_column,
+                value: filter_value,
+                filtered: items.length
+            });
+        }
+
+        // Apply sorting (if not already done by advanced filters)
+        if (sort?.column && !hasAdvancedFilters) {
+            const sortCol = sort.column;
+            const sortOrder = sort.order === 'desc' ? -1 : 1;
+            items.sort((a, b) => {
+                const aVal = String(a[sortCol] || '');
+                const bVal = String(b[sortCol] || '');
+                return aVal.localeCompare(bVal) * sortOrder;
+            });
+        }
+
+        // Limit rows
+        if (items.length > max_rows) {
+            items = items.slice(0, max_rows);
+        }
+
+        // 6. Render template
+        let finalMessage = '';
+        const now = new Date();
+        const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+        if (items.length === 0) {
+            // No data found - render template without data or show empty message
+            finalMessage = '✅ Tidak ada data yang sesuai filter.';
+        } else if (is_digest_mode) {
+            // DIGEST MODE: All rows → one message via enhancedTemplateRenderer
+            const hasModernBlocks = /\{\{\s*#(if|each|group|section|filter)\s/.test(message_template);
+            const hasModernSyntax = /\{\{.*(@|==|contains|\|).*\}\}/.test(message_template);
+
+            if (hasModernBlocks || hasModernSyntax) {
+                // Enhanced template with {{#each}}, {{#if}}, {{@today}}, etc.
+                finalMessage = enhancedTemplateRenderer.render(message_template, {
+                    data: items,
+                    sheetsData,
+                    globalVars: {
+                        RUN_TIME: now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+                        TODAY: now.toLocaleDateString('id-ID', {
+                            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+                        })
+                    },
+                    timezone: 'Asia/Jakarta'
+                });
             } else {
-                // Detailed format with labels
-                for (let i = 0; i < rows.length; i++) {
-                    const row = rows[i];
-                    formattedMessage += `*${i + 1}.*\n`;
-                    for (let j = 0; j < headers.length; j++) {
-                        const val = row[j]?.trim();
-                        if (val) {
-                            formattedMessage += `   ${headers[j]}: ${val}\n`;
-                        }
-                    }
-                    if (i < rows.length - 1) formattedMessage += '\n';
+                // Simple template - auto-wrap with {{#each}} if not present
+                // Build a simple digest: process template for each row
+                const lines: string[] = [];
+                for (let i = 0; i < items.length; i++) {
+                    const rowVars = {
+                        ...items[i],
+                        '@index': String(i + 1),
+                        '@length': String(items.length),
+                        '@today': now.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                        '@todayFull': `${dayNames[now.getDay()]}, ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`,
+                        '@dayName': dayNames[now.getDay()],
+                    };
+                    lines.push(templateEngineService.processTemplate(message_template, rowVars));
                 }
+                finalMessage = lines.join('\n');
             }
-
-            // Show truncation notice
-            if (sheet.rows.length > max_rows) {
-                formattedMessage += `\n_... dan ${sheet.rows.length - max_rows} data lainnya_\n`;
-            }
-
-            if (allSheets.length > 1) formattedMessage += '\n';
+        } else {
+            // NON-DIGEST: Use first row only
+            const rowVars = {
+                ...items[0],
+                '@index': '1',
+                '@length': String(items.length),
+                '@today': now.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                '@todayFull': `${dayNames[now.getDay()]}, ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`,
+                '@dayName': dayNames[now.getDay()],
+            };
+            finalMessage = templateEngineService.processTemplate(message_template, rowVars);
         }
 
-        if (!hasData) {
-            formattedMessage += '_Belum ada data di spreadsheet._\n';
+        // Trim and clean up
+        finalMessage = finalMessage.replace(/\n{4,}/g, '\n\n\n').trim();
+
+        logger.info('SEND_SHEET_DATA: Message rendered', {
+            length: finalMessage.length,
+            digest: is_digest_mode,
+            rowsUsed: items.length
+        });
+
+        // 7. Send via WhatsApp
+        const targetJid = context.contact_id || context.group_id;
+        let result;
+
+        if (image_url) {
+            result = await whatsappAdapter.sendMessage(
+                context.bot_id,
+                targetJid,
+                {
+                    type: 'image',
+                    media_url: image_url,
+                    caption: finalMessage,
+                }
+            );
+        } else {
+            result = await whatsappAdapter.sendMessage(
+                context.bot_id,
+                targetJid,
+                {
+                    type: 'text',
+                    content: finalMessage,
+                }
+            );
         }
-
-        // Add footer if provided
-        if (footer_text && footer_text.trim()) {
-            formattedMessage += '\n' + footer_text.trim();
-        }
-
-        // Add signature
-        formattedMessage += '\n\n—\nAutomated Message\npowered by sendr.web.id';
-
-        // Send via WhatsApp
-        const result = await whatsappAdapter.sendMessage(
-            context.bot_id,
-            context.contact_id || context.group_id,
-            {
-                type: 'text',
-                content: formattedMessage.trim(),
-            }
-        );
 
         // Log to database (non-blocking)
-        this.logMessageToDatabase(context, 'text', formattedMessage.trim(), result).catch(err => {
+        this.logMessageToDatabase(context, image_url ? 'image' : 'text', finalMessage, result, image_url).catch(err => {
             logger.warn('Failed to log sheet data message to database', { error: err.message });
         });
 

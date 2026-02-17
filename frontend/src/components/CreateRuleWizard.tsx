@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import SharedMessageEditor from '@/components/SharedMessageEditor'
-import { X, Image as ImageIcon, Trash2, MessageSquare, Zap, Globe, Users, User, Plus, Search, ArrowRight, Upload, Save, ChevronLeft, Eye, RefreshCw, Check, ChevronDown, FileSpreadsheet, Table } from 'lucide-react'
+import { X, Image as ImageIcon, Trash2, MessageSquare, Zap, Globe, Users, User, Plus, Search, ArrowRight, Upload, Save, ChevronLeft, Eye, RefreshCw, Check, ChevronDown, FileSpreadsheet, Table, Database, FileText, Filter } from 'lucide-react'
 
 interface CreateRuleWizardProps {
     botId?: string
@@ -84,13 +84,74 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
     const [sheetConfig, setSheetConfig] = useState({
         spreadsheet_url: '',
         sheet_name: '',
-        header_text: '',
-        footer_text: '',
-        max_rows: 20
+        message_template: '',
+        is_digest_mode: true,
+        filter_column: '',
+        filter_value: '',
+        max_rows: 50
     })
+
+    // Sheet detection states
+    const [availableTabs, setAvailableTabs] = useState<Array<{ gid: string; name: string }>>([])
+    const [isLoadingTabs, setIsLoadingTabs] = useState(false)
+    const [sheetColumns, setSheetColumns] = useState<string[]>([])
+    const [isLoadingColumns, setIsLoadingColumns] = useState(false)
+    const [sheetRowCount, setSheetRowCount] = useState(0)
 
     // UI Helper State
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+    // Auto-detect tabs when sheet URL changes
+    useEffect(() => {
+        const detectTabs = async () => {
+            const url = sheetConfig.spreadsheet_url
+            if (!url || replyType !== 'sheet') { setAvailableTabs([]); return }
+            const match = url.match(/\/d\/([\w-]+)/)
+            if (!match || !match[1]) { setAvailableTabs([]); return }
+            setIsLoadingTabs(true)
+            try {
+                const response = await api.sheets.getTabs(url)
+                const data = response.data
+                if (data.success && data.tabs && data.tabs.length > 0) {
+                    setAvailableTabs(data.tabs)
+                    if (!sheetConfig.sheet_name) {
+                        setSheetConfig(prev => ({ ...prev, sheet_name: data.tabs[0].name }))
+                    }
+                } else { setAvailableTabs([]) }
+            } catch (error) { setAvailableTabs([]) }
+            finally { setIsLoadingTabs(false) }
+        }
+        const timeoutId = setTimeout(detectTabs, 800)
+        return () => clearTimeout(timeoutId)
+    }, [sheetConfig.spreadsheet_url, replyType])
+
+    // Auto-fetch columns when tab changes
+    useEffect(() => {
+        const fetchColumns = async () => {
+            const url = sheetConfig.spreadsheet_url
+            const tab = sheetConfig.sheet_name
+            if (!url || !tab || replyType !== 'sheet') { setSheetColumns([]); return }
+            const match = url.match(/\/d\/([\w-]+)/)
+            if (!match || !match[1]) { setSheetColumns([]); return }
+            setIsLoadingColumns(true)
+            try {
+                const response = await api.sheets.getColumns(url, tab)
+                const data = response.data
+                if (data.success && data.columns) {
+                    setSheetColumns(data.columns)
+                    setSheetRowCount(data.totalRows || 0)
+                }
+            } catch (error) { console.error('Column detection error:', error) }
+            finally { setIsLoadingColumns(false) }
+        }
+        const timeoutId = setTimeout(fetchColumns, 1000)
+        return () => clearTimeout(timeoutId)
+    }, [sheetConfig.spreadsheet_url, sheetConfig.sheet_name, replyType])
+
+    // Computed: variables from sheet columns for message editor
+    const sheetVariables = useMemo(() => {
+        return sheetColumns.length > 0 ? sheetColumns : []
+    }, [sheetColumns])
 
     // Fetch Groups for Selector (depend on selectedBotId)
     const { data: groupsData } = useQuery({
@@ -151,9 +212,11 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                         setSheetConfig({
                             spreadsheet_url: sheetAction.config.spreadsheet_url || '',
                             sheet_name: sheetAction.config.sheet_name || '',
-                            header_text: sheetAction.config.header_text || '',
-                            footer_text: sheetAction.config.footer_text || '',
-                            max_rows: sheetAction.config.max_rows || 20
+                            message_template: sheetAction.config.message_template || '',
+                            is_digest_mode: sheetAction.config.is_digest_mode !== false,
+                            filter_column: sheetAction.config.filter_column || '',
+                            filter_value: sheetAction.config.filter_value || '',
+                            max_rows: sheetAction.config.max_rows || 50
                         })
                     } else {
                         setReplyType('text')
@@ -247,9 +310,11 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                         config: {
                             spreadsheet_url: sheetConfig.spreadsheet_url,
                             sheet_name: sheetConfig.sheet_name || undefined,
-                            header_text: sheetConfig.header_text || undefined,
-                            footer_text: sheetConfig.footer_text || undefined,
-                            max_rows: sheetConfig.max_rows || 20
+                            message_template: sheetConfig.message_template,
+                            is_digest_mode: sheetConfig.is_digest_mode,
+                            filter_column: sheetConfig.filter_column || undefined,
+                            filter_value: sheetConfig.filter_value || undefined,
+                            max_rows: sheetConfig.max_rows || 50
                         }
                     }]
                     : [{
@@ -318,9 +383,11 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                         config: {
                             spreadsheet_url: sheetConfig.spreadsheet_url,
                             sheet_name: sheetConfig.sheet_name || undefined,
-                            header_text: sheetConfig.header_text || undefined,
-                            footer_text: sheetConfig.footer_text || undefined,
-                            max_rows: sheetConfig.max_rows || 20
+                            message_template: sheetConfig.message_template,
+                            is_digest_mode: sheetConfig.is_digest_mode,
+                            filter_column: sheetConfig.filter_column || undefined,
+                            filter_value: sheetConfig.filter_value || undefined,
+                            max_rows: sheetConfig.max_rows || 50
                         }
                     }]
                     : [{
@@ -365,6 +432,10 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
         }
         if (replyType === 'sheet' && !sheetConfig.spreadsheet_url) {
             toast.error('Google Sheet URL is required')
+            return
+        }
+        if (replyType === 'sheet' && !sheetConfig.message_template) {
+            toast.error('Template pesan harus diisi')
             return
         }
         if (ruleId) {
@@ -809,77 +880,298 @@ export default function CreateRuleWizard({ botId, ruleId, onClose }: CreateRuleW
                                 </div>
                             </div>
                             ) : (
-                            /* Sheet Data Config */
-                            <div className="space-y-4 animate-in fade-in">
+                            /* Sheet Data Config - like Reminder Google Sheets mode */
+                            <div className="space-y-6 animate-in fade-in">
                                 <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
                                     <p className="text-xs text-blue-400">
                                         <FileSpreadsheet size={12} className="inline mr-1" />
-                                        Bot akan mengambil data terbaru dari Google Sheet setiap kali keyword dipicu. Sheet harus bersifat publik (Anyone with the link can view).
+                                        Bot akan mengambil data terbaru dari Google Sheet setiap kali keyword dipicu, lalu mengirim pesan yang diformat sesuai template. Sheet harus bersifat publik.
                                     </p>
                                 </div>
 
-                                {/* Google Sheet URL */}
-                                <div>
-                                    <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Google Sheet URL *</label>
-                                    <input
-                                        type="url"
-                                        value={sheetConfig.spreadsheet_url}
-                                        onChange={(e) => setSheetConfig({ ...sheetConfig, spreadsheet_url: e.target.value })}
-                                        placeholder="https://docs.google.com/spreadsheets/d/..."
-                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-mono"
-                                    />
+                                {/* 1. Connection: URL + Tab Name */}
+                                <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="md:col-span-2 space-y-2">
+                                            <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Google Sheets URL *</label>
+                                            <div className="relative">
+                                                <Database className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
+                                                <input
+                                                    type="url"
+                                                    value={sheetConfig.spreadsheet_url}
+                                                    onChange={e => setSheetConfig({ ...sheetConfig, spreadsheet_url: e.target.value })}
+                                                    placeholder="https://docs.google.com/spreadsheets/d/..."
+                                                    className="w-full pl-10 pr-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded text-zinc-900 dark:text-white focus:ring-1 focus:ring-emerald-500/50 outline-none text-xs transition-all font-mono"
+                                                />
+                                            </div>
+                                            <p className="text-[10px] text-zinc-500">Pastikan sheet bersifat "Anyone with the link can view".</p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span>Tab Name</span>
+                                                    <button type="button" onClick={() => {
+                                                        setAvailableTabs([])
+                                                        setSheetConfig(prev => ({ ...prev, sheet_name: '' }))
+                                                        // Re-trigger tab detection
+                                                        setTimeout(() => setSheetConfig(prev => ({ ...prev })), 100)
+                                                    }} className="text-zinc-500 hover:text-emerald-400 transition-colors" title="Refresh tabs">
+                                                        <RefreshCw size={10} className={isLoadingTabs ? 'animate-spin' : ''} />
+                                                    </button>
+                                                </div>
+                                                {isLoadingTabs && (
+                                                    <span className="flex items-center gap-1.5 text-[10px] text-emerald-500 dark:text-emerald-400 animate-pulse lowercase font-normal">detecting...</span>
+                                                )}
+                                            </label>
+                                            {availableTabs.length > 0 ? (
+                                                <select
+                                                    value={sheetConfig.sheet_name}
+                                                    onChange={e => setSheetConfig({ ...sheetConfig, sheet_name: e.target.value })}
+                                                    className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-emerald-500/30 rounded text-zinc-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                >
+                                                    <option value="" disabled>Select a tab...</option>
+                                                    {availableTabs.map(tab => (
+                                                        <option key={tab.gid} value={tab.name}>{tab.name}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={sheetConfig.sheet_name}
+                                                    onChange={e => setSheetConfig({ ...sheetConfig, sheet_name: e.target.value })}
+                                                    placeholder={isLoadingTabs ? "Detecting tabs..." : "e.g. Sheet1"}
+                                                    className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+                                                    disabled={isLoadingTabs}
+                                                />
+                                            )}
+                                            <p className="text-[10px] text-zinc-500">
+                                                {availableTabs.length > 0 ? `✓ ${availableTabs.length} tabs found` : 'Paste URL to auto-detect tabs'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Connection status */}
+                                    {sheetColumns.length > 0 && (
+                                        <div className="flex items-center gap-2 text-xs text-emerald-500 dark:text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
+                                            <Check size={14} />
+                                            <span>Terkoneksi — {sheetColumns.length} kolom, {sheetRowCount} baris data</span>
+                                        </div>
+                                    )}
+                                    {isLoadingColumns && (
+                                        <div className="flex items-center gap-2 text-xs text-zinc-500 animate-pulse px-3 py-2">
+                                            <RefreshCw size={12} className="animate-spin" />
+                                            <span>Mengambil data kolom...</span>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* Sheet Tab Name */}
-                                <div>
-                                    <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Nama Tab (Opsional)</label>
-                                    <input
-                                        type="text"
-                                        value={sheetConfig.sheet_name}
-                                        onChange={(e) => setSheetConfig({ ...sheetConfig, sheet_name: e.target.value })}
-                                        placeholder="Kosongkan = baca semua tab"
-                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                                    />
-                                    <p className="text-[10px] text-zinc-500 mt-1">Contoh: "Sheet1", "Tugas", "Jadwal". Kosongkan untuk baca semua tab.</p>
+                                {/* 2. Filter Data (Optional) */}
+                                <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="font-medium text-zinc-900 dark:text-white text-sm flex items-center gap-2">
+                                                <Filter size={14} className="text-zinc-500" />
+                                                Filter Data (Opsional)
+                                            </div>
+                                            <div className="text-xs text-zinc-500 mt-0.5">Hanya tampilkan baris yang cocok (misal: Status = "Belum")</div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSheetConfig({ ...sheetConfig, filter_column: sheetConfig.filter_column ? '' : 'Status', filter_value: sheetConfig.filter_value ? '' : '' })}
+                                            className={`w-11 h-6 rounded-full p-0.5 transition-colors group ${sheetConfig.filter_column ? 'bg-emerald-600' : 'bg-zinc-300 dark:bg-zinc-700'}`}
+                                        >
+                                            <div className={`w-5 h-5 bg-white rounded-full transition-transform duration-300 group-hover:scale-110 ${sheetConfig.filter_column ? 'translate-x-5' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+
+                                    {sheetConfig.filter_column !== '' && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                                            <div className="space-y-2">
+                                                <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Kolom Filter</label>
+                                                {sheetColumns.length > 0 ? (
+                                                    <select
+                                                        value={sheetConfig.filter_column}
+                                                        onChange={e => setSheetConfig({ ...sheetConfig, filter_column: e.target.value })}
+                                                        className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                    >
+                                                        <option value="">Pilih kolom...</option>
+                                                        {sheetColumns.map(col => (
+                                                            <option key={col} value={col}>{col}</option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        value={sheetConfig.filter_column}
+                                                        onChange={e => setSheetConfig({ ...sheetConfig, filter_column: e.target.value })}
+                                                        placeholder="Nama kolom (e.g. Status)"
+                                                        className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+                                                    />
+                                                )}
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Nilai Filter</label>
+                                                <input
+                                                    type="text"
+                                                    value={sheetConfig.filter_value}
+                                                    onChange={e => setSheetConfig({ ...sheetConfig, filter_value: e.target.value })}
+                                                    placeholder="Nilai yang harus cocok (e.g. Belum)"
+                                                    className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded text-emerald-600 dark:text-emerald-400 text-xs font-bold placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* Header Text */}
-                                <div>
-                                    <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Teks Header (Opsional)</label>
-                                    <input
-                                        type="text"
-                                        value={sheetConfig.header_text}
-                                        onChange={(e) => setSheetConfig({ ...sheetConfig, header_text: e.target.value })}
-                                        placeholder="Contoh: 📋 *Daftar Tugas Terbaru*"
-                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                                    />
-                                    <p className="text-[10px] text-zinc-500 mt-1">Ditampilkan di atas data. Gunakan *teks* untuk bold.</p>
-                                </div>
+                                {/* 3. Message Template */}
+                                <div className="space-y-4">
+                                    {/* Digest Mode Toggle */}
+                                    <div className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+                                        <div>
+                                            <div className="font-medium text-zinc-900 dark:text-white text-sm">Digest Mode</div>
+                                            <div className="text-xs text-zinc-500">Gabungkan semua baris menjadi satu pesan</div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSheetConfig({ ...sheetConfig, is_digest_mode: !sheetConfig.is_digest_mode })}
+                                            className={`w-11 h-6 rounded-full p-0.5 transition-colors group ${sheetConfig.is_digest_mode ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-700'}`}
+                                        >
+                                            <div className={`w-5 h-5 bg-white rounded-full transition-transform duration-300 group-hover:scale-110 ${sheetConfig.is_digest_mode ? 'translate-x-5' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
 
-                                {/* Footer Text */}
-                                <div>
-                                    <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Teks Footer (Opsional)</label>
-                                    <input
-                                        type="text"
-                                        value={sheetConfig.footer_text}
-                                        onChange={(e) => setSheetConfig({ ...sheetConfig, footer_text: e.target.value })}
-                                        placeholder="Contoh: _Diperbarui setiap hari_"
-                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                                    />
-                                </div>
+                                    {/* Quick Template Presets */}
+                                    {sheetColumns.length > 0 && (
+                                        <div className="flex flex-wrap gap-2">
+                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold self-center mr-1">Quick Template:</span>
+                                            {[
+                                                {
+                                                    label: '📋 Simple List',
+                                                    template: sheetConfig.is_digest_mode
+                                                        ? `📋 *DATA*\n📅 {{@todayFull}}\n\n{{#each items}}\n{{@index}}. *{{${sheetColumns[0] || 'Nama'}}}*${sheetColumns[1] ? ` — {{${sheetColumns[1]}}}` : ''}${sheetColumns[2] ? ` — {{${sheetColumns[2]}}}` : ''}\n{{/each}}\n\n📊 Total: {{@length}} data`
+                                                        : `*{{${sheetColumns[0] || 'Nama'}}}*${sheetColumns[1] ? `\n${sheetColumns[1]}: {{${sheetColumns[1]}}}` : ''}${sheetColumns[2] ? `\n${sheetColumns[2]}: {{${sheetColumns[2]}}}` : ''}`
+                                                },
+                                                {
+                                                    label: '📝 Detail',
+                                                    template: sheetConfig.is_digest_mode
+                                                        ? `📝 *DETAIL DATA*\n📅 {{@todayFull}}\n\n{{#each items}}\n━━━ {{@index}} ━━━\n${sheetColumns.map(c => `📌 ${c}: {{${c}}}`).join('\n')}\n{{/each}}\n\n📊 Total: {{@length}} data`
+                                                        : sheetColumns.map(c => `${c}: {{${c}}}`).join('\n')
+                                                },
+                                            ].map((preset, i) => (
+                                                <button
+                                                    key={i}
+                                                    type="button"
+                                                    onClick={() => setSheetConfig({ ...sheetConfig, message_template: preset.template })}
+                                                    className="px-2.5 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-blue-500/10 text-zinc-600 dark:text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 text-xs rounded border border-zinc-200 dark:border-zinc-700 hover:border-blue-500/30 transition-colors"
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
 
-                                {/* Max Rows */}
-                                <div>
-                                    <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Max Data Ditampilkan</label>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={100}
-                                        value={sheetConfig.max_rows}
-                                        onChange={(e) => setSheetConfig({ ...sheetConfig, max_rows: parseInt(e.target.value) || 20 })}
-                                        className="w-24 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                                    />
-                                    <span className="text-[10px] text-zinc-500 ml-2">baris (default: 20)</span>
+                                    {/* Variable Chips */}
+                                    {(sheetColumns.length > 0 || isLoadingColumns) && (
+                                        <div className="bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <Database size={14} className="text-emerald-500 dark:text-emerald-400" />
+                                                <span className="text-xs font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-wider">Variables dari Sheet</span>
+                                                {isLoadingColumns && (
+                                                    <span className="text-[10px] text-emerald-400/60 animate-pulse">detecting...</span>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {/* Built-in helper variables */}
+                                                {[
+                                                    { name: '#each items', desc: 'Loop semua baris data' },
+                                                    { name: '/each', desc: 'Akhiri loop' },
+                                                    { name: '@today', desc: 'Tanggal hari ini (dd/MM/yyyy)' },
+                                                    { name: '@todayFull', desc: 'Hari, tanggal lengkap' },
+                                                    { name: '@dayName', desc: 'Nama hari' },
+                                                    { name: '@index', desc: 'Nomor urut (1, 2, 3...)' },
+                                                    { name: '@length', desc: 'Total jumlah data' },
+                                                ].map(v => (
+                                                    <button
+                                                        key={v.name}
+                                                        type="button"
+                                                        onClick={() => { navigator.clipboard.writeText(`{{${v.name}}}`); toast.success(`Copied {{${v.name}}}`) }}
+                                                        className="px-2.5 py-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-mono rounded border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                                                        title={v.desc}
+                                                    >
+                                                        {v.name}
+                                                    </button>
+                                                ))}
+                                                {/* Dynamic column variables */}
+                                                {sheetColumns.map((colName, i) => (
+                                                    <button
+                                                        key={i}
+                                                        type="button"
+                                                        onClick={() => { navigator.clipboard.writeText(`{{${colName}}}`); toast.success(`Copied {{${colName}}}`) }}
+                                                        className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-mono rounded border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                                                        title={`Kolom: ${colName}`}
+                                                    >
+                                                        {colName}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="text-[10px] text-zinc-500 mt-2">Klik variabel untuk copy. Paste ke template pesan di bawah.</p>
+                                        </div>
+                                    )}
+
+                                    {/* Message Template Editor */}
+                                    <div>
+                                        <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Template Pesan *</label>
+                                        <div className="relative">
+                                            <SharedMessageEditor
+                                                value={sheetConfig.message_template}
+                                                onChange={(val) => setSheetConfig({ ...sheetConfig, message_template: val })}
+                                                variables={sheetVariables}
+                                                isExpanded={false}
+                                                onToggleExpand={() => setIsEditorExpanded(true)}
+                                                variableWrapper={['{{', '}}']}
+                                                placeholder={sheetConfig.is_digest_mode
+                                                    ? "Tulis template pesan... Gunakan {{#each items}} untuk loop data"
+                                                    : "Tulis template pesan... Gunakan {{NamaKolom}} untuk variabel"
+                                                }
+                                            />
+                                            {isEditorExpanded && (
+                                                <>
+                                                    <div
+                                                        className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm animate-in fade-in duration-300"
+                                                        onClick={() => setIsEditorExpanded(false)}
+                                                    />
+                                                    <div className="fixed top-[5vh] bottom-[5vh] left-1/2 -translate-x-1/2 w-[95vw] max-w-5xl z-[200] flex flex-col animate-in zoom-in-95 duration-300">
+                                                        <SharedMessageEditor
+                                                            value={sheetConfig.message_template}
+                                                            onChange={(val) => setSheetConfig({ ...sheetConfig, message_template: val })}
+                                                            variables={sheetVariables}
+                                                            isExpanded={true}
+                                                            onToggleExpand={() => setIsEditorExpanded(false)}
+                                                            variableWrapper={['{{', '}}']}
+                                                            placeholder={sheetConfig.is_digest_mode
+                                                                ? "Tulis template pesan... Gunakan {{#each items}} untuk loop data"
+                                                                : "Tulis template pesan... Gunakan {{NamaKolom}} untuk variabel"
+                                                            }
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Max Rows */}
+                                    <div className="flex items-center gap-3">
+                                        <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Max data:</label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={100}
+                                            value={sheetConfig.max_rows}
+                                            onChange={(e) => setSheetConfig({ ...sheetConfig, max_rows: parseInt(e.target.value) || 50 })}
+                                            className="w-20 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                                        />
+                                        <span className="text-[10px] text-zinc-500">baris (default: 50)</span>
+                                    </div>
                                 </div>
                             </div>
                             )}
