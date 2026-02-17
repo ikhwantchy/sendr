@@ -174,44 +174,18 @@ class AIEngine {
             const isMentioned = this.isBotMentioned(payload, bot.name, bot.phone_number, bot.lid);
             const isPrivate = !context.group_id;
 
-            // Check per-target behavior config (conversationModel = respond to ALL messages)
-            let isConversationMode = false;
-            const targetJid2 = context.group_id || contact_id;
-            const targetBehaviorResult = await query(
-                'SELECT llm_config FROM llm_allowed_targets WHERE bot_id = ? AND target_jid = ? AND is_enabled = 1 LIMIT 1',
-                [bot_id, targetJid2]
-            );
-            if (targetBehaviorResult.rows.length > 0) {
-                const tConfig = JSON.parse(targetBehaviorResult.rows[0].llm_config || '{}');
-                isConversationMode = tConfig.behavior?.conversationModel === true;
-            }
-
             logger.info('AI evaluating fallback response', {
                 bot_id,
                 isPrivate,
                 isMentioned,
-                isConversationMode,
                 message: userMessage.substring(0, 50)
             });
 
-            // Logic for responding:
-            // 1. Bot is mentioned (@bot / reply) → always respond
+            // Only respond if:
+            // 1. Bot is mentioned (@bot / reply to bot) → always respond
             // 2. Private/DM chat → always respond
-            // 3. Group + conversationModel + NOT mentioned → only respond if message looks like a direct query
-            //    (prevents bot from responding to casual chat that happens to contain keywords)
-            let shouldRespond = false;
-
+            // In groups without mention → do NOT respond
             if (isMentioned || isPrivate) {
-                shouldRespond = true;
-            } else if (isConversationMode && !isPrivate) {
-                // Group + conversation mode + no mention:
-                // Only respond if the message looks like a direct query, not casual conversation
-                const isQuery = this.isDirectQuery(userMessage);
-                logger.info('AI group query detection', { bot_id, isQuery, message: userMessage.substring(0, 60) });
-                shouldRespond = isQuery;
-            }
-
-            if (shouldRespond) {
                 const conversationPartner = contact_id || payload.from;
                 logger.info('🤖 AI generating response...', { bot_id, conversationPartner });
 
@@ -270,7 +244,7 @@ class AIEngine {
                     });
                 }
             } else {
-                logger.info('AI ignoring message: not mentioned in group', { bot_id, bot_name: bot.name });
+                logger.debug('AI ignoring message: not mentioned in group', { bot_id, bot_name: bot.name });
             }
         } catch (error) {
             logger.error('AI handleNoMatch error', { error, bot_id });
@@ -342,80 +316,6 @@ class AIEngine {
             return true;
         }
 
-        return false;
-    }
-
-    /**
-     * Detect if a message is a direct query/question (not casual conversation)
-     * Used in groups with conversationModel to avoid responding to casual chat
-     * 
-     * Responds to:    "tugas", "ada tugas apa", "jadwal hari ini?", "deadline kapan"
-     * Ignores:        "iya kemaren ada tugas dosennya ngasih", "gue udah kerjain tugas"
-     */
-    private isDirectQuery(message: string): boolean {
-        const msg = message.toLowerCase().trim();
-        const wordCount = msg.split(/\s+/).length;
-
-        // 1. Very short messages (1-3 words) that match keywords → likely a direct query
-        //    e.g. "tugas", "jadwal", "deadline apa", "cek tugas"
-        if (wordCount <= 3) {
-            const shortQueryKeywords = [
-                'tugas', 'jadwal', 'deadline', 'schedule', 'task',
-                'pr', 'ujian', 'uts', 'uas', 'quiz', 'kuis',
-                'pengumuman', 'info', 'update', 'menu', 'harga',
-                'produk', 'stok', 'biaya', 'tarif', 'daftar',
-                'rekap', 'data', 'list', 'cek', 'lihat', 'show',
-            ];
-            if (shortQueryKeywords.some(kw => msg.includes(kw))) {
-                return true;
-            }
-        }
-
-        // 2. Message ends with "?" → it's a question
-        if (msg.endsWith('?')) {
-            return true;
-        }
-
-        // 3. Message starts with question words (Indonesian + English)
-        const questionStarters = [
-            'apa ', 'apaan', 'kapan ', 'berapa ', 'siapa ', 'dimana ', 'mana ',
-            'gimana ', 'bagaimana ', 'kenapa ', 'mengapa ', 'bisa ',
-            'ada gak', 'ada nggak', 'ada tidak', 'ada ga ', 'ada nga',
-            'what ', 'when ', 'how ', 'where ', 'who ', 'which ',
-            'is there', 'are there', 'can you', 'do we', 'any ',
-        ];
-        if (questionStarters.some(qs => msg.startsWith(qs))) {
-            return true;
-        }
-
-        // 4. Contains question patterns mid-sentence
-        //    e.g. "ada tugas apa aja", "deadline nya kapan", "tugas apa"
-        const questionPatterns = [
-            'apa aja', 'apa saja', 'apaan aja', 'apa yang',
-            'ada apa', 'ada gak', 'ada ga ', 'ada nga', 'ada tidak',
-            'yang mana', 'kapan nih', 'kapan ya', 'berapa ya',
-            'tolong ', 'minta ', 'kasih tau', 'kasih tahu',
-            'cek ', 'lihat ', 'tampilkan', 'tunjukkan', 'carikan',
-            'list ', 'show ', 'check ',
-        ];
-        if (questionPatterns.some(qp => msg.includes(qp))) {
-            return true;
-        }
-
-        // 5. Short messages (≤6 words) with action/query verbs at the start
-        if (wordCount <= 6) {
-            const actionVerbs = [
-                'cek', 'lihat', 'tampilkan', 'kasih', 'minta', 'tolong',
-                'carikan', 'show', 'list', 'get', 'check', 'find',
-                'ada', 'rekap', 'ringkas',
-            ];
-            const firstWord = msg.split(/\s+/)[0];
-            if (actionVerbs.includes(firstWord)) {
-                return true;
-            }
-        }
-
-        // If none of the above → probably casual conversation, don't respond
         return false;
     }
 
