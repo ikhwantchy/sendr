@@ -275,13 +275,24 @@ class EnhancedTemplateRenderer {
 
     /**
      * Process simple inline conditionals like {{#if PropertyName}}...{{/if}}
+     * Supports both single-word and multi-word property names: {{#if Tugas}}, {{#if Mata Kuliah}}
+     * Uses fuzzy key matching (case-insensitive) same as replaceItemProperties
      */
     private processInlineConditionals(template: string, item: any): string {
-        const inlineIfRegex = /\{\{\s*#if\s+(\w+)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
+        // Support multi-word property names: {{#if Mata Kuliah}} or {{#if Tugas}}
+        const inlineIfRegex = /\{\{\s*#if\s+([\w\s]+?)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
 
         return template.replace(inlineIfRegex, (match, propName, content) => {
-            // Check if the property exists and has a truthy value
-            const value = item[propName];
+            const searchKey = propName.trim().toLowerCase();
+
+            // Fuzzy key matching (same as replaceItemProperties)
+            const allKeys = Object.keys(item);
+            const actualKey = allKeys.find(k => k.toLowerCase().trim() === searchKey) ||
+                allKeys.find(k => k.toLowerCase().trim().startsWith(searchKey)) ||
+                allKeys.find(k => k.toLowerCase().trim().includes(searchKey)) ||
+                propName.trim();
+
+            const value = item[actualKey];
             const hasValue = value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
             return hasValue ? content : '';
         });

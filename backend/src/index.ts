@@ -22,8 +22,10 @@ import './queue/messageWorker';
 // ✅ Import campaign worker (Bull queue) - SEPARATE from reminder
 import './queue/campaignWorker';
 
-// ✅ Import Bro-Bot Service (Student Utility)
-import './services/broBotService';
+// ❌ Bro-Bot Service DISABLED - conflicts with Rule Engine's SEND_SHEET_DATA
+// It was sending "Mencari tugas..." + errors because it uses wrong spreadsheet ID
+// All keyword handling is now done via Rule Engine + Action Engine
+// import './services/broBotService';
 
 // ✅ Import group integration
 import { initializeGroupIntegration } from './integrations/groupIntegration';
