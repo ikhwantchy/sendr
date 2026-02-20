@@ -20,20 +20,18 @@ jobs:
             
             echo "Deployment started..."
             
-            # Pull latest code
+            # Pull latest code (includes pre-built .next/ from local)
             git pull origin main
             
             # Backend Setup
             cd backend
-            npm install
+            npm install --no-audit --no-fund
             npm run build
-            # Run migrations just in case
             npm run migrate
             
-            # Frontend Setup
+            # Frontend: install deps only (NO build — built locally to avoid OOM)
             cd ../frontend
-            npm install
-            npm run build
+            npm install --no-audit --no-fund
             
             # Restart Services
             pm2 restart all
