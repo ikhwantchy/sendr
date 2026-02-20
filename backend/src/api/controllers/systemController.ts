@@ -1,13 +1,9 @@
 import { Request, Response } from 'express';
-import { query } from '../../database/connection-sqlite';
+import { query, backupDatabase, listBackups } from '../../database/connection-sqlite';
 import auditLogService from '../../services/auditLogService';
 import systemSettingsService from '../../services/systemSettingsService';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import path from 'path';
-import fs from 'fs/promises';
-
-const execAsync = promisify(exec);
+import { existsSync } from 'fs';
 
 /**
  * System Controller
@@ -92,42 +88,21 @@ export const getSystemHealth = async (req: Request, res: Response) => {
 
 /**
  * POST /api/admin/system/backup
- * Create a database backup
+ * Create a database backup (SQLite)
  */
 export const createBackup = async (req: Request, res: Response) => {
     try {
         const userId = req.user!.id;
-        const timestamp = Date.now();
-        const filename = `backup_${timestamp}.sql`;
-        const backupDir = path.join(process.cwd(), 'backups');
-        const filepath = path.join(backupDir, filename);
 
-        // Ensure backup directory exists
-        await fs.mkdir(backupDir, { recursive: true });
+        const backupPath = backupDatabase();
+        if (!backupPath) {
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to create backup'
+            });
+        }
 
-        // Get database connection info from env
-        const dbName = process.env.DB_NAME || 'wa_automation';
-        const dbUser = process.env.DB_USER || 'postgres';
-        const dbHost = process.env.DB_HOST || 'localhost';
-        const dbPort = process.env.DB_PORT || '5432';
-
-        // Create backup using pg_dump
-        const command = `pg_dump -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName} -f "${filepath}"`;
-
-        await execAsync(command, {
-            env: { ...process.env, PGPASSWORD: process.env.DB_PASSWORD }
-        });
-
-        // Get file size
-        const stats = await fs.stat(filepath);
-        const fileSize = stats.size;
-
-        // Record backup in database
-        await query(
-            `INSERT INTO system_backups (filename, file_path, file_size, backup_type, status, created_by)
-             VALUES ($1, $2, $3, 'manual', 'completed', $4)`,
-            [filename, filepath, fileSize, userId]
-        );
+        const filename = path.basename(backupPath);
 
         // Log backup creation
         await auditLogService.log({
@@ -135,7 +110,6 @@ export const createBackup = async (req: Request, res: Response) => {
             action_type: 'backup.create',
             action_category: 'system',
             description: `Created database backup: ${filename}`,
-            metadata: { filename, size: fileSize },
             status: 'success'
         });
 
@@ -144,7 +118,7 @@ export const createBackup = async (req: Request, res: Response) => {
             message: 'Backup created successfully',
             backup: {
                 filename,
-                size: `${Math.round(fileSize / 1024 / 1024)} MB`,
+                path: backupPath,
                 created_at: new Date()
             }
         });
@@ -160,23 +134,17 @@ export const createBackup = async (req: Request, res: Response) => {
 
 /**
  * GET /api/admin/system/backups
- * Get list of backups
+ * Get list of backups (SQLite)
  */
 export const getBackups = async (req: Request, res: Response) => {
     try {
-        const result = await query(
-            `SELECT 
-                id, filename, file_size, backup_type, status, created_at,
-                u.email as created_by_email
-             FROM system_backups sb
-             LEFT JOIN users u ON sb.created_by = u.id
-             ORDER BY created_at DESC
-             LIMIT 50`
-        );
-
-        const backups = result.rows.map(row => ({
-            ...row,
-            file_size_mb: Math.round(row.file_size / 1024 / 1024)
+        const backups = listBackups().map(b => ({
+            filename: b.name,
+            file_size: b.size,
+            file_size_display: b.size > 1024 * 1024
+                ? `${(b.size / 1024 / 1024).toFixed(1)} MB`
+                : `${(b.size / 1024).toFixed(0)} KB`,
+            created_at: b.date
         }));
 
         res.json({
@@ -194,6 +162,37 @@ export const getBackups = async (req: Request, res: Response) => {
 };
 
 /**
+ * GET /api/admin/system/backups/download/:filename
+ * Download a backup file
+ */
+export const downloadBackup = async (req: Request, res: Response) => {
+    try {
+        const { filename } = req.params;
+
+        // Security: prevent directory traversal
+        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+            return res.status(400).json({ success: false, message: 'Invalid filename' });
+        }
+
+        const backupDir = path.join(process.cwd(), 'data', 'backups');
+        const filepath = path.join(backupDir, filename);
+
+        if (!existsSync(filepath)) {
+            return res.status(404).json({ success: false, message: 'Backup file not found' });
+        }
+
+        res.download(filepath, filename);
+    } catch (error: any) {
+        console.error('[System] Download backup error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to download backup',
+            error: error.message
+        });
+    }
+};
+
+/**
  * POST /api/admin/system/maintenance/optimize-db
  * Optimize database (vacuum, analyze)
  */
@@ -201,15 +200,15 @@ export const optimizeDatabase = async (req: Request, res: Response) => {
     try {
         const userId = req.user!.id;
 
-        // Run VACUUM ANALYZE
-        await query('VACUUM ANALYZE');
+        // Run VACUUM for SQLite
+        await query('VACUUM');
 
         // Log maintenance
         await auditLogService.log({
             user_id: userId,
             action_type: 'maintenance.optimize_db',
             action_category: 'system',
-            description: 'Optimized database (VACUUM ANALYZE)',
+            description: 'Optimized database (VACUUM)',
             status: 'success'
         });
 

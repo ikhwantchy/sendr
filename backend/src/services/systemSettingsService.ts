@@ -135,17 +135,17 @@ class SystemSettingsService {
 
         // Check if setting already exists (sql.js has issues with UPSERT)
         const existing = await query(
-            'SELECT key FROM system_settings WHERE key = ?',
-            [key]
+            'SELECT key FROM system_settings WHERE category = ? AND key = ?',
+            [safeCategory, key]
         );
 
         if (existing.rows.length > 0) {
             // UPDATE existing
             await query(
                 `UPDATE system_settings 
-                 SET value = ?, data_type = ?, category = ?, updated_by = ?, updated_at = ?
-                 WHERE key = ?`,
-                [safeValue, value_type, safeCategory, safeUpdatedBy, now, key]
+                 SET value = ?, data_type = ?, updated_by = ?, updated_at = ?
+                 WHERE category = ? AND key = ?`,
+                [safeValue, value_type, safeUpdatedBy, now, safeCategory, key]
             );
         } else {
             // INSERT new

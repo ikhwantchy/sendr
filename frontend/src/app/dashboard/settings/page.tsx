@@ -2,17 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Save, Mail, Shield, Settings as SettingsIcon, Zap, Send, User, Lock, ArrowLeft, Loader2, CheckCircle2, XCircle, Key, Eye, Monitor, ChevronRight, Link2, Upload, Trash2, FileJson } from 'lucide-react';
-import { api } from '@/lib/api';
+import { User, Lock, Loader2, CheckCircle2, XCircle, Key, Monitor, ChevronRight, Shield } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
-
-interface Setting {
-    key: string;
-    value: string;
-    category: string;
-    description: string;
-    data_type: string;
-}
 
 interface UserProfile {
     id: string;
@@ -27,7 +18,6 @@ export default function SettingsPage() {
     const searchParams = useSearchParams();
     const { isAdmin } = usePermissions();
     
-    // Get initial tab from URL or default to 'profile'
     const initialTab = searchParams?.get('tab') || 'profile';
     const [activeTab, setActiveTab] = useState(initialTab);
     
@@ -45,36 +35,17 @@ export default function SettingsPage() {
         confirmPassword: ''
     });
     
-    // System settings state (admin only)
-    const [settings, setSettings] = useState<Setting[]>([]);
-    const [changes, setChanges] = useState<Record<string, string>>({});
-    const [systemActiveTab, setSystemActiveTab] = useState('general');
-    
     // Common state
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-    // Google Service Account state
-    const [googleSA, setGoogleSA] = useState<{
-        configured: boolean;
-        email?: string;
-        projectId?: string;
-    } | null>(null);
-    const [googleSALoading, setGoogleSALoading] = useState(false);
-    const [googleSASaving, setGoogleSASaving] = useState(false);
-
     useEffect(() => {
         if (activeTab === 'profile') {
             fetchProfile();
-        } else if (activeTab === 'system' && isAdmin) {
-            fetchSystemSettings();
-        } else if (activeTab === 'integrations') {
-            fetchGoogleServiceAccount();
         }
-    }, [activeTab, isAdmin]);
+    }, [activeTab]);
 
-    // Update URL when tab changes
     useEffect(() => {
         const url = new URL(window.location.href);
         url.searchParams.set('tab', activeTab);
@@ -104,92 +75,6 @@ export default function SettingsPage() {
         }
     };
 
-    const fetchSystemSettings = async () => {
-        setLoading(true);
-        try {
-            const response = await api.get('/admin/settings');
-            setSettings(response.data.settings);
-        } catch (error) {
-            console.error('Failed to fetch settings:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchGoogleServiceAccount = async () => {
-        setGoogleSALoading(true);
-        try {
-            const response = await api.get('/admin/google-service-account');
-            setGoogleSA(response.data.data);
-        } catch (error) {
-            console.error('Failed to fetch Google Service Account:', error);
-            setGoogleSA({ configured: false });
-        } finally {
-            setGoogleSALoading(false);
-        }
-    };
-
-    const handleGoogleSAUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        setGoogleSASaving(true);
-        setMessage(null);
-
-        try {
-            const text = await file.text();
-            const json = JSON.parse(text);
-
-            const response = await api.post('/admin/google-service-account', {
-                serviceAccountJson: json
-            });
-
-            if (response.data.success) {
-                setMessage({ type: 'success', text: 'Google Service Account configured successfully!' });
-                setGoogleSA({
-                    configured: true,
-                    email: response.data.data.email,
-                    projectId: response.data.data.projectId
-                });
-            } else {
-                setMessage({ type: 'error', text: response.data.message || 'Failed to save' });
-            }
-        } catch (error: any) {
-            console.error('Failed to upload Google Service Account:', error);
-            if (error.response?.data?.message) {
-                setMessage({ type: 'error', text: error.response.data.message });
-            } else {
-                setMessage({ type: 'error', text: 'Invalid JSON file or upload failed' });
-            }
-        } finally {
-            setGoogleSASaving(false);
-            // Reset file input
-            event.target.value = '';
-        }
-    };
-
-    const handleGoogleSADelete = async () => {
-        if (!confirm('Are you sure you want to remove the Google Service Account? This will disable Google Sheets integration.')) {
-            return;
-        }
-
-        setGoogleSASaving(true);
-        setMessage(null);
-
-        try {
-            const response = await api.delete('/admin/google-service-account');
-            if (response.data.success) {
-                setMessage({ type: 'success', text: 'Google Service Account removed successfully' });
-                setGoogleSA({ configured: false });
-            }
-        } catch (error: any) {
-            console.error('Failed to delete Google Service Account:', error);
-            setMessage({ type: 'error', text: 'Failed to remove Google Service Account' });
-        } finally {
-            setGoogleSASaving(false);
-        }
-    };
-
     const handleSaveProfile = async () => {
         setSaving(true);
         setMessage(null);
@@ -214,7 +99,6 @@ export default function SettingsPage() {
                 setProfile(data.data);
                 setIsEditing(false);
                 
-                // Update localStorage user
                 const storedUser = localStorage.getItem('user');
                 if (storedUser) {
                     const user = JSON.parse(storedUser);
@@ -278,96 +162,9 @@ export default function SettingsPage() {
         }
     };
 
-    const handleSaveSystemSettings = async () => {
-        setSaving(true);
-        try {
-            await api.put('/admin/settings', { settings: changes });
-            setMessage({ type: 'success', text: 'Settings saved successfully' });
-            setChanges({});
-            fetchSystemSettings();
-        } catch (error) {
-            console.error('Failed to save settings:', error);
-            setMessage({ type: 'error', text: 'Failed to save settings' });
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleSettingChange = (key: string, value: string) => {
-        setChanges({ ...changes, [key]: value });
-    };
-
-    const getSettingValue = (key: string) => {
-        return changes[key] !== undefined ? changes[key] : settings.find(s => s.key === key)?.value || '';
-    };
-
-    const getSettingsByCategory = (category: string) => {
-        return settings.filter(s => s.category === category);
-    };
-
-    const renderSettingInput = (setting: Setting) => {
-        const value = getSettingValue(setting.key);
-
-        if (setting.data_type === 'boolean') {
-            return (
-                <select
-                    value={value}
-                    onChange={(e) => handleSettingChange(setting.key, e.target.value)}
-                    className="w-full px-4 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
-                >
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
-                </select>
-            );
-        }
-
-        if (setting.data_type === 'number') {
-            return (
-                <input
-                    type="number"
-                    value={value}
-                    onChange={(e) => handleSettingChange(setting.key, e.target.value)}
-                    className="w-full px-4 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
-                />
-            );
-        }
-
-        if (setting.data_type === 'password') {
-            return (
-                <input
-                    type="password"
-                    value={value}
-                    onChange={(e) => handleSettingChange(setting.key, e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-4 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
-                />
-            );
-        }
-
-        return (
-            <input
-                type="text"
-                value={value}
-                onChange={(e) => handleSettingChange(setting.key, e.target.value)}
-                className="w-full px-4 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
-            />
-        );
-    };
-
-    // Build tabs based on role
     const tabs = [
         { id: 'profile', label: 'Profile', icon: User },
         { id: 'security', label: 'Security', icon: Lock },
-        { id: 'integrations', label: 'Integrations', icon: Link2 },
-        ...(isAdmin ? [{ id: 'system', label: 'System', icon: SettingsIcon }] : []),
-    ];
-
-    const systemTabs = [
-        { id: 'general', label: 'General', icon: SettingsIcon },
-        { id: 'email', label: 'Email', icon: Mail },
-        { id: 'telegram', label: 'Telegram', icon: Send },
-        { id: 'security', label: 'Security', icon: Shield },
-        { id: 'advanced', label: 'Advanced', icon: Zap },
     ];
 
     if (loading && !profile && activeTab === 'profile') {
@@ -403,7 +200,7 @@ export default function SettingsPage() {
                 </div>
             )}
 
-            {/* Main Tabs */}
+            {/* Tabs */}
             <div className="flex gap-1 sm:gap-2 mb-4 sm:mb-6 border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto">
                 {tabs.map((tab) => {
                     const Icon = tab.icon;
@@ -429,7 +226,6 @@ export default function SettingsPage() {
             {/* Profile Tab */}
             {activeTab === 'profile' && (
                 <div className="space-y-6">
-                    {/* Profile Card */}
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6">
                         <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 sm:gap-8">
                             {/* Left Side - Profile Photo */}
@@ -451,7 +247,7 @@ export default function SettingsPage() {
                                     </label>
                                 </div>
                                 <p className="text-[10px] text-zinc-500 text-center leading-tight">
-                                    Recommended: Square image, at least 400×400px
+                                    Recommended: Square image, at least 400x400px
                                 </p>
                             </div>
 
@@ -488,7 +284,6 @@ export default function SettingsPage() {
                                     )}
                                 </div>
 
-                                {/* Name Fields */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                     <div>
                                         <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-2">First name</label>
@@ -512,7 +307,6 @@ export default function SettingsPage() {
                                     </div>
                                 </div>
 
-                                {/* Email Field */}
                                 <div className="mb-4">
                                     <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-2">Email address</label>
                                     <input
@@ -524,7 +318,6 @@ export default function SettingsPage() {
                                     />
                                 </div>
 
-                                {/* Role Badge */}
                                 <div>
                                     <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-2">Role</label>
                                     <span className="inline-flex items-center px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-800">
@@ -540,7 +333,7 @@ export default function SettingsPage() {
             {/* Security Tab */}
             {activeTab === 'security' && (
                 <div className="space-y-6">
-                    {/* Change Password Card */}
+                    {/* Change Password */}
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
                         <div className="flex items-center gap-3 mb-6">
                             <Key className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
@@ -603,7 +396,7 @@ export default function SettingsPage() {
                         </form>
                     </div>
 
-                    {/* Active Sessions Card */}
+                    {/* Active Sessions */}
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -620,7 +413,7 @@ export default function SettingsPage() {
                         </div>
                     </div>
 
-                    {/* Two-Factor Authentication Card */}
+                    {/* Two-Factor Authentication */}
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
                         <div className="flex items-center gap-3 mb-4">
                             <Shield className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
@@ -648,195 +441,6 @@ export default function SettingsPage() {
                             </button>
                         </div>
                     </div>
-                </div>
-            )}
-
-            {/* Integrations Tab */}
-            {activeTab === 'integrations' && (
-                <div className="space-y-6">
-                    {/* Google Sheets Integration */}
-                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
-                        <div className="flex items-start gap-4 mb-6">
-                            <div className="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
-                                <svg className="w-6 h-6 text-green-600 dark:text-green-400" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M19 11V9h-6V3H7v6H1v2h6v6H1v2h6v6h6v-6h6v-2h-6v-6h6zM9 5h4v4H9V5zm0 14v-4h4v4H9zm4-6H9v-4h4v4z"/>
-                                </svg>
-                            </div>
-                            <div className="flex-1">
-                                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Google Sheets Integration</h3>
-                                <p className="text-xs text-zinc-500 mt-1">
-                                    Connect a Google Service Account to enable automatic data synchronization with Google Sheets.
-                                    This is used for the Sheet Updater feature in your bots.
-                                </p>
-                            </div>
-                        </div>
-
-                        {googleSALoading ? (
-                            <div className="flex items-center justify-center py-8">
-                                <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
-                            </div>
-                        ) : googleSA?.configured ? (
-                            <div className="space-y-4">
-                                {/* Configured State */}
-                                <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                                    <div className="flex-1">
-                                        <p className="text-sm font-medium text-green-700 dark:text-green-300">Service Account Connected</p>
-                                        <p className="text-xs text-green-600 dark:text-green-400 mt-0.5 font-mono">{googleSA.email}</p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-3">
-                                    <label className="cursor-pointer">
-                                        <input
-                                            type="file"
-                                            accept=".json,application/json"
-                                            onChange={handleGoogleSAUpload}
-                                            className="hidden"
-                                            disabled={googleSASaving}
-                                        />
-                                        <span className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white text-sm font-medium rounded-lg transition-colors cursor-pointer">
-                                            <Upload className="h-4 w-4" />
-                                            Replace
-                                        </span>
-                                    </label>
-                                    <button
-                                        onClick={handleGoogleSADelete}
-                                        disabled={googleSASaving}
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                                    >
-                                        {googleSASaving ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Trash2 className="h-4 w-4" />
-                                        )}
-                                        Remove
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {/* Not Configured State */}
-                                <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                                    <XCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                                    <div>
-                                        <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Not Configured</p>
-                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Upload a service account JSON file to enable Google Sheets integration</p>
-                                    </div>
-                                </div>
-
-                                <label className="cursor-pointer inline-block">
-                                    <input
-                                        type="file"
-                                        accept=".json,application/json"
-                                        onChange={handleGoogleSAUpload}
-                                        className="hidden"
-                                        disabled={googleSASaving}
-                                    />
-                                    <span className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer">
-                                        {googleSASaving ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <FileJson className="h-4 w-4" />
-                                        )}
-                                        Upload Service Account JSON
-                                    </span>
-                                </label>
-                            </div>
-                        )}
-
-                        {/* Help Section */}
-                        <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-800">
-                            <h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-3">How to get a Service Account</h4>
-                            <ol className="text-xs text-zinc-500 dark:text-zinc-400 space-y-2 list-decimal list-inside">
-                                <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Google Cloud Console</a></li>
-                                <li>Create or select a project</li>
-                                <li>Enable the <strong>Google Sheets API</strong></li>
-                                <li>Go to <strong>IAM & Admin → Service Accounts</strong></li>
-                                <li>Create a new service account</li>
-                                <li>Create a JSON key and download it</li>
-                                <li>Upload the JSON file here</li>
-                                <li>Share your Google Sheet with the service account email</li>
-                            </ol>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* System Tab (Admin Only) */}
-            {activeTab === 'system' && isAdmin && (
-                <div className="space-y-6">
-                    {/* System Settings Header */}
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-0">
-                        <div>
-                            <h2 className="text-base sm:text-lg font-semibold text-zinc-900 dark:text-zinc-100">System Settings</h2>
-                            <p className="text-xs sm:text-sm text-zinc-500">Configure system-wide settings (Admin only)</p>
-                        </div>
-                        <button
-                            onClick={handleSaveSystemSettings}
-                            disabled={saving || Object.keys(changes).length === 0}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <Save size={18} />
-                            {saving ? 'Saving...' : 'Save Changes'}
-                        </button>
-                    </div>
-
-                    {/* System Sub-Tabs */}
-                    <div className="flex gap-1 sm:gap-2 border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto">
-                        {systemTabs.map((tab) => {
-                            const Icon = tab.icon;
-                            return (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setSystemActiveTab(tab.id)}
-                                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 font-medium transition-colors text-xs sm:text-sm whitespace-nowrap ${systemActiveTab === tab.id
-                                        ? 'text-blue-500 dark:text-blue-400 border-b-2 border-blue-500 dark:border-blue-400'
-                                        : 'text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'
-                                        }`}
-                                >
-                                    <Icon size={14} className="sm:w-4 sm:h-4" />
-                                    {tab.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    {/* System Settings Form */}
-                    {loading ? (
-                        <div className="flex items-center justify-center h-32">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {getSettingsByCategory(systemActiveTab).map((setting) => (
-                                <div key={setting.key} className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-800">
-                                    <div className="mb-2">
-                                        <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-300">
-                                            {setting.key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                                        </label>
-                                        {setting.description && (
-                                            <p className="text-xs text-zinc-500 mt-1">{setting.description}</p>
-                                        )}
-                                    </div>
-                                    {renderSettingInput(setting)}
-                                </div>
-                            ))}
-
-                            {getSettingsByCategory(systemActiveTab).length === 0 && (
-                                <div className="text-center py-12 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
-                                    <p className="text-zinc-500">No settings available in this category</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Unsaved Changes Warning */}
-                    {Object.keys(changes).length > 0 && (
-                        <div className="fixed bottom-6 right-6 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/20 text-yellow-700 dark:text-yellow-400 px-4 py-3 rounded-lg shadow-lg">
-                            <p className="text-sm font-medium">You have unsaved changes</p>
-                        </div>
-                    )}
                 </div>
             )}
         </div>

@@ -120,6 +120,8 @@ export default function Sidebar() {
         { name: 'Health Check', href: '/dashboard/system?tab=health' },
         { name: 'Backup & Restore', href: '/dashboard/system?tab=backup' },
         { name: 'Maintenance', href: '/dashboard/system?tab=maintenance' },
+        { name: 'Email', href: '/dashboard/system?tab=email' },
+        { name: 'Landing Page', href: '/dashboard/landing-page' },
     ]
 
     const bottomNavigation = useMemo(() => {

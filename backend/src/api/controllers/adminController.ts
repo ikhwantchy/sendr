@@ -3,6 +3,7 @@ import systemSettingsService from '../../services/systemSettingsService';
 import auditLogService from '../../services/auditLogService';
 import userInviteService from '../../services/userInviteService';
 import { googleSheetsWriteService } from '../../services/googleSheetsWriteService';
+import emailService from '../../services/emailService';
 import { query } from '../../database/connection-sqlite';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
@@ -98,9 +99,22 @@ export const createUser = async (req: Request, res: Response) => {
             status: 'success'
         });
 
+        // Try to send welcome email (non-blocking)
+        let emailSent = false;
+        try {
+            await emailService.sendWelcomeEmail(name, email, password);
+            emailSent = true;
+        } catch (emailError: any) {
+            console.warn(`[Admin] Welcome email failed for ${email}:`, emailError.message);
+            // Don't fail user creation if email fails
+        }
+
         res.status(201).json({
             success: true,
-            message: 'User created successfully',
+            message: emailSent
+                ? 'User created successfully and welcome email sent'
+                : 'User created successfully',
+            email_sent: emailSent,
             user: {
                 id: userId,
                 name,
@@ -294,6 +308,15 @@ export const bulkUpdateSettings = async (req: Request, res: Response) => {
             }
         }
 
+        // Clear email transporter cache if any email settings changed
+        const hasEmailChanges = keys.some(key =>
+            key.startsWith('smtp_') || key === 'from_email' || key === 'from_name'
+        );
+        if (hasEmailChanges) {
+            emailService.clearTransporter();
+            console.log('[Admin] Email settings updated via bulk, transporter cache cleared');
+        }
+
         res.json({
             success: true,
             message: 'Settings updated successfully'
@@ -343,6 +366,12 @@ export const updateSettings = async (req: Request, res: Response) => {
 
         await systemSettingsService.setMultiple(settingsUpdates);
 
+        // Clear email transporter cache when email settings change
+        if (category === 'email') {
+            emailService.clearTransporter();
+            console.log('[Admin] Email settings updated, transporter cache cleared');
+        }
+
         res.json({
             success: true,
             message: 'Settings updated successfully'
@@ -372,7 +401,6 @@ export const testEmail = async (req: Request, res: Response) => {
             });
         }
 
-        const emailService = require('../../services/emailService').default;
         await emailService.sendTestEmail(to);
 
         res.json({

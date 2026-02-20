@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import AdminGuard from '@/components/AdminGuard';
+import EmailSettings from '@/components/EmailSettings';
 
 interface HealthStatus {
     status: string;
@@ -86,7 +87,7 @@ function KPICard({ title, value, icon, loading, status, subtitle }: KPICardProps
 function SystemContent() {
     const searchParams = useSearchParams();
     const [mounted, setMounted] = useState(false);
-    const [activeTab, setActiveTab] = useState<'health' | 'backup' | 'maintenance'>('health');
+    const [activeTab, setActiveTab] = useState<'health' | 'backup' | 'maintenance' | 'email'>('health');
     const [health, setHealth] = useState<HealthStatus | null>(null);
     const [backups, setBackups] = useState<Backup[]>([]);
     const [loading, setLoading] = useState(false);
@@ -96,8 +97,8 @@ function SystemContent() {
     useEffect(() => {
         setMounted(true);
         const tabParam = searchParams?.get('tab');
-        if (tabParam && ['health', 'backup', 'maintenance'].includes(tabParam)) {
-            setActiveTab(tabParam as 'health' | 'backup' | 'maintenance');
+        if (tabParam && ['health', 'backup', 'maintenance', 'email'].includes(tabParam)) {
+            setActiveTab(tabParam as 'health' | 'backup' | 'maintenance' | 'email');
         }
     }, [searchParams]);
 
@@ -163,6 +164,26 @@ function SystemContent() {
         }
     };
 
+    const handleDownloadBackup = (filename: string) => {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const token = localStorage.getItem('token');
+        const url = `${baseUrl}/api/admin/system/backups/download/${encodeURIComponent(filename)}`;
+        // Open in new tab with auth — use fetch + blob for authenticated download
+        fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(res => {
+                if (!res.ok) throw new Error('Download failed');
+                return res.blob();
+            })
+            .then(blob => {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            })
+            .catch(() => alert('Failed to download backup'));
+    };
+
     const handleOptimizeDB = async () => {
         if (!confirm('Optimize database? This may take a few moments.')) return;
         setLoading(true);
@@ -215,7 +236,8 @@ function SystemContent() {
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
-            {/* Header */}
+            {/* Header - hide on email tab since EmailSettings has its own */}
+            {activeTab !== 'email' && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
                     {activeTab === 'health' ? 'Health Check' :
@@ -231,6 +253,7 @@ function SystemContent() {
                     <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 </button>
             </div>
+            )}
 
             {/* Health Check Tab */}
             {activeTab === 'health' && (
@@ -492,7 +515,7 @@ function SystemContent() {
                                                     {new Date(backup.created_at).toLocaleString()}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <button className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-all">
+                                                    <button onClick={() => handleDownloadBackup(backup.filename)} className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-all">
                                                         <Download className="w-4 h-4" />
                                                     </button>
                                                 </td>
@@ -515,7 +538,7 @@ function SystemContent() {
                                                 {new Date(backup.created_at).toLocaleDateString()}
                                             </p>
                                         </div>
-                                        <button className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg flex-shrink-0">
+                                        <button onClick={() => handleDownloadBackup(backup.filename)} className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg flex-shrink-0">
                                             <Download className="w-4 h-4" />
                                         </button>
                                     </div>
@@ -574,6 +597,11 @@ function SystemContent() {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {/* Email Tab */}
+            {activeTab === 'email' && (
+                <EmailSettings />
             )}
         </div>
     );

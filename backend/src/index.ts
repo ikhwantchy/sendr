@@ -8,6 +8,8 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
+import fs from 'fs';
 import { logger } from './utils/logger';
 import { query, closePool } from './database/connection';
 
@@ -107,6 +109,34 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/security', securityRoutes);
 app.use('/api/sheet-updater', sheetUpdaterRoutes);
 app.use('/api/lid-mappings', lidMappingRoutes);
+
+// Public endpoint - landing page content (no auth)
+app.get('/api/public/landing-page', async (req, res) => {
+    try {
+        const { default: systemSettingsService } = await import('./services/systemSettingsService');
+        const content = await systemSettingsService.get('landing_page', 'content', '{}');
+        // content may be a string or already-parsed object depending on data_type
+        const parsed = typeof content === 'string' ? JSON.parse(content) : content;
+        res.json({ success: true, content: parsed });
+    } catch (error: any) {
+        console.error('[Landing] Public endpoint error:', error.message);
+        res.json({ success: true, content: {} });
+    }
+});
+
+// Public endpoint - serve uploaded images (no auth, cross-origin allowed)
+const UPLOADS_DIR = path.join(__dirname, '../data/uploads');
+app.get('/api/public/uploads/:filename', (req, res) => {
+    const filename = path.basename(req.params.filename); // prevent directory traversal
+    const filePath = path.join(UPLOADS_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'File not found' });
+    }
+    // Override helmet's restrictive CORP header for images
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.sendFile(filePath);
+});
 
 
 // 404 handler
