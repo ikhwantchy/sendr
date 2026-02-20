@@ -133,9 +133,9 @@ class EmailService {
         const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const loginUrl = `${baseUrl}/login`;
 
-        // Check if welcome email is enabled
-        const enabled = await systemSettingsService.get('email', 'welcome_email_enabled', 'false');
-        if (enabled !== 'true') {
+        // Check if welcome email is enabled (default: true)
+        const enabled = await systemSettingsService.get('email', 'welcome_email_enabled', 'true');
+        if (enabled === 'false') {
             console.log(`[Email] Welcome email disabled, skipping for ${userEmail}`);
             return;
         }

@@ -70,16 +70,22 @@ export const createInvite = async (req: Request, res: Response) => {
         const { invite_id, token } = await userInviteService.createInvite(email, role, invitedBy);
 
         // Send invite email
+        let emailSent = false;
+        let emailError = '';
         try {
             await emailService.sendInviteEmail(email, token, req.user!.name || req.user!.email);
-        } catch (emailError) {
-            console.error('[Invites] Failed to send email:', emailError);
-            // Don't fail the request if email fails
+            emailSent = true;
+        } catch (err: any) {
+            console.error('[Invites] Failed to send email:', err);
+            emailError = err.message || 'Unknown email error';
         }
 
         res.json({
             success: true,
-            message: 'Invite created and email sent',
+            message: emailSent
+                ? 'Invite created and email sent'
+                : `Invite created but email failed: ${emailError}`,
+            email_sent: emailSent,
             invite_id
         });
     } catch (error: any) {
@@ -114,15 +120,18 @@ export const resendInvite = async (req: Request, res: Response) => {
         }
 
         // Send email
+        let emailSent = false;
         try {
             await emailService.sendInviteEmail(invite.email, newToken, req.user!.name || req.user!.email);
+            emailSent = true;
         } catch (emailError) {
-            console.error('[Invites] Failed to send email:', emailError);
+            console.error('[Invites] Failed to resend email:', emailError);
         }
 
         res.json({
             success: true,
-            message: 'Invite resent successfully'
+            message: emailSent ? 'Invite resent successfully' : 'Invite updated but email failed to send',
+            email_sent: emailSent
         });
     } catch (error: any) {
         console.error('[Invites] Resend invite error:', error);
