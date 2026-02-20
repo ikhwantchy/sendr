@@ -328,10 +328,9 @@ function FeatureSection({
     headingFont?: string
 }) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
-    const imgWidth = mockupImageWidth || 50
-    const imgPos = mockupImagePosition ?? 50
+    const imgScale = (mockupImageWidth || 100) / 100
+    const imgPosX = ((mockupImagePosition ?? 50) - 50) * 4 // 0→-200px, 50→0px, 100→+200px
     const imgPosY = mockupImagePositionY ?? 0
-    const marginLeft = imgWidth < 100 ? (imgPos / 100) * (100 - imgWidth) : 0
 
     return (
         <div className={`grid lg:grid-cols-2 gap-8 lg:gap-16 items-center ${reverse ? 'lg:flex-row-reverse' : ''}`}>
@@ -346,12 +345,12 @@ function FeatureSection({
                 {mockupImage ? (
                     <div
                         className="relative cms-mockup"
-                        style={{ width: `${imgWidth}%`, marginLeft: `${marginLeft}%`, transform: `translateY(${imgPosY}px)` }}
+                        style={{ transform: `scale(${imgScale}) translateX(${imgPosX}px) translateY(${imgPosY}px)`, transformOrigin: 'center top' }}
                     >
                         <img
                             src={`${apiUrl}${mockupImage}`}
                             alt={title}
-                            className="w-full h-auto"
+                            className="w-full h-auto rounded-2xl"
                         />
                     </div>
                 ) : (
@@ -524,7 +523,7 @@ export default function LandingPage() {
         >            {/* ─── Hero Section ─────────────────────────────── */}
             <div className="relative h-[700px] sm:h-[800px] lg:h-[900px] overflow-hidden">
                 <SectionGrid className="bg-[#0a0a0a]">
-                    <section className="px-4 sm:px-6 pt-12 sm:pt-18 lg:pt-24 pb-0 max-w-4xl mx-auto">
+                    <section className="px-4 sm:px-6 pt-8 sm:pt-12 lg:pt-16 pb-0 max-w-6xl mx-auto">
                         {/* Text — centered */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
@@ -536,10 +535,10 @@ export default function LandingPage() {
                             <img
                                 src="/sendr-logo.png"
                                 alt="Sendr"
-                                className="h-[80px] sm:h-[100px] lg:h-[120px] w-auto mx-auto mb-6 sm:mb-8"
+                                className="h-[80px] sm:h-[100px] lg:h-[120px] w-auto mx-auto mb-10 sm:mb-12"
                             />
                             <h1
-                                className="text-[28px] sm:text-[40px] lg:text-[52px] font-bold text-white leading-[1.1] tracking-tight mb-4 sm:mb-5 whitespace-pre-line"
+                                className="text-[28px] sm:text-[40px] lg:text-[52px] font-bold text-white leading-[1.1] tracking-tight mb-4 sm:mb-5 whitespace-pre-line max-w-3xl mx-auto"
                                 style={{ fontFamily: `'${fontHeading}', sans-serif` }}
                             >
                                 {content.hero.title}
@@ -569,7 +568,7 @@ export default function LandingPage() {
                         >
                             {(content.hero as any)?.mockup_image ? (
                                 <div
-                                    className="relative cms-mockup"
+                                    className="relative cms-mockup flex-shrink-0"
                                     style={{ width: `${heroImgWidth}%`, marginLeft: `${heroMarginLeft}%`, transform: `translateY(${heroImgPosY}px)` }}
                                 >
                                     <img
@@ -579,7 +578,7 @@ export default function LandingPage() {
                                     />
                                 </div>
                             ) : (
-                                <PhoneMockup className="w-[240px] sm:w-[280px]">
+                                <PhoneMockup className="w-[280px] sm:w-[320px] lg:w-[340px]">
                                     <DashboardMockup />
                                 </PhoneMockup>
                             )}
@@ -601,7 +600,7 @@ export default function LandingPage() {
             {content.features.map((feat: any, idx: number) => (
                 (feat as any).visible !== false && (
                 <div key={idx}>
-                    <section id={idx === 0 ? 'features' : undefined} className="px-4 sm:px-6 py-16 sm:py-24 max-w-6xl mx-auto bg-[#0a0a0a]">
+                    <section id={idx === 0 ? 'features' : undefined} className="px-4 sm:px-6 py-16 sm:py-24 max-w-6xl mx-auto bg-[#0a0a0a] overflow-y-clip">
                         <FeatureSection
                             label={feat.label}
                             title={feat.title}

@@ -470,13 +470,13 @@ function ImageSettingsControls({ width, position, positionY, onWidthChange, onPo
             {/* Width slider */}
             <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Ukuran Gambar</label>
+                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Ukuran Gambar (Skala)</label>
                     <span className="text-xs font-mono text-zinc-400">{width}%</span>
                 </div>
                 <input
                     type="range"
                     min={20}
-                    max={100}
+                    max={150}
                     step={5}
                     value={width}
                     onChange={e => onWidthChange(Number(e.target.value))}
@@ -484,7 +484,7 @@ function ImageSettingsControls({ width, position, positionY, onWidthChange, onPo
                 />
                 <div className="flex justify-between text-[10px] text-zinc-400">
                     <span>20%</span>
-                    <span>100%</span>
+                    <span>150%</span>
                 </div>
             </div>
 
@@ -528,8 +528,8 @@ function ImageSettingsControls({ width, position, positionY, onWidthChange, onPo
                 </div>
                 <input
                     type="range"
-                    min={-200}
-                    max={200}
+                    min={-500}
+                    max={500}
                     step={5}
                     value={positionY}
                     onChange={e => onPositionYChange(Number(e.target.value))}
