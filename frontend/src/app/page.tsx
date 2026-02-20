@@ -334,13 +334,13 @@ function FeatureSection({
 
     return (
         <div className={`grid lg:grid-cols-2 gap-8 lg:gap-16 items-center ${reverse ? 'lg:flex-row-reverse' : ''}`}>
-            {/* Mockup */}
+            {/* Mockup — hidden on mobile */}
             <motion.div
                 initial={{ opacity: 0, x: reverse ? 30 : -30 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6 }}
-                className={`${reverse ? 'lg:order-2' : 'lg:order-1'}`}
+                className={`hidden lg:block ${reverse ? 'lg:order-2' : 'lg:order-1'}`}
             >
                 {mockupImage ? (
                     <div
@@ -369,28 +369,28 @@ function FeatureSection({
                 className={`${reverse ? 'lg:order-1' : 'lg:order-2'}`}
             >
                 {label && (
-                    <span className="text-[11px] sm:text-[12px] text-blue-400 font-semibold tracking-widest uppercase mb-3 block">
+                    <span className="text-[11px] sm:text-[12px] text-blue-400 font-semibold tracking-widest uppercase mb-3 block text-center lg:text-left">
                         {label}
                     </span>
                 )}
                 <h3
-                    className="text-[24px] sm:text-[30px] lg:text-[36px] font-bold text-white leading-[1.15] tracking-tight mb-4"
+                    className="text-[22px] sm:text-[30px] lg:text-[36px] font-bold text-white leading-[1.15] tracking-tight mb-3 sm:mb-4 text-center lg:text-left"
                     style={headingFont ? { fontFamily: `'${headingFont}', sans-serif` } : undefined}
                 >
                     {title}
                 </h3>
-                <p className="text-[14px] sm:text-[15px] text-zinc-400 leading-relaxed mb-8 max-w-lg">
+                <p className="text-[13px] sm:text-[15px] text-zinc-400 leading-relaxed mb-6 sm:mb-8 max-w-lg text-center lg:text-left mx-auto lg:mx-0">
                     {description}
                 </p>
-                <div className="space-y-5">
+                <div className="space-y-4 sm:space-y-5">
                     {items.map((item, i) => (
-                        <div key={i} className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700/50 flex items-center justify-center flex-shrink-0">
-                                <item.icon weight="duotone" className="w-5 h-5 text-blue-400" />
+                        <div key={i} className="flex items-start gap-3 sm:gap-4">
+                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-zinc-800 border border-zinc-700/50 flex items-center justify-center flex-shrink-0">
+                                <item.icon weight="duotone" className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
                             </div>
                             <div>
-                                <h4 className="text-[14px] sm:text-[15px] font-semibold text-white mb-1">{item.title}</h4>
-                                <p className="text-[12px] sm:text-[13px] text-zinc-500 leading-relaxed">{item.description}</p>
+                                <h4 className="text-[13px] sm:text-[15px] font-semibold text-white mb-0.5 sm:mb-1">{item.title}</h4>
+                                <p className="text-[11px] sm:text-[13px] text-zinc-500 leading-relaxed">{item.description}</p>
                             </div>
                         </div>
                     ))}
@@ -521,9 +521,9 @@ export default function LandingPage() {
             className="min-h-screen bg-[#0a0a0a] text-white overflow-x-hidden"
             style={{ fontFamily: `'${fontBody}', sans-serif` }}
         >            {/* ─── Hero Section ─────────────────────────────── */}
-            <div className="relative h-[700px] sm:h-[800px] lg:h-[900px] overflow-hidden">
+            <div className="relative sm:h-[800px] lg:h-[900px] overflow-hidden">
                 <SectionGrid className="bg-[#0a0a0a]">
-                    <section className="px-4 sm:px-6 pt-8 sm:pt-12 lg:pt-16 pb-0 max-w-6xl mx-auto">
+                    <section className="px-4 sm:px-6 pt-8 sm:pt-12 lg:pt-16 pb-16 sm:pb-0 max-w-6xl mx-auto">
                         {/* Text — centered */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
@@ -535,15 +535,15 @@ export default function LandingPage() {
                             <img
                                 src="/sendr-logo.png"
                                 alt="Sendr"
-                                className="h-[80px] sm:h-[100px] lg:h-[120px] w-auto mx-auto mb-10 sm:mb-12"
+                                className="h-[60px] sm:h-[100px] lg:h-[120px] w-auto mx-auto mb-6 sm:mb-12"
                             />
                             <h1
-                                className="text-[28px] sm:text-[40px] lg:text-[52px] font-bold text-white leading-[1.1] tracking-tight mb-4 sm:mb-5 whitespace-pre-line max-w-3xl mx-auto"
+                                className="text-[24px] sm:text-[40px] lg:text-[52px] font-bold text-white leading-[1.1] tracking-tight mb-3 sm:mb-5 whitespace-pre-line max-w-3xl mx-auto"
                                 style={{ fontFamily: `'${fontHeading}', sans-serif` }}
                             >
                                 {content.hero.title}
                             </h1>
-                            <p className="text-[13px] sm:text-[15px] lg:text-[17px] text-zinc-400 leading-relaxed mb-6 sm:mb-8 max-w-2xl mx-auto px-2">
+                            <p className="text-[12px] sm:text-[15px] lg:text-[17px] text-zinc-400 leading-relaxed mb-5 sm:mb-8 max-w-2xl mx-auto px-2">
                                 {content.hero.description}
                             </p>
                             {content.hero.cta_visible !== false && (
@@ -551,20 +551,20 @@ export default function LandingPage() {
                                     href={content.hero.cta_link}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white text-[14px] sm:text-[15px] font-semibold rounded-xl transition-all hover:shadow-lg hover:shadow-blue-500/25"
+                                    className="inline-flex items-center gap-2 px-5 sm:px-8 py-2.5 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white text-[13px] sm:text-[15px] font-semibold rounded-xl transition-all hover:shadow-lg hover:shadow-blue-500/25"
                                 >
-                                    <WhatsappLogo weight="fill" className="w-5 h-5" />
+                                    <WhatsappLogo weight="fill" className="w-4 h-4 sm:w-5 sm:h-5" />
                                     {content.hero.cta_text}
                                 </a>
                             )}
                         </motion.div>
 
-                        {/* Mockup — centered below, clips at hero boundary */}
+                        {/* Mockup — hidden on mobile, visible on sm+ */}
                         <motion.div
                             initial={{ opacity: 0, y: 40 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.2 }}
-                            className="flex justify-center mt-10 sm:mt-14"
+                            className="hidden sm:flex justify-center mt-10 sm:mt-14"
                         >
                             {(content.hero as any)?.mockup_image ? (
                                 <div
@@ -578,7 +578,7 @@ export default function LandingPage() {
                                     />
                                 </div>
                             ) : (
-                                <PhoneMockup className="w-[280px] sm:w-[320px] lg:w-[340px]">
+                                <PhoneMockup className="sm:w-[320px] lg:w-[340px]">
                                     <DashboardMockup />
                                 </PhoneMockup>
                             )}
@@ -586,8 +586,8 @@ export default function LandingPage() {
                     </section>
                 </SectionGrid>
 
-                {/* Bottom fade — clips mockup smoothly */}
-                <div className="absolute bottom-0 left-0 right-0 h-32 sm:h-40 bg-gradient-to-t from-[#0a0a0a] to-transparent z-20 pointer-events-none" />
+                {/* Bottom fade — clips mockup smoothly (hidden on mobile since no mockup) */}
+                <div className="hidden sm:block absolute bottom-0 left-0 right-0 h-32 sm:h-40 bg-gradient-to-t from-[#0a0a0a] to-transparent z-20 pointer-events-none" />
             </div>
 
             {/* ─── Hero / Body Divider ───────────────────────── */}
@@ -600,7 +600,8 @@ export default function LandingPage() {
             {content.features.map((feat: any, idx: number) => (
                 (feat as any).visible !== false && (
                 <div key={idx}>
-                    <section id={idx === 0 ? 'features' : undefined} className="px-4 sm:px-6 py-16 sm:py-24 max-w-6xl mx-auto bg-[#0a0a0a] overflow-y-clip">
+                    <SectionGrid className="bg-[#0a0a0a] lg:bg-transparent">
+                    <section id={idx === 0 ? 'features' : undefined} className="px-4 sm:px-6 py-12 sm:py-24 max-w-6xl mx-auto overflow-y-clip">
                         <FeatureSection
                             label={feat.label}
                             title={feat.title}
@@ -619,7 +620,7 @@ export default function LandingPage() {
                             }))}
                         />
                     </section>
-                    {/* Section Divider */}
+                    </SectionGrid>
                     <div className="relative section-divider">
                         <div className="h-8 sm:h-12 bg-gradient-to-t from-blue-500/5 to-transparent" />
                         <div className="h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
@@ -630,7 +631,7 @@ export default function LandingPage() {
 
             {/* ─── FAQ Section ────────────────────────────── */}
             {((content as any).visibility?.faq !== false || (content as any).visibility?.contact !== false) && (
-            <section id="faq" className="px-4 sm:px-6 py-16 sm:py-24 max-w-3xl mx-auto bg-[#0a0a0a]">
+            <section id="faq" className="px-4 sm:px-6 py-12 sm:py-24 max-w-3xl mx-auto bg-[#0a0a0a]">
                 {(content as any).visibility?.faq !== false && (
                 <>
                 <motion.div
@@ -688,7 +689,8 @@ export default function LandingPage() {
 
             {/* ─── CTA Section ────────────────────────────── */}
             {(content as any).visibility?.cta_section !== false && (
-            <section className="px-4 sm:px-6 py-20 sm:py-28 bg-[#0a0a0a]">
+            <SectionGrid className="bg-[#0a0a0a]">
+            <section className="px-4 sm:px-6 py-16 sm:py-28 bg-transparent">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
@@ -697,25 +699,26 @@ export default function LandingPage() {
                     className="max-w-3xl mx-auto text-center"
                 >
                     <h2
-                        className="text-[28px] sm:text-[36px] lg:text-[44px] font-bold tracking-tight mb-4 sm:mb-5"
+                        className="text-[24px] sm:text-[36px] lg:text-[44px] font-bold tracking-tight mb-3 sm:mb-5"
                         style={{ fontFamily: `'${fontHeading}', sans-serif` }}
                     >
                         {content.cta.title}
                     </h2>
-                    <p className="text-[14px] sm:text-[16px] text-zinc-400 mb-8 sm:mb-10 max-w-xl mx-auto">
+                    <p className="text-[13px] sm:text-[16px] text-zinc-400 mb-6 sm:mb-10 max-w-xl mx-auto">
                         {content.cta.description}
                     </p>
                     <a
                         href={content.cta.button_link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white text-[15px] font-semibold rounded-xl transition-all hover:shadow-lg hover:shadow-blue-500/25"
+                        className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white text-[13px] sm:text-[15px] font-semibold rounded-xl transition-all hover:shadow-lg hover:shadow-blue-500/25"
                     >
                         {content.cta.button_text}
                         <ArrowRight weight="bold" className="w-4 h-4" />
                     </a>
                 </motion.div>
             </section>
+            </SectionGrid>
             )}
 
             {/* ─── Footer ─────────────────────────────────── */}
