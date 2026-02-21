@@ -1,39 +1,110 @@
-name: Deploy to Staging
+name: 🚀 Auto Deploy to AWS
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main   # Trigger setiap push ke branch main
 
 jobs:
   deploy:
+    name: Deploy to AWS EC2
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@master
+      # ─────────────────────────────────────────
+      # 1. Checkout code (untuk build frontend)
+      # ─────────────────────────────────────────
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────
+      # 2. Setup Node.js
+      # ─────────────────────────────────────────
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # ─────────────────────────────────────────
+      # 3. Build Frontend (Next.js)
+      #    Build di GitHub Actions agar server
+      #    tidak OOM (RAM terbatas di AWS free tier)
+      # ─────────────────────────────────────────
+      - name: 📦 Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci --prefer-offline
+
+      - name: 🔨 Build frontend
+        working-directory: ./frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        run: npm run build
+
+      # ─────────────────────────────────────────
+      # 4. Upload hasil build ke server via rsync
+      # ─────────────────────────────────────────
+      - name: 🔐 Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AWS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 📤 Upload .next build ke server
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ./frontend/.next/ \
+            ${{ secrets.AWS_USERNAME }}@${{ secrets.AWS_HOST }}:~/Sendr/frontend/.next/
+
+      # ─────────────────────────────────────────
+      # 5. SSH ke server, pull kode & restart PM2
+      # ─────────────────────────────────────────
+      - name: 🚀 Deploy on server
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.AWS_HOST }}
           username: ${{ secrets.AWS_USERNAME }}
           key: ${{ secrets.AWS_SSH_KEY }}
+          timeout: 10m
           script: |
-            # Navigate to project dir (Support both folder names)
-            cd ~/Sendr || cd ~/brobot || echo "Project folder not found!" && exit 1
-            
-            echo "Deployment started..."
-            
-            # Pull latest code (includes pre-built .next/ from local)
+            set -e
+            echo "==============================="
+            echo "🚀 Auto Deploy — $(date)"
+            echo "==============================="
+
+            # Masuk ke direktori project
+            cd ~/Sendr
+
+            # Pull kode terbaru (backend + config)
             git pull origin main
-            
-            # Backend Setup
+
+            # Install backend dependencies jika ada perubahan
             cd backend
-            npm install --no-audit --no-fund
-            npm run build
-            npm run migrate
-            
-            # Frontend: install deps only (NO build — built locally to avoid OOM)
-            cd ../frontend
-            npm install --no-audit --no-fund
-            
-            # Restart Services
-            pm2 restart all
-            
-            echo "Deployment finished successfully!"
+            npm install --no-audit --no-fund --omit=dev 2>/dev/null
+            cd ..
+
+            # Backup database SQLite sebelum deploy
+            BACKUP_DIR="backend/data/backups"
+            mkdir -p "$BACKUP_DIR"
+            DB_FILE="backend/data/database.sqlite"
+            if [ -f "$DB_FILE" ]; then
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              cp "$DB_FILE" "$BACKUP_DIR/database_pre-deploy_${TIMESTAMP}.sqlite"
+              echo "✅ Database backed up → $BACKUP_DIR"
+              # Keep only last 10 backups
+              ls -t "$BACKUP_DIR"/database_pre-deploy_*.sqlite 2>/dev/null | tail -n +11 | xargs -r rm
+            fi
+
+            # Restart PM2 services
+            pm2 restart Sendr-backend Sendr-frontend --update-env
+
+            # Tunggu lalu cek status
+            sleep 3
+            pm2 status
+
+            echo ""
+            echo "✅ Deploy selesai! — $(date)"

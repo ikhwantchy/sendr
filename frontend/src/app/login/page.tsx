@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { Turnstile } from '@marsidev/react-turnstile'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { Mail, Lock, ArrowRight, Loader2, Github } from 'lucide-react'
+import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { getErrorMessage } from '@/lib/errorUtils'
 
@@ -11,13 +12,26 @@ export default function LoginPage() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
+    const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+    const turnstileRef = useRef<any>(null)
+
+    const siteKey = process.env.NEXT_PUBLIC_CF_TURNSTILE_SITE_KEY || ''
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
 
+        // Validasi token Turnstile sebelum submit
+        if (siteKey && !turnstileToken) {
+            toast.error('Verifikasi keamanan belum selesai, coba lagi.')
+            setLoading(false)
+            // Reset widget agar user bisa coba lagi
+            turnstileRef.current?.reset()
+            return
+        }
+
         try {
-            const response = await api.auth.login(email, password)
+            const response = await api.auth.login(email, password, turnstileToken ?? undefined)
 
             if (response.data.success) {
                 localStorage.setItem('token', response.data.data.token)
@@ -32,6 +46,9 @@ export default function LoginPage() {
         } catch (error: any) {
             toast.error(getErrorMessage(error, 'Invalid credentials'))
             setLoading(false)
+            // Reset Turnstile widget setelah gagal — token lama tidak bisa dipakai ulang
+            setTurnstileToken(null)
+            turnstileRef.current?.reset()
         }
     }
 
@@ -104,10 +121,34 @@ export default function LoginPage() {
                                 </div>
                             </div>
 
+                            {/* Cloudflare Turnstile Widget */}
+                            {siteKey && (
+                                <div className="flex justify-center pt-1">
+                                    <Turnstile
+                                        ref={turnstileRef}
+                                        siteKey={siteKey}
+                                        onSuccess={(token) => setTurnstileToken(token)}
+                                        onExpire={() => {
+                                            setTurnstileToken(null)
+                                            turnstileRef.current?.reset()
+                                        }}
+                                        onError={() => {
+                                            setTurnstileToken(null)
+                                            toast.error('Gagal memuat verifikasi keamanan. Refresh halaman.')
+                                        }}
+                                        options={{
+                                            theme: 'dark',
+                                            language: 'id',
+                                            size: 'normal',
+                                        }}
+                                    />
+                                </div>
+                            )}
+
                             <div className="pt-2">
                                 <button
                                     type="submit"
-                                    disabled={loading}
+                                    disabled={loading || (!!siteKey && !turnstileToken)}
                                     className="w-full flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-white/10"
                                 >
                                     {loading && <Loader2 className="w-4 h-4 animate-spin" />}

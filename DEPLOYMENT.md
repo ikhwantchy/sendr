@@ -1,415 +1,256 @@
 # Deployment Guide: Sendr WhatsApp Automation Platform
 
-This guide details how to deploy the Sendr platform to your existing AWS server (running Ubuntu/Debian) alongside your existing applications (`Cucii.my.id`).
+> **Last updated:** Feb 2026
+> **Server:** AWS t3.small (2GB RAM), Ubuntu, PM2, Nginx
+> **Domain:** sendr.web.id
 
-## 📋 Prerequisites
-- Access to your AWS Server via SSH.
-- **Node.js** (v18 or later) installed on the server.
-- **PM2** installed globally on the server.
-- **Git** installed on the server.
-- **Nginx** (already installed on your server).
+---
 
-## ⚡ Step 1.5: Server Optimization (CRITICAL for 2GB RAM)
+## ATURAN PENTING (BACA DULU!)
 
-**⚠️ WAJIB DILAKUKAN:** Mengingat Anda menggunakan server dengan RAM 2GB (`t3.small`), langkah ini **SANGAT KRUSIAL** untuk mencegah server crash saat proses `build` atau saat beban tinggi.
+### 1. JANGAN build frontend di server
+Server cuma 2GB RAM, `npm run build` frontend PASTI OOM crash.
+Frontend di-build **di local**, lalu `.next/` di-push ke git.
 
-Jalankan perintah ini satu per satu di terminal server Anda:
-
-```bash
-# 1. Matikan swap lama jika ada (optional)
-sudo swapoff -a
-
-# 2. Buat file swap sebesar 4GB (biar lega)
-sudo fallocate -l 4G /swapfile
-
-# 3. Ubah permission file agar aman
-sudo chmod 600 /swapfile
-
-# 4. Format file sebagai swap area
-sudo mkswap /swapfile
-
-# 5. Aktifkan swap
-sudo swapon /swapfile
-
-# 6. Buat permanen (agar tetap jalan setelah restart)
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-
-# 7. Cek apakah swap sudah aktif
-sudo free -h
-# Pastikan di baris 'Swap' muncul angka sekitar 4.0G
+### 2. Environment variables untuk API URL
+```
+frontend/.env.development  → NEXT_PUBLIC_API_URL=http://localhost:3001  (untuk npm run dev)
+frontend/.env.production   → NEXT_PUBLIC_API_URL=https://sendr.web.id  (untuk npm run build)
+frontend/.env.local        → KOSONGKAN (jangan isi, karena .env.local override semua env)
 ```
 
-*Dengan melakukan ini, server Anda sekarang punya total memori 6GB (2GB RAM Fisik + 4GB Virtual), cukup untuk menampung lonjakan trafik.*
+**JANGAN** taruh `NEXT_PUBLIC_API_URL` di `.env.local`!
+Next.js `.env.local` override SEMUA environment. Kalau isinya `localhost:3001`,
+maka production build juga pakai `localhost:3001` → dashboard MATI di production.
 
----
+### 3. Install dependency baru di SERVER juga
+Kalau menambah package baru di backend (contoh: `multer`), 
+**HARUS** install juga di server karena `node_modules` tidak di-push ke git.
 
-## 🚀 Step 1: Prepare Your Codebase
-
-1.  **Protect Sensitive Data**:
-    Ensure your `.gitignore` in `backend/` includes:
-    ```
-    .env
-    node_modules/
-    dist/
-    sessions/
-    *.sqlite
-    *.sqlite-journal
-    ```
-    *Note: We exclude `sessions/` and database files so they are not overwritten by future deployments/git pulls.*
-
-2.  **Push to GitHub**:
-    Ensure all your latest changes are committed and pushed to your repository.
-    ```bash
-    git add .
-    git commit -m "Ready for deployment"
-    git push origin main
-    ```
-
-## 🛠️ Step 2: Server Setup
-
-Connect to your server:
 ```bash
-ssh user@your-server-ip
+# Di server:
+cd ~/Sendr/backend
+npm install
 ```
 
-1.  **Install Node.js 18+** (if not already installed):
-    ```bash
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-    ```
-
-2.  **Install PM2 (Process Manager)**:
-    ```bash
-    sudo npm install -g pm2
-    ```
-
-3.  **Prepare Directory**:
-    Create a folder for your app (e.g., in `/var/www/Sendr` or `~/Sendr`).
-    ```bash
-    mkdir -p ~/Sendr
-    cd ~/Sendr
-    ```
-
-4.  **Clone Repository**:
-    ```bash
-    git clone https://github.com/ikhwantchy/Sendr.git .
-    # Or your specific repo URL
-    ```
-
-## ⚙️ Step 3: Backend Deployment
-
-1.  **Navigate to Backend**:
-    ```bash
-    cd ~/Sendr/backend
-    ```
-
-2.  **Install Dependencies**:
-    ```bash
-    npm install
-    ```
-
-3.  **Setup Environment Variables**:
-    Create a `.env` file:
-    ```bash
-    nano .env
-    ```
-    Paste your production variables:
-    ```env
-    PORT=3001
-    NODE_ENV=production
-    JWT_SECRET=your_super_secret_jwt_key
-    API_KEY=your_secure_api_key
-    GOOGLE_SHEETS_API_KEY=your_google_api_key
-    # Database path relative to execution
-    DB_PATH=./database.sqlite
-    ```
-
-4.  **Build and Setup Database**:
-    ```bash
-    npm run build
-    # Initialize DB (Run migrations)
-    npm run migrate
-    ```
-
-5.  **Start with PM2**:
-    ```bash
-    pm2 start dist/index.js --name "Sendr-backend"
-    ```
-
-## 🎨 Step 4: Frontend Deployment
-
-1.  **Navigate to Frontend**:
-    ```bash
-    cd ~/Sendr/frontend
-    ```
-
-2.  **Install Dependencies**:
-    ```bash
-    npm install
-    ```
-
-3.  **Setup Environment Variables**:
-    Create `.env.local`:
-    ```bash
-    nano .env.local
-    ```
-    Content (Point to your domain or localhost port):
-    ```env
-    NEXT_PUBLIC_API_URL=https://wa.cucii.my.id/api
-    # Or if running locally without https yet: http://localhost:3001
-    ```
-
-4.  **Build Next.js**:
-    ```bash
-    npm run build
-    ```
-
-5.  **Start with PM2**:
-    ```bash
-    pm2 start npm --name "Sendr-frontend" -- start -- -p 3000
-    ```
-
-6.  **Save PM2 List** (so it restarts on reboot):
-    ```bash
-    pm2 save
-    pm2 startup
-    ```
-
-## 🌐 Step 5: Nginx Configuration (Reverse Proxy)
-*Use this method if you have a domain (e.g., `bot.yoursite.com`) and want to run this app alongside existing apps on Port 80/443.*
-
-1.  **Create Nginx Config**:
-    ```bash
-    sudo nano /etc/nginx/sites-available/Sendr
-    ```
-
-2.  **Paste Configuration**:
-    Replace `wa.yourdomain.com` with your actual domain/subdomain.
-
-    ```nginx
-    server {
-        listen 80;
-        server_name staging.sendr.web.id;
-
-        # Frontend (Next.js)
-        location / {
-            proxy_pass http://localhost:3000;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection 'upgrade';
-            proxy_set_header Host $host;
-            proxy_cache_bypass $http_upgrade;
-        }
-
-        # Backend API
-        location /api {
-            proxy_pass http://localhost:3001;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection 'upgrade';
-            proxy_set_header Host $host;
-            proxy_cache_bypass $http_upgrade;
-        }
-        
-        # WhatsApp Socket (if using WebSockets)
-        location /socket.io {
-            proxy_pass http://localhost:3001;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-        }
-    }
-    ```
-
-3.  **Enable Configuration**:
-    ```bash
-    sudo ln -s /etc/nginx/sites-available/Sendr /etc/nginx/sites-enabled/
-    ```
-
-4.  **Test & Reload Nginx**:
-    ```bash
-    sudo nginx -t
-    sudo systemctl reload nginx
-    ```
-
-5.  **SSL Setup (HTTPS)** (Optional but Recommended):
-    ```bash
-    sudo certbot --nginx -d staging.sendr.web.id
-    ```
-
-## 🚪 Alternative: Direct Port Access (No Domain)
-*Use this method if you don't have a domain yet or just want to test using the Server IP.*
-
-1.  **Open Ports in AWS Security Group**:
-    - Go to AWS Console > EC2 > Security Groups.
-    - Edit Inbound Rules for your instance.
-    - Add Custom TCP Rule for Port **3000** (Frontend) and **3001** (Backend).
-    - Source: `0.0.0.0/0` (Anywhere).
-
-2.  **Update Frontend Environment**:
-    Edit `frontend/.env.local` to point to the IP address:
-    ```env
-    NEXT_PUBLIC_API_URL=http://YOUR_SERVER_IP:3001/api
-    ```
-    *Rebuild frontend after changing this (`npm run build`).*
-
-3.  **Access App**:
-    - Frontend: `http://YOUR_SERVER_IP:3000`
-    - Backend: `http://YOUR_SERVER_IP:3001`
-
-## ✅ Done!
-Your application should now be accessible at `https://staging.sendr.web.id`.
+### 4. Database TIDAK di-track git
+`database.sqlite` tidak ada di git. Aman dari overwrite saat `git pull`.
+Tapi kalau backend crash-loop, bisa overwrite database dari memory.
 
 ---
 
-## 🔄 Auto-Deployment Setup
+## Deploy Flow (Local → Production)
 
-### Method 1: GitHub Actions (Recommended)
-**Otomatis deploy setiap kali push ke GitHub!**
-
-#### Setup GitHub Secrets:
-1. Go to your GitHub repository
-2. Navigate to: **Settings** → **Secrets and variables** → **Actions**
-3. Click **New repository secret** and add these:
-
-| Secret Name | Value | Description |
-|-------------|-------|-------------|
-| `AWS_HOST` | Your server IP address | e.g., `13.123.45.67` |
-| `AWS_USERNAME` | SSH username | Usually `ubuntu` or `ec2-user` |
-| `AWS_SSH_KEY` | Your private SSH key | Full content of your `.pem` file |
-
-#### Setup SSH Key on Server:
+### Step 1: Build frontend di LOCAL
 ```bash
-# On your local machine, copy your public key
-cat ~/.ssh/id_rsa.pub
-
-# On AWS server, add it to authorized_keys
-ssh user@your-server-ip
-mkdir -p ~/.ssh
-nano ~/.ssh/authorized_keys
-# Paste your public key, save and exit
-
-# Set permissions
-chmod 700 ~/.ssh
-chmod 600 ~/.ssh/authorized_keys
+cd frontend
+npm run build
 ```
+Pastikan output menunjukkan `Environments: .env.production` (bukan `.env.local` yang isinya localhost).
 
-#### How it Works:
-- ✅ Push code to GitHub → Auto-deploy triggered
-- ✅ Server pulls latest changes
-- ✅ Installs dependencies
-- ✅ Builds backend & frontend
-- ✅ Restarts PM2 processes
-- ✅ Preview langsung tersedia di IP server!
-
-**Workflow file sudah dibuat di:** `.github/workflows/deploy.yml`
-
----
-
-### Method 2: Manual Deploy Script
-**Untuk deploy manual dari server**
-
-1. **Upload script ke server:**
-   ```bash
-   # From local machine
-   scp deploy.sh user@your-server-ip:~/Sendr/
-   ```
-
-2. **Make it executable:**
-   ```bash
-   # On server
-   ssh user@your-server-ip
-   cd ~/Sendr
-   chmod +x deploy.sh
-   ```
-
-3. **Run deployment:**
-   ```bash
-   ./deploy.sh
-   ```
-
----
-
-### 🎯 Workflow Setelah Setup:
-
-#### Dari Local (Development):
+### Step 2: Stage & commit
 ```bash
-# 1. Buat perubahan di code
-# 2. Test di localhost jika perlu
-# 3. Commit & Push
+cd ..  # root project
+
+# Stage build artifacts (WAJIB exclude cache, file >100MB ditolak GitHub)
+git add -f frontend/.next/ -- ":!frontend/.next/cache/"
+
+# Stage source code changes
 git add .
-git commit -m "Update feature X"
-git push origin main
 
-# 4. GitHub Actions otomatis deploy ke server
-# 5. Tunggu 1-2 menit
-# 6. Preview langsung di: http://YOUR_SERVER_IP:3000
+# Commit
+git commit -m "build: production build + <deskripsi perubahan>"
 ```
 
-#### Manual Update (Tanpa GitHub Actions):
+### Step 3: Push ke GitHub
+```bash
+git push origin main
+```
+GitHub Actions akan auto-deploy (SSH ke server → git pull → install deps → restart PM2).
+
+### Step 4: Verifikasi (opsional)
 ```bash
 # SSH ke server
-ssh user@your-server-ip
+ssh admin@<server-ip>
 
-# Run deploy script
+# Cek PM2 status
+npx pm2 status
+
+# Cek backend logs (pastikan tidak ada error)
+npx pm2 logs Sendr-backend --lines 20
+
+# Cek apakah crash-loop
+npx pm2 show Sendr-backend | grep "restart\|status\|uptime"
+# Tunggu 5 detik, jalankan lagi. Kalau restart count naik = crash-loop.
+```
+
+---
+
+## Deploy Manual (di server)
+
+### Quick deploy
+```bash
+cd ~/Sendr
+git pull origin main
+cd backend && npm install && cd ..
+npx pm2 restart Sendr-frontend Sendr-backend
+```
+
+### Dengan backup database (RECOMMENDED)
+```bash
 cd ~/Sendr
 ./deploy.sh
 ```
+Script `deploy.sh` otomatis backup database sebelum pull.
 
 ---
 
-### 📝 Monitoring Deployment:
+## Troubleshooting
 
-**Check GitHub Actions:**
-- Go to: Repository → **Actions** tab
-- See deployment progress in real-time
+### Dashboard menunjukkan 0 / data hilang
 
-**Check Server Status:**
+**Penyebab umum:**
+1. **API URL masih localhost** — Frontend build pakai `.env.local` yang isinya `localhost:3001`
+2. **Backend crash-loop** — Missing dependency, database corrupt
+3. **Database overwritten** — Backend crash-loop bisa bikin database kosong
+
+**Diagnosa:**
 ```bash
-# SSH to server
-ssh user@your-server-ip
+# 1. Cek backend error
+npx pm2 logs Sendr-backend --err --lines 20
 
-# Check PM2 status
-pm2 status
+# 2. Cek apakah crash-loop (restart count naik terus)
+npx pm2 show Sendr-backend | grep "restart\|uptime"
+sleep 5
+npx pm2 show Sendr-backend | grep "restart\|uptime"
 
-# Check logs
-pm2 logs Sendr-backend --lines 50
-pm2 logs Sendr-frontend --lines 50
+# 3. Cek database ada isinya
+node -e "const fs=require('fs');const s=require('sql.js');s().then(SQL=>{const db=new SQL.Database(fs.readFileSync('data/database.sqlite'));console.log('Users:',db.exec('SELECT COUNT(*) FROM users')[0]?.values);console.log('Bots:',db.exec('SELECT COUNT(*) FROM bots')[0]?.values);db.close()})"
 
-# Restart if needed
-pm2 restart all
+# 4. Cek API bisa diakses
+curl -s http://localhost:3001/health
+curl -s http://localhost:3001/api/analytics/dashboard-stats
 ```
 
----
+**Fix API URL localhost:**
+1. Pastikan `frontend/.env.local` KOSONG
+2. Pastikan `frontend/.env.production` isinya `NEXT_PUBLIC_API_URL=https://sendr.web.id`
+3. Rebuild frontend di local: `cd frontend && npm run build`
+4. Push dan deploy
 
-### 🔧 Troubleshooting:
-
-**Deployment Failed?**
+**Fix missing dependency (contoh: multer):**
 ```bash
-# Check GitHub Actions logs in Actions tab
-
-# Or manually check on server:
-ssh user@your-server-ip
-cd ~/Sendr
-git status
-git pull origin main
-pm2 status
-```
-
-**Port not accessible?**
-- Check AWS Security Group (Ports 3000, 3001 must be open)
-- Check Nginx configuration if using reverse proxy
-
-**Build errors?**
-```bash
-# Clear cache and rebuild
+# Di server:
 cd ~/Sendr/backend
-rm -rf node_modules dist
 npm install
-npm run build
-
-cd ~/Sendr/frontend
-rm -rf node_modules .next
-npm install
-npm run build
+npx pm2 restart Sendr-backend
 ```
+
+**Fix database kosong (restore dari backup):**
+```bash
+# Lihat backup yang tersedia
+ls -lh ~/Sendr/backend/data/backups/
+
+# Restore backup terbaru (pilih yang ukurannya besar)
+cp ~/Sendr/backend/data/backups/<nama_backup>.sqlite ~/Sendr/backend/data/database.sqlite
+npx pm2 restart Sendr-backend
+```
+
+### Error: Cannot find module 'xxx'
+
+Backend butuh dependency yang belum terinstall di server.
+
+```bash
+cd ~/Sendr/backend
+npm install
+npx pm2 restart Sendr-backend
+```
+
+### Frontend blank / 404
+
+```bash
+# Cek frontend logs
+npx pm2 logs Sendr-frontend --lines 20
+
+# Restart frontend
+npx pm2 restart Sendr-frontend
+```
+
+### Browser console: ERR_BLOCKED_BY_CLIENT / Network Error ke localhost
+
+Frontend build pakai API URL `localhost:3001`. Lihat fix "API URL localhost" di atas.
+
+Di browser, buka DevTools (F12) → Console. Kalau ada error `localhost:3001` → masalah env build.
+
+---
+
+## Architecture
+
+```
+Browser (sendr.web.id)
+    ↓ HTTPS
+Nginx (port 443)
+    ├── /        → localhost:3000 (Next.js frontend, PM2: Sendr-frontend)
+    ├── /api     → localhost:3001 (Express backend, PM2: Sendr-backend)
+    └── /socket.io → localhost:3001 (WebSocket)
+```
+
+### Key files
+```
+frontend/
+  .env.development          → API URL untuk local dev (localhost:3001)
+  .env.production           → API URL untuk production build (sendr.web.id)
+  .env.local                → HARUS KOSONG (override semua env)
+  .next/                    → Build output (force-added ke git, exclude cache/)
+  src/lib/api.ts            → API client (baseURL dari NEXT_PUBLIC_API_URL)
+
+backend/
+  data/database.sqlite      → SQLite database (TIDAK di-track git)
+  data/backups/             → Auto backup setiap 6 jam
+  src/index.ts              → Entry point (port 3001)
+
+.github/workflows/deploy.yml → Auto deploy on push to main
+deploy.sh                    → Manual deploy script (with DB backup)
+```
+
+### GitHub Actions (deploy.yml)
+Trigger: push ke `main`
+Steps:
+1. SSH ke server
+2. `git pull origin main`
+3. Backend: `npm install` + `npm run build` + `npm run migrate`
+4. Frontend: `npm install` (NO build — sudah dari local)
+5. `pm2 restart all`
+
+---
+
+## Database Backup
+
+### Auto backup
+Backend otomatis backup database setiap 6 jam ke `backend/data/backups/`.
+Naming: `database_auto_YYYYMMDD_HHMMSS.sqlite`
+Max 10 backups disimpan (rotate otomatis).
+
+### Manual backup
+```bash
+cp ~/Sendr/backend/data/database.sqlite ~/Sendr/backend/data/backups/database_manual_$(date +%Y%m%d_%H%M%S).sqlite
+```
+
+### Restore
+```bash
+cp ~/Sendr/backend/data/backups/<backup_file> ~/Sendr/backend/data/database.sqlite
+npx pm2 restart Sendr-backend
+```
+
+---
+
+## Checklist Sebelum Deploy
+
+- [ ] `npm run build` di `frontend/` sukses tanpa error
+- [ ] Build output menunjukkan `Environments: .env.production` (bukan `.env.local` dengan localhost)
+- [ ] `frontend/.env.local` KOSONG
+- [ ] Kalau ada package baru di backend, sudah `npm install` di server
+- [ ] `git add -f frontend/.next/ -- ":!frontend/.next/cache/"`
+- [ ] `git push origin main`
+- [ ] Cek PM2 status di server setelah deploy (tidak crash-loop)
+- [ ] Hard refresh browser (`Ctrl+Shift+R`) untuk test

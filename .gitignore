@@ -4,16 +4,24 @@ node_modules/
 .pnp.js
 
 # Build outputs
-frontend/.next/cache/
+# .next/ TIDAK dipush — build dilakukan di server dengan swap memory
+frontend/.next/
 frontend/out/
 backend/dist/
 
 # Environment variables
+# .env.local diabaikan (isinya sudah dipindah ke .env.development & .env.production)
 .env
 .env.local
+backend/.env.local
+frontend/.env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# .env.development & .env.production BOLEH masuk git (berisi NEXT_PUBLIC_ vars, tidak sensitif)
+# !frontend/.env.development
+# !frontend/.env.production
 
 # Logs
 logs/
