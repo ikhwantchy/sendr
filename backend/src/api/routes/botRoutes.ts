@@ -162,7 +162,7 @@ router.post('/', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req
                 `SELECT id FROM users WHERE tenant_id = ? LIMIT 1`,
                 [target_tenant_id]
             );
-            
+
             if (tenantUserResult.rows.length > 0) {
                 const targetUserId = tenantUserResult.rows[0].id;
                 // Create permissions based on admin's selection
@@ -251,8 +251,8 @@ router.post('/:id/connect', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']),
         if (bot.expires_at) {
             const expiresAt = new Date(bot.expires_at);
             if (expiresAt < new Date()) {
-                return res.status(403).json({ 
-                    success: false, 
+                return res.status(403).json({
+                    success: false,
                     error: 'Bot subscription has expired',
                     expired_at: bot.expires_at,
                     expired_reason: bot.expired_reason || 'Your bot subscription has ended. Please contact admin to renew.'
@@ -286,6 +286,56 @@ router.post('/:id/connect', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']),
         });
     }
 });
+
+// POST /api/bots/:id/pair
+// Request a phone number pairing code — phone number can be provided in body or read from bot DB
+router.post('/:id/pair', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { phone_number } = req.body; // optional: user can provide phone directly on connect page
+        const isAdmin = req.user!.role === 'ADMIN' || req.user!.role === 'OWNER';
+
+        let bot = await botRepository.findById(id);
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
+
+        if ((bot as any).expires_at && new Date((bot as any).expires_at) < new Date()) {
+            return res.status(403).json({ success: false, error: 'Bot subscription has expired' });
+        }
+
+        if (!isAdmin && bot.tenant_id !== req.user!.tenant_id) {
+            const permCheck = await query(
+                `SELECT 1 FROM bot_permissions WHERE user_id = ? AND bot_id = ? AND (can_edit = 1 OR can_edit = 'true')`,
+                [req.user!.id, id]
+            );
+            if (permCheck.rows.length === 0) return res.status(403).json({ success: false, error: 'Permission denied' });
+        }
+
+        // If phone_number provided in body (from connect page), save it to the bot first
+        if (phone_number) {
+            const cleanPhone = String(phone_number).replace(/\D/g, '');
+            if (!cleanPhone || cleanPhone.length < 7) {
+                return res.status(400).json({ success: false, error: 'Nomor HP tidak valid. Masukkan nomor dengan kode negara (contoh: 628123456789)' });
+            }
+            logger.info('Saving phone number from connect page to bot', { bot_id: id, phone: cleanPhone });
+            await botRepository.update(id, { phone_number: cleanPhone });
+        }
+
+        const pairingData = await whatsappAdapter.requestPairingCode(id);
+
+        res.json({
+            success: true,
+            data: {
+                code: pairingData.code,
+                phone: pairingData.phone,
+                expires_at: pairingData.expires_at,
+            },
+        });
+    } catch (error: any) {
+        logger.error('Failed to generate pairing code', { error });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 
 /**
  * GET /api/bots/:id/status

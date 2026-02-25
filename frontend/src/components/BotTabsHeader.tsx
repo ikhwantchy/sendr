@@ -24,11 +24,11 @@ interface Tab {
 const TABS: Tab[] = [
     { id: 'overview', name: 'Overview' },
     { id: 'rules', name: 'Auto-Reply', permission: 'auto_reply', action: 'New Rule', actionPath: '/dashboard/rules/create' },
-    { 
-        id: 'ai-assistant', 
-        name: 'AI Assistant', 
-        permission: 'ai_assistant', 
-        action: 'Create Config', 
+    {
+        id: 'ai-assistant',
+        name: 'AI Assistant',
+        permission: 'ai_assistant',
+        action: 'Create Config',
         actionPath: '/dashboard/ai-config/create',
         subTabs: [
             { id: 'ai-config', name: 'Configurations', action: 'Create Config', actionType: 'link' },
@@ -37,7 +37,6 @@ const TABS: Tab[] = [
     },
     { id: 'campaigns', name: 'Campaigns', permission: 'campaigns', action: 'New Campaign', actionPath: '/dashboard/campaigns/create' },
     { id: 'reminders', name: 'Reminders', permission: 'reminders', action: 'New Reminder', actionPath: '/dashboard/reminders/create' },
-    { id: 'settings', name: 'Settings' },
 ]
 
 export default function BotTabsHeader({ botId }: { botId: string }) {
@@ -66,7 +65,7 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
     }, [])
 
     const tabs = TABS.filter(tab => !tab.permission || hasModuleAccess(tab.permission, botId))
-    
+
     // Determine current tab considering subtabs
     const isAISubTab = activeTab === 'ai-config' || activeTab === 'ai-mappings'
     const currentTabId = isAISubTab ? 'ai-assistant' : activeTab
@@ -93,7 +92,7 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
     return (
         <div className="relative flex items-center justify-center w-full h-full">
             {/* Center: Tabs */}
-            <div className="flex items-center gap-2 sm:gap-4 md:gap-8 lg:gap-12 h-full px-1 sm:px-2">
+            <div className="flex-1 flex items-center justify-start md:justify-center gap-2 sm:gap-4 md:gap-8 lg:gap-12 h-full px-1 sm:px-2 overflow-x-auto scrollbar-hide">
                 {tabs.map((tab) => {
                     const isActive = tab.id === currentTabId || (tab.subTabs?.some(st => st.id === activeTab))
                     const hasSubTabs = tab.subTabs && tab.subTabs.length > 0
@@ -125,7 +124,7 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
 
                             {/* Dropdown for subtabs */}
                             {hasSubTabs && hoveredTab === tab.id && (
-                                <div 
+                                <div
                                     className="absolute left-1/2 -translate-x-1/2 pt-2"
                                     style={{ top: '100%', zIndex: 9999 }}
                                 >
@@ -136,11 +135,10 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
                                                 <button
                                                     key={subTab.id}
                                                     onClick={(e) => handleSubTabClick(subTab.id, e)}
-                                                    className={`w-full px-5 py-2.5 text-sm text-left transition-colors ${
-                                                        isSubActive
-                                                            ? 'text-white font-medium'
-                                                            : 'text-zinc-400 hover:text-white'
-                                                    }`}
+                                                    className={`w-full px-5 py-2.5 text-sm text-left transition-colors ${isSubActive
+                                                        ? 'text-white font-medium'
+                                                        : 'text-zinc-400 hover:text-white'
+                                                        }`}
                                                 >
                                                     {subTab.name}
                                                 </button>
@@ -159,7 +157,7 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 pr-2 sm:pr-4">
                     <Link
                         href={`${currentTab.actionPath}?botId=${botId}`}
-                        className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
                     >
                         <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         <span className="hidden sm:inline">{currentTab.action}</span>

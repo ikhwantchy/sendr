@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useState, useMemo, useEffect } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import EditRuleModal from '@/components/modals/EditRuleModal'
@@ -14,6 +15,7 @@ import RemindersTable from '@/components/tables/RemindersTable'
 import ActivityChart from '@/components/ActivityChart'
 import RecentActivityList from '@/components/RecentActivityList'
 import AIAssistantPanel from '@/components/AIAssistantPanel'
+import ConnectBotModal from '@/components/modals/ConnectBotModal'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
     ChevronLeft,
@@ -41,7 +43,8 @@ import {
     Plus,
     RefreshCw,
     Activity,
-    Bot
+    Bot,
+    Check
 } from 'lucide-react'
 
 export default function BotDetailPage() {
@@ -50,12 +53,12 @@ export default function BotDetailPage() {
     if (!params) return null;
     const botId = params?.id as string
     const { hasModuleAccess, isAdmin } = usePermissions()
-    
+
     // Initialize activeTab from hash on first render
     const [activeTab, setActiveTab] = useState<string>(() => {
         if (typeof window === 'undefined') return 'overview'
         const hash = window.location.hash.replace('#', '')
-        if (hash && ['overview', 'rules', 'ai-assistant', 'ai-config', 'ai-mappings', 'campaigns', 'reminders', 'settings'].includes(hash)) {
+        if (hash && ['overview', 'rules', 'ai-assistant', 'ai-config', 'ai-mappings', 'campaigns', 'reminders'].includes(hash)) {
             return hash
         }
         return 'overview'
@@ -68,13 +71,16 @@ export default function BotDetailPage() {
     // Delete Confirmation State
     const [ruleToDelete, setRuleToDelete] = useState<string | null>(null)
     const [isDeletingRule, setIsDeletingRule] = useState(false)
+    const [showConnectModal, setShowConnectModal] = useState(false)
+    const [isEditingName, setIsEditingName] = useState(false)
+    const [tempBotName, setTempBotName] = useState('')
 
     // Handle URL hash for tab switching
     useEffect(() => {
         const handleHashChange = () => {
             const hash = window.location.hash.replace('#', '')
             // Include AI subtabs
-            if (hash && ['overview', 'rules', 'ai-assistant', 'ai-config', 'ai-mappings', 'campaigns', 'reminders', 'settings'].includes(hash)) {
+            if (hash && ['overview', 'rules', 'ai-assistant', 'ai-config', 'ai-mappings', 'campaigns', 'reminders'].includes(hash)) {
                 setActiveTab(hash)
             } else {
                 setActiveTab('overview')
@@ -109,6 +115,7 @@ export default function BotDetailPage() {
 
     const [openFilter, setOpenFilter] = useState<string | null>(null)
     const [isBotPausing, setIsBotPausing] = useState(false)
+    const [isUpdatingBot, setIsUpdatingBot] = useState(false)
 
     const queryClient = useQueryClient()
 
@@ -117,7 +124,9 @@ export default function BotDetailPage() {
         queryKey: ['bot', botId],
         queryFn: async () => {
             const response = await api.bots.get(botId)
-            return response.data.data || response.data
+            const data = response.data.data || response.data
+            if (!isEditingName) setTempBotName(data.name)
+            return data
         },
         refetchInterval: 3000,
     })
@@ -286,18 +295,31 @@ export default function BotDetailPage() {
         },
     })
 
-    const resumeMutation = useMutation({
-        mutationFn: async () => {
-            return await api.bots.resume(botId)
+    const updateBotMutation = useMutation({
+        mutationFn: async (data: any) => {
+            return await api.bots.update(botId, data)
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['bot', botId] })
-            toast.success('Bot is resuming...')
+            setIsEditingName(false)
+            toast.success('Bot name updated')
         },
         onError: (error: any) => {
-            toast.error(error.response?.data?.error || 'Failed to resume bot')
+            toast.error(error.response?.data?.error || 'Failed to update bot')
         },
+        onSettled: () => {
+            setIsUpdatingBot(false)
+        }
     })
+
+    const handleSaveBotName = () => {
+        if (!tempBotName.trim()) {
+            toast.error('Bot name cannot be empty')
+            return
+        }
+        setIsUpdatingBot(true)
+        updateBotMutation.mutate({ name: tempBotName })
+    }
 
     const stats = {
         totalMessages: bot?.total_messages || 0,
@@ -315,7 +337,6 @@ export default function BotDetailPage() {
         { id: 'ai-assistant', name: 'AI Assistant', permission: 'ai_assistant' },
         { id: 'campaigns', name: 'Campaigns', permission: 'campaigns' },
         { id: 'reminders', name: 'Reminders', permission: 'reminders' },
-        { id: 'settings', name: 'Settings' },
     ].filter(tab => !tab.permission || hasModuleAccess(tab.permission, botId))
 
     if (isLoading) {
@@ -356,9 +377,47 @@ export default function BotDetailPage() {
                                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500/10 border border-blue-500/20 rounded-xl sm:rounded-2xl flex items-center justify-center text-blue-500 shadow-lg shadow-blue-500/5">
                                     <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
                                 </div>
-                                <h1 className="text-xl sm:text-2xl font-bold text-zinc-100 tracking-tight truncate">
-                                    {bot.name}
-                                </h1>
+                                {isEditingName ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={tempBotName}
+                                            onChange={(e) => setTempBotName(e.target.value)}
+                                            autoFocus
+                                            className="bg-zinc-900 border border-zinc-800 text-zinc-100 font-bold px-3 py-1.5 rounded-xl outline-none focus:border-blue-500 transition-all text-xl"
+                                        />
+                                        <button
+                                            onClick={handleSaveBotName}
+                                            disabled={isUpdatingBot}
+                                            className="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                                        >
+                                            <Check className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsEditingName(false)
+                                                setTempBotName(bot.name)
+                                            }}
+                                            disabled={isUpdatingBot}
+                                            className="p-2 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all border border-zinc-800"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-3 group">
+                                        <h1 className="text-xl sm:text-2xl font-bold text-zinc-100 tracking-tight truncate max-w-[200px] sm:max-w-md">
+                                            {bot.name}
+                                        </h1>
+                                        <button
+                                            onClick={() => setIsEditingName(true)}
+                                            className="p-1.5 text-zinc-600 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-blue-500/10 rounded-lg focus:opacity-100"
+                                            title="Edit Name"
+                                        >
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Right: Phone, Status, Action Button */}
@@ -369,34 +428,52 @@ export default function BotDetailPage() {
                                         <span className="truncate max-w-[100px] sm:max-w-none">{bot.phone_number}</span>
                                     </div>
                                 )}
-                                <div className={`inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold uppercase tracking-widest border transition-all ${isConnected
-                                    ? bot.is_paused
-                                        ? 'bg-orange-500/5 border-orange-500/20 text-orange-500'
-                                        : 'bg-emerald-500/5 border-emerald-500/20 text-emerald-500'
-                                    : 'bg-zinc-500/5 border-zinc-500/20 text-zinc-500'
-                                    }`}>
-                                    <Circle className={`w-1.5 h-1.5 sm:w-2 sm:h-2 flex-shrink-0 fill-current ${isConnected && !bot.is_paused ? 'animate-pulse' : ''}`} />
-                                    <span>{isConnected ? (bot.is_paused ? 'PAUSED' : 'CONNECTED') : 'DISCONNECTED'}</span>
-                                </div>
+                                {(() => {
+                                    const status = bot.status || 'disconnected'
+                                    const isConnecting = status === 'connecting' || status === 'reconnecting'
+                                    const isPaused = bot.is_paused
+                                    const isConnectedState = status === 'connected'
+
+                                    return (
+                                        <div className={`inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold uppercase tracking-widest border transition-all ${isConnectedState
+                                            ? isPaused
+                                                ? 'bg-orange-500/5 border-orange-500/20 text-orange-500'
+                                                : 'bg-emerald-500/5 border-emerald-500/20 text-emerald-500'
+                                            : isConnecting
+                                                ? 'bg-blue-500/5 border-blue-500/20 text-blue-500'
+                                                : 'bg-zinc-500/5 border-zinc-500/20 text-zinc-500'
+                                            }`}>
+                                            <Circle className={`w-1.5 h-1.5 sm:w-2 sm:h-2 flex-shrink-0 fill-current ${(isConnectedState && !isPaused) || isConnecting ? 'animate-pulse' : ''
+                                                }`} />
+                                            <span>
+                                                {isConnectedState
+                                                    ? (isPaused ? 'PAUSED' : 'CONNECTED')
+                                                    : isConnecting
+                                                        ? 'CONNECTING'
+                                                        : 'DISCONNECTED'}
+                                            </span>
+                                        </div>
+                                    )
+                                })()}
 
                                 {/* Action Button */}
                                 {!isConnected && !bot.phone_number && (
-                                    <Link
-                                        href={`/dashboard/bots/${botId}/connect`}
+                                    <button
+                                        onClick={() => setShowConnectModal(true)}
                                         className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold border transition-all duration-300 bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"
                                     >
                                         <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
                                         <span className="uppercase">Connect</span>
-                                    </Link>
+                                    </button>
                                 )}
                                 {!isConnected && bot.phone_number && (
-                                    <Link
-                                        href={`/dashboard/bots/${botId}/connect`}
+                                    <button
+                                        onClick={() => setShowConnectModal(true)}
                                         className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-semibold border transition-all duration-300 bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25 active:scale-95"
                                     >
                                         <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" />
                                         <span className="uppercase">Reconnect</span>
-                                    </Link>
+                                    </button>
                                 )}
                                 {isConnected && (
                                     <button
@@ -499,28 +576,7 @@ export default function BotDetailPage() {
                     </div>
                 )}
 
-                {activeTab === 'settings' && (
-                    <div className="max-w-4xl mx-auto py-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                        <div className="bg-zinc-900/40 border border-zinc-800 p-10 rounded-3xl space-y-8">
-                            <h3 className="text-xl font-bold text-white border-b border-zinc-800 pb-6">Bot Settings</h3>
-                            <div className="space-y-6">
-                                <div>
-                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-3 tracking-widest">Bot Name</label>
-                                    <input type="text" defaultValue={bot.name} className="w-full bg-zinc-950 border border-zinc-800 p-4 rounded-2xl text-white outline-none focus:border-blue-500 transition-all font-medium" />
-                                </div>
-                                <div className="pt-4 flex justify-between items-center">
-                                    <div>
-                                        <label className="block text-xs font-bold text-zinc-500 uppercase mb-1 tracking-widest">Bot ID</label>
-                                        <code className="text-[10px] text-zinc-600 font-mono">{bot.id}</code>
-                                    </div>
-                                    <button className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all">
-                                        Save Changes
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
+
             </div>
 
             {showEditRuleModal && selectedRule && (
@@ -533,6 +589,14 @@ export default function BotDetailPage() {
                     }}
                 />
             )}
+            <AnimatePresence>
+                {showConnectModal && (
+                    <ConnectBotModal
+                        botId={botId}
+                        onClose={() => setShowConnectModal(false)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     )
 }

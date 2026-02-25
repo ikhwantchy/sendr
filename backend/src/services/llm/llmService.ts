@@ -8,6 +8,8 @@ import { GoogleGeminiProvider } from './providers/google';
 import { OpenAIProvider } from './providers/openai';
 import { GroqProvider } from './providers/groq';
 import { NvidiaProvider } from './providers/nvidia';
+import { OpenRouterProvider } from './providers/openrouter';
+import { BytePlusProvider } from './providers/byteplus';
 import { LLMProvider, LLMMessage, LLMConfig, DataSchema } from './base';
 import { query } from '../../database/connection';
 import { logger } from '../../utils/logger';
@@ -28,7 +30,12 @@ class LLMService {
         const nvidiaProvider = new NvidiaProvider();
         this.providers.set('nvidia', nvidiaProvider);
         this.providers.set('nim', nvidiaProvider);
+
+        this.providers.set('openrouter', new OpenRouterProvider());
+        this.providers.set('byteplus', new BytePlusProvider());
+        this.providers.set('ark', new BytePlusProvider()); // Alias for ARK
     }
+
 
     /**
      * Get provider instance
@@ -92,7 +99,51 @@ class LLMService {
             const conversation = await this.getOrCreateConversation(botId, contactId, 'chat');
 
             // Build base system prompt
-            let systemPrompt = activeConfig.systemPrompt || 'You are a helpful assistant.';
+            const now = new Date();
+            const timeContext = `[CURRENT_CONTEXT]\nToday: ${now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}\nTime: ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}\nLocation: Jakarta, Indonesia\n\n`;
+
+            let systemPrompt = timeContext + (activeConfig.systemPrompt || 'You are a helpful assistant.');
+
+            // --- Programmatic Shuffler Interceptor ---
+            // If user asks for groups, we MANUALLY shuffle the student list in the prompt 
+            // to bypass AI sorting bias and DB sync lag.
+            const isGroupingRequest = /kelompok|bagi|acak|random|group/i.test(userMessage);
+            if (isGroupingRequest && systemPrompt.includes('DATA MAHASISWA')) {
+                try {
+                    const sections = systemPrompt.split('---');
+                    let shuffled = false;
+                    for (let i = 0; i < sections.length; i++) {
+                        if (sections[i].includes('DATA MAHASISWA')) {
+                            const lines = sections[i].split('\n');
+                            const headerIdx = lines.findIndex(l => l.includes('DATA MAHASISWA'));
+                            if (headerIdx !== -1) {
+                                let names = lines.slice(headerIdx + 1).filter(l => l.trim().startsWith('-'));
+                                const otherLines = lines.slice(headerIdx + 1).filter(l => !l.trim().startsWith('-'));
+
+                                // Fisher-Yates Shuffle
+                                for (let j = names.length - 1; j > 0; j--) {
+                                    const k = Math.floor(Math.random() * (j + 1));
+                                    [names[j], names[k]] = [names[k], names[j]];
+                                }
+
+                                sections[i] = lines.slice(0, headerIdx + 1).join('\n') + '\n' +
+                                    names.join('\n') + '\n' +
+                                    otherLines.join('\n');
+                                shuffled = true;
+                            }
+                        }
+                    }
+                    if (shuffled) {
+                        systemPrompt = sections.join('---');
+                        // ADD "FORCE RANDOM" INSTRUCTION AT THE TOP OF SYSTEM PROMPT
+                        systemPrompt = `🚨 CRITICAL: THE STUDENT LIST BELOW IS ALREADY SYSTEM-SHUFFLED. DO NOT RE-SORT OR USE ALPHABETICAL ORDER. TAKE NAMES EXACTLY IN THE ORDER PROVIDED BELOW.\n\n` + systemPrompt;
+                        logger.info('[LLMService] Programmatically shuffled student list for grouping request');
+                    }
+                } catch (err) {
+                    logger.error('[LLMService] Shuffler Interceptor failed', err);
+                }
+            }
+            // -----------------------------------------
 
             // Check if user is querying sheet data and inject context if available
             if (aiSheetUpdaterService.isQueryingSheetData(userMessage)) {
@@ -156,7 +207,7 @@ class LLMService {
                 provider: providerName,
                 model: activeConfig.model || 'gemini-1.5-flash',
                 apiKey: activeConfig.apiKey,
-                systemPrompt: activeConfig.systemPrompt,
+                systemPrompt: systemPrompt,
                 temperature: activeConfig.temperature || 0.7,
                 maxTokens: activeConfig.maxTokens || 1024
             };

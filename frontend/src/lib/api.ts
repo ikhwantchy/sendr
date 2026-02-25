@@ -62,6 +62,7 @@ export const api = {
         getByUser: (userId: string) => apiClient.get(`/bots/user/${userId}`),
         create: (data: any) => apiClient.post('/bots', data),
         connect: (id: string) => apiClient.post(`/bots/${id}/connect`),
+        pair: (id: string, phone_number?: string) => apiClient.post(`/bots/${id}/pair`, phone_number ? { phone_number } : {}),
         status: (id: string) => apiClient.get(`/bots/${id}/status`),
         disconnect: (id: string) => apiClient.post(`/bots/${id}/disconnect`),
         pause: (id: string) => apiClient.post(`/bots/${id}/pause`),

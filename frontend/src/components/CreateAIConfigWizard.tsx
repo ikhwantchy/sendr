@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { ChevronLeft, Save, Plus, Eye, EyeOff, X, Maximize2, Users, User, ChevronDown, Search, RefreshCw, AlertTriangle, Settings2, FileSpreadsheet, Trash2, Brain, Copy, Smile, BookOpen } from 'lucide-react'
+import { ChevronLeft, Save, Plus, Eye, EyeOff, X, Maximize2, Users, User, ChevronDown, Search, RefreshCw, AlertTriangle, Settings2, FileSpreadsheet, Trash2, Brain, Copy, Smile, BookOpen, Check, Cpu, Sparkles, Zap } from 'lucide-react'
 import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 
 // Quick emoji list for category picker (subset of common emojis)
@@ -45,6 +45,7 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
 
     // New UI State
     const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false)
+    const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
 
     const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
@@ -313,34 +314,45 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
             defaultModel: 'meta/llama-3.1-405b-instruct',
             validateKey: (k: string) => k.startsWith('nvapi-'),
             models: [
-                { id: 'meta/llama-3.1-405b-instruct', name: 'Llama 3.1 405B' },
-                { id: 'nvidia/nemotron-4-340b-instruct', name: 'Nemotron 4 340B' }
+                { id: 'meta/llama-3.1-405b-instruct', name: 'Llama 3.1 405B (Very Smart)' },
+                { id: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B (Balanced)' },
+                { id: 'meta/llama-3.1-8b-instruct', name: 'Llama 3.1 8B (Fast)' },
+                { id: 'nvidia/nemotron-4-340b-instruct', name: 'Nemotron 4 340B' },
+                { id: 'mistralai/mistral-large-2-instruct', name: 'Mistral Large 2' },
+                { id: 'google/gemma-2-27b-it', name: 'Gemma 2 27B' },
+                { id: 'microsoft/phi-3.5-moe-instruct', name: 'Phi 3.5 MoE' }
             ]
+
         },
         {
             id: 'openrouter',
             name: 'OpenRouter',
             prefix: 'sk-or-',
             baseUrl: 'https://openrouter.ai/api/v1',
-            defaultModel: 'openai/gpt-4o',
+            defaultModel: 'google/gemini-2.0-flash-exp:free',
             validateKey: (k: string) => k.startsWith('sk-or-'),
             models: [
-                { id: 'openai/gpt-4o', name: 'GPT-4o (via OpenRouter)' },
-                { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet (via OpenRouter)' },
-                { id: 'google/gemini-pro-1.5', name: 'Gemini Pro 1.5 (via OpenRouter)' }
+                { id: 'openrouter/free', name: 'Auto (Best Free Model - Stable)' },
+                { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B (Free)' },
+                { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free)' },
+                { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash (Free)' },
+                { id: 'qwen/qwen-3-coder-480b-a3b5:free', name: 'Qwen 3 Coder (Free)' },
+                { id: 'mistralai/mixtral-8x7b-instruct:free', name: 'Mixtral 8x7B (Free)' },
+                { id: 'nousresearch/nous-hermes-2-mixtral-8x7b-dpo', name: 'Hermes 2 Mixtral 8x7B (DPO)' },
+                { id: 'perplexity/llama-3-sonar-large-32k-online', name: 'Perplexity Llama 3 Sonar Large (Online)' }
             ]
         },
         {
             id: 'byteplus',
-            name: 'BytePlus (Doubao)',
+            name: 'BytePlus (ARK)',
             prefix: '',
-            baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+            baseUrl: 'https://ark.byteplus.com/api/v3',
             defaultModel: 'doubao-pro-4k',
-            validateKey: (k: string) => k.length === 36 && k.split('-').length === 5, // Basic UUID format check
+            validateKey: (k: string) => k.length >= 32, // ARK keys are usually long UUIDs
             models: [
-                { id: 'doubao-pro-4k', name: 'Doubao Pro 4k' },
-                { id: 'doubao-lite-4k', name: 'Doubao Lite 4k' },
-                { id: 'doubao-pro-32k', name: 'Doubao Pro 32k' }
+                { id: 'doubao-pro-4k', name: 'Doubao Pro 4K' },
+                { id: 'doubao-lite-4k', name: 'Doubao Lite 4K' },
+                { id: 'byteplus/ark-pro', name: 'ARK Pro' }
             ]
         },
         {
@@ -374,7 +386,6 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
             return {}
         }
     }
-
     // Auto-detect provider from API key and set defaults
     const handleApiKeyChange = (apiKey: string) => {
         let detectedProvider = ''
@@ -391,30 +402,35 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
         } else if (apiKey.startsWith('nvapi-')) {
             detectedProvider = 'nvidia'
         } else if (apiKey.startsWith('sk-')) {
-            // Check if it's deepseek
-            detectedProvider = 'openai' // default for sk-, but could be DeepSeek
+            detectedProvider = 'openai'
+        } else if (apiKey.length >= 32 && (apiKey.includes('-') || /^[a-z0-9]+$/i.test(apiKey))) {
+            // BytePlus ARK keys
+            detectedProvider = 'byteplus'
         }
 
         // Get preset for detected provider
         const preset = providerPresets.find(p => p.id === detectedProvider)
 
-        // Only auto-fill model if we detected a known provider AND model is currently empty
-        const newModel = (preset && !formData.model) ? preset.defaultModel : formData.model
-        const newBaseUrl = preset?.baseUrl || formData.base_url
-
-        // If we detected a valid provider, turn off custom mode
+        // Reset custom mode if we detected a known provider
         if (detectedProvider) {
             setIsCustomMode(false)
+        }
+
+        // Always update model if provider changed or if model is empty/invalid for that provider
+        let newModel = formData.model
+        if (preset && (detectedProvider !== formData.provider || !formData.model)) {
+            newModel = preset.defaultModel
         }
 
         setFormData({
             ...formData,
             api_key: apiKey,
-            provider: detectedProvider || (isCustomMode ? formData.provider : ''), // Keep existing if custom logic is active
+            provider: detectedProvider || (isCustomMode ? formData.provider : ''),
             model: newModel,
-            base_url: newBaseUrl
+            base_url: preset?.baseUrl || formData.base_url
         })
     }
+
 
     const handleSyncGroups = async () => {
         setIsSyncingGroups(true)
@@ -478,6 +494,7 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
         }
     }
 
+
     // Preset mappings for data collection
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -504,7 +521,7 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                 toast.error('Spreadsheet URL and Sheet Name are required for data collection')
                 return
             }
-            if ((dataCollectionData.mode === 'update' || dataCollectionData.mode === 'smart') && 
+            if ((dataCollectionData.mode === 'update' || dataCollectionData.mode === 'smart') &&
                 (!dataCollectionData.match_column || !dataCollectionData.update_column)) {
                 toast.error('Match Column and Update Column are required for Update mode')
                 return
@@ -601,7 +618,7 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
             } else {
                 // CREATE mode (Iterate all selected targets)
                 const createdTargetJids: string[] = []
-                
+
                 for (const target of selectedTargets) {
                     await api.bots.llmTargets.add(botId, {
                         config_name: selectedTargets.length > 1 ? `${formData.config_name} - ${target.name}` : formData.config_name,
@@ -999,28 +1016,53 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                         </label>
 
                                         {shouldShowModelDropdown ? (
-                                            // 1. DROPDOWN (Smart Mode - detected OR manually selected provider)
+                                            // 1. PREMIUM CUSTOM DROPDOWN (Matched Size)
                                             <div className="relative">
-                                                <select
-                                                    required
-                                                    value={formData.model}
-                                                    onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                                                    className="w-full appearance-none px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+                                                <div
+                                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs flex justify-between items-center cursor-pointer hover:border-zinc-600 transition-all duration-200"
+                                                    onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
                                                 >
-                                                    <option value="" disabled>Select a model...</option>
-                                                    {activeProviderPreset?.models?.map(model => (
-                                                        <option key={model.id} value={model.id}>
-                                                            {model.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                                    <svg className="w-3 h-3 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                    </svg>
+                                                    <span className={formData.model ? "text-white" : "text-zinc-500"}>
+                                                        {activeProviderPreset?.models?.find(m => m.id === formData.model)?.name || "Select a model..."}
+                                                    </span>
+                                                    <ChevronDown size={14} className={`text-zinc-500 transition-transform duration-300 ${isModelDropdownOpen ? 'rotate-180' : ''}`} />
                                                 </div>
+
+                                                {isModelDropdownOpen && (
+                                                    <>
+                                                        <div className="fixed inset-0 z-40" onClick={() => setIsModelDropdownOpen(false)} />
+                                                        <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                                            <div className="p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
+                                                                {activeProviderPreset?.models?.map(model => {
+                                                                    const isSelected = formData.model === model.id
+                                                                    return (
+                                                                        <button
+                                                                            key={model.id}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setFormData({ ...formData, model: model.id })
+                                                                                setIsModelDropdownOpen(false)
+                                                                            }}
+                                                                            className={`w-full flex items-center justify-between px-3 py-2 rounded text-left transition-all ${isSelected ? 'bg-blue-600/10' : 'hover:bg-zinc-700'}`}
+                                                                        >
+                                                                            <div className="flex flex-col">
+                                                                                <span className={`text-xs font-medium ${isSelected ? 'text-white' : 'text-zinc-300'}`}>
+                                                                                    {model.name}
+                                                                                </span>
+                                                                            </div>
+                                                                            {isSelected && (
+                                                                                <Check size={14} className="text-blue-500" />
+                                                                            )}
+                                                                        </button>
+                                                                    )
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         ) : (
+
                                             // 2. TEXT INPUT (Custom/Manual Mode or Display Only)
                                             <input
                                                 type="text"
@@ -1029,11 +1071,10 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                 onChange={(e) => isCustomMode && setFormData({ ...formData, model: e.target.value })}
                                                 readOnly={!isCustomMode}
                                                 placeholder={isCustomMode ? "e.g., my-custom-model" : "Auto-filled when API detected"}
-                                                className={`w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs placeholder-zinc-500 transition-all ${
-                                                    isCustomMode 
-                                                        ? 'focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-text' 
-                                                        : 'cursor-not-allowed opacity-70'
-                                                }`}
+                                                className={`w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs placeholder-zinc-500 transition-all ${isCustomMode
+                                                    ? 'focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-text'
+                                                    : 'cursor-not-allowed opacity-70'
+                                                    }`}
                                             />
                                         )}
                                     </div>
@@ -1145,24 +1186,22 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                     {/* Conversation Mode */}
                                     <button
                                         type="button"
-                                        onClick={() => setFormData({ 
-                                            ...formData, 
-                                            conversation_model: true, 
-                                            silent_collection: false, 
-                                            hybrid_mode: false 
+                                        onClick={() => setFormData({
+                                            ...formData,
+                                            conversation_model: true,
+                                            silent_collection: false,
+                                            hybrid_mode: false
                                         })}
-                                        className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                                            formData.conversation_model && !formData.silent_collection && !formData.hybrid_mode
-                                                ? 'border-blue-500 bg-blue-500/10'
-                                                : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
-                                        }`}
+                                        className={`relative p-4 rounded-xl border-2 text-left transition-all ${formData.conversation_model && !formData.silent_collection && !formData.hybrid_mode
+                                            ? 'border-blue-500 bg-blue-500/10'
+                                            : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                                            }`}
                                     >
                                         <div className="flex items-start gap-3">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                                                formData.conversation_model && !formData.silent_collection && !formData.hybrid_mode
-                                                    ? 'border-blue-500 bg-blue-500'
-                                                    : 'border-zinc-600'
-                                            }`}>
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${formData.conversation_model && !formData.silent_collection && !formData.hybrid_mode
+                                                ? 'border-blue-500 bg-blue-500'
+                                                : 'border-zinc-600'
+                                                }`}>
                                                 {formData.conversation_model && !formData.silent_collection && !formData.hybrid_mode && (
                                                     <div className="w-2 h-2 rounded-full bg-white" />
                                                 )}
@@ -1179,24 +1218,22 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                     {/* Silent Collection Mode */}
                                     <button
                                         type="button"
-                                        onClick={() => setFormData({ 
-                                            ...formData, 
-                                            conversation_model: false, 
-                                            silent_collection: true, 
-                                            hybrid_mode: false 
+                                        onClick={() => setFormData({
+                                            ...formData,
+                                            conversation_model: false,
+                                            silent_collection: true,
+                                            hybrid_mode: false
                                         })}
-                                        className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                                            formData.silent_collection
-                                                ? 'border-blue-500 bg-blue-500/10'
-                                                : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
-                                        }`}
+                                        className={`relative p-4 rounded-xl border-2 text-left transition-all ${formData.silent_collection
+                                            ? 'border-blue-500 bg-blue-500/10'
+                                            : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                                            }`}
                                     >
                                         <div className="flex items-start gap-3">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                                                formData.silent_collection
-                                                    ? 'border-blue-500 bg-blue-500'
-                                                    : 'border-zinc-600'
-                                            }`}>
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${formData.silent_collection
+                                                ? 'border-blue-500 bg-blue-500'
+                                                : 'border-zinc-600'
+                                                }`}>
                                                 {formData.silent_collection && (
                                                     <div className="w-2 h-2 rounded-full bg-white" />
                                                 )}
@@ -1213,24 +1250,22 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                     {/* Hybrid Mode */}
                                     <button
                                         type="button"
-                                        onClick={() => setFormData({ 
-                                            ...formData, 
-                                            conversation_model: false, 
-                                            silent_collection: false, 
-                                            hybrid_mode: true 
+                                        onClick={() => setFormData({
+                                            ...formData,
+                                            conversation_model: false,
+                                            silent_collection: false,
+                                            hybrid_mode: true
                                         })}
-                                        className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                                            formData.hybrid_mode
-                                                ? 'border-purple-500 bg-purple-500/10'
-                                                : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
-                                        }`}
+                                        className={`relative p-4 rounded-xl border-2 text-left transition-all ${formData.hybrid_mode
+                                            ? 'border-purple-500 bg-purple-500/10'
+                                            : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                                            }`}
                                     >
                                         <div className="flex items-start gap-3">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                                                formData.hybrid_mode
-                                                    ? 'border-purple-500 bg-purple-500'
-                                                    : 'border-zinc-600'
-                                            }`}>
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${formData.hybrid_mode
+                                                ? 'border-purple-500 bg-purple-500'
+                                                : 'border-zinc-600'
+                                                }`}>
                                                 {formData.hybrid_mode && (
                                                     <div className="w-2 h-2 rounded-full bg-white" />
                                                 )}
@@ -1281,11 +1316,10 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                     <button
                                                         type="button"
                                                         onClick={() => setKbMode('auto')}
-                                                        className={`p-3 rounded-lg border text-left text-sm transition-all ${
-                                                            kbMode === 'auto'
-                                                                ? 'border-emerald-500 bg-emerald-500/10 text-white'
-                                                                : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
-                                                        }`}
+                                                        className={`p-3 rounded-lg border text-left text-sm transition-all ${kbMode === 'auto'
+                                                            ? 'border-emerald-500 bg-emerald-500/10 text-white'
+                                                            : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
+                                                            }`}
                                                     >
                                                         <span className="font-medium">Auto</span>
                                                         <p className="text-[10px] text-zinc-500 mt-1">Inject data hanya saat pertanyaan relevan (hemat token)</p>
@@ -1293,11 +1327,10 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                     <button
                                                         type="button"
                                                         onClick={() => setKbMode('always')}
-                                                        className={`p-3 rounded-lg border text-left text-sm transition-all ${
-                                                            kbMode === 'always'
-                                                                ? 'border-emerald-500 bg-emerald-500/10 text-white'
-                                                                : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
-                                                        }`}
+                                                        className={`p-3 rounded-lg border text-left text-sm transition-all ${kbMode === 'always'
+                                                            ? 'border-emerald-500 bg-emerald-500/10 text-white'
+                                                            : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
+                                                            }`}
                                                     >
                                                         <span className="font-medium">Always</span>
                                                         <p className="text-[10px] text-zinc-500 mt-1">Selalu inject data ke setiap pesan (paling akurat)</p>
@@ -1473,9 +1506,8 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                                 setSheetInfo(null)
                                                             }}
                                                             placeholder="https://docs.google.com/spreadsheets/d/..."
-                                                            className={`w-full px-3 py-2 bg-zinc-800 border rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                                                                sheetInfo ? 'border-blue-500/50 pr-8' : 'border-zinc-700'
-                                                            }`}
+                                                            className={`w-full px-3 py-2 bg-zinc-800 border rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${sheetInfo ? 'border-blue-500/50 pr-8' : 'border-zinc-700'
+                                                                }`}
                                                         />
                                                         {sheetInfo && (
                                                             <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -1543,11 +1575,10 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => setDataCollectionData({ ...dataCollectionData, mode: 'update' })}
-                                                                    className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
-                                                                        dataCollectionData.mode === 'update'
-                                                                            ? 'bg-blue-600 text-white'
-                                                                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                                                    }`}
+                                                                    className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${dataCollectionData.mode === 'update'
+                                                                        ? 'bg-blue-600 text-white'
+                                                                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                                                        }`}
                                                                 >
                                                                     📋 Update
                                                                 </button>
@@ -1563,11 +1594,10 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                                             { name: 'Message', source: 'ai_extract' as const, ai_prompt: 'Extract the main content' }
                                                                         ] : dataCollectionData.column_schema
                                                                     })}
-                                                                    className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
-                                                                        dataCollectionData.mode === 'create'
-                                                                            ? 'bg-blue-600 text-white'
-                                                                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                                                    }`}
+                                                                    className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${dataCollectionData.mode === 'create'
+                                                                        ? 'bg-blue-600 text-white'
+                                                                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                                                        }`}
                                                                 >
                                                                     📝 Log
                                                                 </button>
@@ -1670,11 +1700,10 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                                                                             key={cat}
                                                                                                             type="button"
                                                                                                             onClick={() => setSelectedEmojiCategory(cat)}
-                                                                                                            className={`px-2 py-1 text-xs rounded whitespace-nowrap transition-colors ${
-                                                                                                                selectedEmojiCategory === cat 
-                                                                                                                    ? 'bg-blue-600 text-white' 
-                                                                                                                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                                                                                                            }`}
+                                                                                                            className={`px-2 py-1 text-xs rounded whitespace-nowrap transition-colors ${selectedEmojiCategory === cat
+                                                                                                                ? 'bg-blue-600 text-white'
+                                                                                                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                                                                                                                }`}
                                                                                                         >
                                                                                                             {cat.split(' ')[0]}
                                                                                                         </button>
@@ -1732,8 +1761,8 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                                                 defaultValue={mapping.keywords.join(', ')}
                                                                                 onBlur={(e) => {
                                                                                     const updated = [...dataCollectionData.value_mappings]
-                                                                                    updated[idx] = { 
-                                                                                        ...mapping, 
+                                                                                    updated[idx] = {
+                                                                                        ...mapping,
                                                                                         keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
                                                                                     }
                                                                                     setDataCollectionData({ ...dataCollectionData, value_mappings: updated })

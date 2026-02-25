@@ -6,6 +6,7 @@
 import makeWASocket, {
     DisconnectReason,
     useMultiFileAuthState,
+    fetchLatestBaileysVersion,
     WASocket,
     WAMessage,
 } from '@whiskeysockets/baileys';
@@ -24,13 +25,32 @@ import fs from 'fs';
 class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
     private sockets: Map<string, WASocket> = new Map();
     private qrCodes: Map<string, { qr_code: string; expires_at: string }> = new Map();
-    private pausedBots: Set<string> = new Set(); // Track paused bots
-    private reconnecting: Set<string> = new Set(); // Guard against concurrent reconnects
-    private lidToPhone: Map<string, string> = new Map(); // Cache LID -> phone number mapping
+    private pairingCodes: Map<string, { code: string; expires_at: string }> = new Map();
+    private pausedBots: Set<string> = new Set();
+    private reconnecting: Set<string> = new Set();
+    private lidToPhone: Map<string, string> = new Map();
     private sessionPath: string;
+    private cachedWAVersion: [number, number, number] | null = null; // Cache WA version to avoid repeated fetches
 
     constructor() {
         this.sessionPath = process.env.WA_SESSION_PATH || './sessions';
+    }
+
+    /**
+     * Fetch & cache WhatsApp Web version (only fetches once per process lifetime)
+     */
+    private async getWAVersion(): Promise<[number, number, number]> {
+        if (this.cachedWAVersion) return this.cachedWAVersion;
+        try {
+            const { version, isLatest } = await fetchLatestBaileysVersion();
+            logger.info('Fetched latest WA version', { version, isLatest });
+            this.cachedWAVersion = version;
+            return version;
+        } catch (err) {
+            logger.warn('Failed to fetch latest WA version, using fallback', { error: err });
+            // Fallback to a known-good version
+            return [2, 3000, 1023028715];
+        }
     }
 
     /**
@@ -43,6 +63,22 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             return fs.existsSync(credsPath);
         } catch {
             return false;
+        }
+    }
+
+    /**
+     * Clear session files for a bot, forcing fresh QR on next init.
+     * Called when WhatsApp returns 405 or badSession.
+     */
+    public clearSession(botId: string): void {
+        const authPath = path.join(this.sessionPath, `session-${botId}`);
+        try {
+            if (fs.existsSync(authPath)) {
+                fs.rmSync(authPath, { recursive: true, force: true });
+                logger.info('🗑️ Session files cleared', { bot_id: botId, path: authPath });
+            }
+        } catch (err) {
+            logger.error('Failed to clear session files', { bot_id: botId, error: err });
         }
     }
 
@@ -80,16 +116,21 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             const authPath = path.join(this.sessionPath, `session-${botId}`);
             const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
+            // Fetch the latest WhatsApp Web version — using outdated versions causes 405 rejection
+            const version = await this.getWAVersion();
+            logger.info('Using WA Web version', { bot_id: botId, version });
+
             // Create socket with proper config
             const sock = makeWASocket({
+                version,
                 auth: state,
                 printQRInTerminal: false,
-                markOnlineOnConnect: true,  // ✅ IMPORTANT!
+                markOnlineOnConnect: true,
+                browser: ['Sendr', 'Chrome', '124.0.0'],  // Realistic browser fingerprint
+                connectTimeoutMs: 30000,
+                keepAliveIntervalMs: 20000,
                 // getMessage is required for message retry mechanism stability
-                // Without it, Baileys can have protocol-level issues causing disconnects
                 getMessage: async (key) => {
-                    // Return undefined - we don't cache messages, but providing
-                    // the callback prevents Baileys from throwing errors
                     return undefined;
                 },
                 logger: {
@@ -259,9 +300,15 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             // Disconnected
             if (connection === 'close') {
                 const disconnectReason = (lastDisconnect?.error as Boom)?.output?.statusCode;
-                // Don't auto-reconnect if logged out or connection replaced (another session took over)
-                const shouldReconnect = disconnectReason !== DisconnectReason.loggedOut && 
-                                        disconnectReason !== DisconnectReason.connectionReplaced;
+
+                // 405 = Method Not Allowed: WA rejected our session entirely → must clear & re-auth
+                // badSession = corrupted local session → must clear & re-auth
+                const isSessionInvalid = disconnectReason === 405 ||
+                    disconnectReason === DisconnectReason.badSession;
+
+                // Don't auto-reconnect if logged out or connection replaced
+                const shouldReconnect = disconnectReason !== DisconnectReason.loggedOut &&
+                    disconnectReason !== DisconnectReason.connectionReplaced;
 
                 const reasonMap = new Map<number, string>([
                     [DisconnectReason.badSession, 'Bad Session'],
@@ -271,6 +318,7 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                     [DisconnectReason.loggedOut, 'Logged Out'],
                     [DisconnectReason.restartRequired, 'Restart Required'],
                     [DisconnectReason.timedOut, 'Timed Out'],
+                    [405, 'Session Rejected by WhatsApp (405)'],
                 ]);
 
                 const reasonText = disconnectReason ? reasonMap.get(disconnectReason) || `Unknown (${disconnectReason})` : 'Unknown';
@@ -278,6 +326,7 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 logger.warn('WhatsApp disconnected', {
                     bot_id: botId,
                     shouldReconnect,
+                    isSessionInvalid,
                     disconnect_code: disconnectReason,
                     disconnect_reason: reasonText,
                     error: lastDisconnect?.error
@@ -288,7 +337,6 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
 
                 await botRepository.update(botId, {
                     status: 'disconnected',
-                    // Only clear phone_number if logged out AND not paused
                     ...(disconnectReason === DisconnectReason.loggedOut && !wasPaused ? { phone_number: null } : {}),
                 });
 
@@ -314,24 +362,39 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 this.sockets.delete(botId);
                 this.qrCodes.delete(botId);
 
-                // Don't auto-reconnect if bot was paused by user
+                // If session is invalid (405 / badSession), wipe session files so next init gets fresh QR
+                if (isSessionInvalid) {
+                    logger.warn('🗑️ Session invalid - clearing session files to force re-authentication', { bot_id: botId, disconnect_code: disconnectReason });
+                    this.clearSession(botId);
+                    // IMPORTANT: Force-clear the reconnecting lock so the next manual connect works
+                    this.reconnecting.delete(botId);
+                }
+
                 if (shouldReconnect && !wasPaused) {
-                    // Guard against concurrent reconnect attempts (prevents connectionReplaced)
-                    if (this.reconnecting.has(botId)) {
+                    if (isSessionInvalid && disconnectReason === 405) {
+                        // 405 = WhatsApp server is actively rejecting this device.
+                        // Do NOT auto-reconnect — it will just keep failing.
+                        // User must remove linked device from their phone first.
+                        logger.warn('🚫 Not auto-reconnecting after 405 - WhatsApp rejected the session. ' +
+                            'User must go to WhatsApp > Settings > Linked Devices > Remove this device, then reconnect manually.',
+                            { bot_id: botId });
+                        await botRepository.update(botId, { status: 'error' });
+                    } else if (this.reconnecting.has(botId)) {
                         logger.warn('⏳ Reconnect already in progress, skipping duplicate attempt', { bot_id: botId });
                     } else {
                         this.reconnecting.add(botId);
-                        // Auto-reconnect with longer delay to avoid WhatsApp anti-spam
-                        logger.info('⏳ Will attempt reconnect in 30 seconds...', { bot_id: botId });
+                        // Longer delay for session-invalid cases to avoid hammering WA servers
+                        const reconnectDelay = isSessionInvalid ? 15000 : 30000;
+                        logger.info(`⏳ Will attempt reconnect in ${reconnectDelay / 1000}s...`, { bot_id: botId, reason: reasonText });
                         setTimeout(() => {
                             logger.info('🔄 Attempting to reconnect...', { bot_id: botId });
-                            // Clear lock BEFORE calling initializeBot (it has its own check)
                             this.reconnecting.delete(botId);
                             this.initializeBot(botId).catch(err => {
                                 logger.error('Failed to reconnect', { error: err, bot_id: botId });
                             });
-                        }, 30000); // 30 seconds delay (safer than 5 seconds)
+                        }, reconnectDelay);
                     }
+
                 } else if (wasPaused) {
                     logger.info('⏸️ Bot was paused by user - not auto-reconnecting', { bot_id: botId });
                 } else if (disconnectReason === DisconnectReason.connectionReplaced) {
@@ -350,28 +413,28 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             logger.info('📇 Contacts upsert event', { bot_id: botId, count: contacts.length });
             try {
                 const { lidPhoneMappingService } = await import('../../services/lidPhoneMappingService');
-                
+
                 for (const contact of contacts) {
                     // contact.id could be either LID or phone format
                     // contact.lid is the LID if the contact has one
                     // We need to map LID ↔ Phone
-                    
+
                     const contactId = contact.id || '';
                     const lidValue = (contact as any).lid;
-                    
-                    logger.info('📇 Contact info', { 
-                        bot_id: botId, 
+
+                    logger.info('📇 Contact info', {
+                        bot_id: botId,
                         contact_id: contactId,
                         lid: lidValue,
                         name: contact.name || contact.notify,
                         raw: JSON.stringify(contact)
                     });
-                    
+
                     // If contact has both phone JID and LID, save mapping
                     if (contactId.includes('@s.whatsapp.net') && lidValue) {
                         const phone = contactId.split('@')[0];
                         const lid = lidValue.split('@')[0];
-                        
+
                         await lidPhoneMappingService.upsertMapping({
                             bot_id: botId,
                             lid: lid,
@@ -515,14 +578,14 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
 
             const remoteJid = msg.key.remoteJid || '';
             const senderId = msg.key.participant || msg.key.remoteJid || '';
-            
+
             // Try to resolve LID to phone number
             let senderPhone: string | undefined;
             if (remoteJid.includes('@lid') || senderId.includes('@lid')) {
                 // Try to get phone from cache
                 const lid = remoteJid.split('@')[0];
                 senderPhone = this.lidToPhone.get(lid);
-                
+
                 // If not in cache, try to resolve using socket
                 if (!senderPhone) {
                     const sock = this.sockets.get(bot.id);
@@ -634,40 +697,124 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
         try {
             logger.info('Requesting QR code', { bot_id: botId });
 
-            if (!this.sockets.has(botId)) {
-                logger.info('Initializing bot for QR request', { bot_id: botId });
-                await this.initializeBot(botId);
+            // Always destroy existing socket and clear session FIRST so we start fresh
+            if (this.sockets.has(botId)) {
+                logger.info('Destroying existing socket before QR request', { bot_id: botId });
+                try {
+                    const oldSock = this.sockets.get(botId);
+                    oldSock?.end(undefined);
+                } catch (e) { /* ignore */ }
+                this.sockets.delete(botId);
             }
 
-            // Wait for QR code (max 30 seconds)
-            const maxWait = 30000;
+            // Clear any stale reconnecting lock
+            this.reconnecting.delete(botId);
+
+            // Clear old QR
+            this.qrCodes.delete(botId);
+
+            // Always clear session so a fresh QR is generated (avoids 405 from stale session)
+            this.clearSession(botId);
+
+            logger.info('Initializing bot for QR request', { bot_id: botId });
+            await this.initializeBot(botId);
+
+            // Wait up to 15 seconds for either: QR code OR connection close (fast-fail)
+            const maxWait = 15000;
             const startTime = Date.now();
             let attempts = 0;
 
             while (Date.now() - startTime < maxWait) {
                 attempts++;
-                const qrData = this.qrCodes.get(botId);
 
+                // ✅ Happy path: QR appeared
+                const qrData = this.qrCodes.get(botId);
                 if (qrData) {
                     logger.info('QR code found', { bot_id: botId, attempts });
                     return qrData;
                 }
-
-                if (attempts % 10 === 0) {
-                    logger.debug('Still waiting for QR code', {
-                        bot_id: botId,
-                        attempts,
-                        elapsed: Date.now() - startTime
-                    });
+                // ❌ Fast-fail: socket disappeared — means WA rejected/disconnected early
+                if (!this.sockets.has(botId)) {
+                    logger.warn('Socket disappeared during QR wait — WA likely rejected connection', { bot_id: botId, attempts });
+                    throw new Error(
+                        'WhatsApp rejected the connection. Please try using Phone Number Pairing instead: click "Use Phone Number" on the connect page.'
+                    );
                 }
 
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                await new Promise((resolve) => setTimeout(resolve, 200));
             }
 
+            // Timeout reached without QR
             logger.error('QR code generation timeout', { bot_id: botId, attempts });
-            throw new Error('QR code generation timeout - please try again');
+            throw new Error('QR code not received in time. Try using Phone Number Pairing instead.');
         } catch (error) {
             logger.error('Failed to request QR code', { error, bot_id: botId });
+            throw error;
+        }
+    }
+
+    /**
+     * Request a phone number pairing code (alternative to QR scan)
+     * Phone number is read automatically from the bot's DB record.
+     * User enters this 8-digit code in WhatsApp > Linked Devices > Link with Phone Number
+     */
+    public async requestPairingCode(botId: string): Promise<{ code: string; phone: string; expires_at: string }> {
+        try {
+            // Fetch bot to get its registered phone number
+            const bot = await botRepository.findById(botId);
+            if (!bot) throw new Error('Bot not found');
+
+            const rawPhone = (bot as any).phone_number || '';
+            const cleanPhone = rawPhone.replace(/\D/g, '');
+            if (!cleanPhone) {
+                throw new Error('This bot has no phone number configured. Please set the phone number in bot settings first.');
+            }
+
+            logger.info('Requesting pairing code', { bot_id: botId, phone: cleanPhone });
+
+            // Cleanup existing socket
+            if (this.sockets.has(botId)) {
+                try { this.sockets.get(botId)?.end(undefined); } catch (e) { }
+                this.sockets.delete(botId);
+            }
+            this.reconnecting.delete(botId);
+            this.pairingCodes.delete(botId);
+            this.clearSession(botId);
+
+            // Init with pairing mode (no QR needed)
+            const authPath = path.join(this.sessionPath, `session-${botId}`);
+            const { state, saveCreds } = await useMultiFileAuthState(authPath);
+            const version = await this.getWAVersion();
+
+            const sock = makeWASocket({
+                version,
+                auth: state,
+                printQRInTerminal: false,
+                markOnlineOnConnect: false, // Must be false for pairing
+                browser: ['Sendr', 'Chrome', '124.0.0'],
+                connectTimeoutMs: 30000,
+            });
+
+            this.sockets.set(botId, sock);
+            this.setupEventHandlers(sock, bot, saveCreds);
+
+            // Wait briefly for open connection before requesting code
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Request pairing code from WA
+            const code = await sock.requestPairingCode(cleanPhone);
+            const formattedCode = `${code.slice(0, 4)}-${code.slice(4)}`;
+            const expiresAt = new Date(Date.now() + 120000).toISOString();
+
+            logger.info('✅ Pairing code generated', { bot_id: botId, code: formattedCode });
+            this.pairingCodes.set(botId, { code: formattedCode, expires_at: expiresAt });
+            setTimeout(() => this.reconnecting.delete(botId), 10000);
+
+            return { code: formattedCode, phone: cleanPhone, expires_at: expiresAt };
+        } catch (error: any) {
+            logger.error('Failed to request pairing code', { error, bot_id: botId });
+            this.sockets.delete(botId);
+            this.reconnecting.delete(botId);
             throw error;
         }
     }
@@ -919,7 +1066,7 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             if (remoteJid && remoteJid.includes('@lid')) {
                 const lid = remoteJid.split('@')[0];
                 const phone = jid.split('@')[0].replace(/\D/g, '');
-                
+
                 // Import and save mapping
                 try {
                     const { lidPhoneMappingService } = await import('../../services/lidPhoneMappingService');

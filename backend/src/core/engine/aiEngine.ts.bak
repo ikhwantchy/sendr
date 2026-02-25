@@ -253,9 +253,11 @@ class AIEngine {
             // 2. Private/DM chat → always respond
             // In groups without mention → do NOT respond
             if (isMentioned || isPrivate) {
-                // Bypasses LLM entirely to guarantee truly random results for free
-                const groupReply = this.handleDistributorCommand(userMessage, activeSystemPrompt);
-
+                // ✅ GROUP GENERATOR INTERCEPTOR
+                // Intercept "kelompok" requests and handle with REAL Fisher-Yates shuffle
+                // Reads student list from system prompt (AI Prompt Config dashboard or per-target override)
+                // This bypasses LLM entirely to guarantee truly random groups
+                const groupReply = this.handleKelompokCommand(userMessage, activeSystemPrompt);
                 if (groupReply) {
                     logger.info('[AIEngine] Kelompok command intercepted — handling in code', { userMessage });
                     await eventBus.emit(EventType.KEYWORD_MATCHED, context, {
@@ -330,107 +332,90 @@ class AIEngine {
             } else {
                 logger.debug('AI ignoring message: not mentioned in group', { bot_id, bot_name: bot.name });
             }
-        } catch (err: any) {
-            logger.error('AI handleNoMatch error', {
-                bot_id,
-                error: err.message,
-                stack: err.stack,
-                user_message: userMessage.substring(0, 50)
-            });
+        } catch (error) {
+            logger.error('AI handleNoMatch error', { error, bot_id });
         }
     }
 
     /**
-     * Terminology adapts to the user's message (e.g., "tim", "sif", "kloter", "sesi").
-     * Bypasses LLM for cost-efficiency and 100% randomization accuracy.
+     * ✅ KELOMPOK COMMAND HANDLER
+     * Detects "kelompok" + number in message and generates truly random groups.
+     * Student list is parsed DYNAMICALLY from the AI system prompt (dashboard config).
+     * Returns formatted string if handled, null if not a kelompok command.
      */
-    private handleDistributorCommand(message: string, systemPrompt: string): string | null {
+    private handleKelompokCommand(message: string, systemPrompt: string): string | null {
         const lower = message.toLowerCase();
 
-        // Keywords that trigger the distributor
-        const keywords = [
-            'kelompok', 'bagi', 'bagikan', 'tim', 'sif', 'shift',
-            'kloter', 'sesi', 'grup', 'deret', 'acak'
-        ];
+        // Must contain "kelompok"
+        if (!lower.includes('kelompok')) return null;
 
-        const hasKeyword = keywords.some(k => lower.includes(k));
-        if (!hasKeyword) return null;
-
-        // Parse student/person/item list from system prompt
-        const itemList = parseStudentsFromPrompt(systemPrompt);
-        if (itemList.length === 0) {
-            return null; // Fall through to AI if no list found
+        // Parse student list from system prompt
+        const studentList = parseStudentsFromPrompt(systemPrompt);
+        if (studentList.length === 0) {
+            logger.warn('[Kelompok] No student list found in system prompt');
+            return null;
         }
 
-        // Extract numbers
+        // Extract numbers from message
         const numMatch = message.match(/\d+/);
         if (!numMatch) return null;
 
         const requestedNum = parseInt(numMatch[0], 10);
-        if (requestedNum < 1 || requestedNum > itemList.length) return null;
+        if (requestedNum < 1 || requestedNum > studentList.length) return null;
 
-        // Determine the label to use based on message context
-        let label = 'Kelompok';
-        if (lower.includes('sif') || lower.includes('shift')) label = 'Sif';
-        else if (lower.includes('tim')) label = 'Tim';
-        else if (lower.includes('kloter')) label = 'Kloter';
-        else if (lower.includes('sesi')) label = 'Sesi';
-        else if (lower.includes('grup')) label = 'Grup';
+        // Decide if requestedNum is "members per group" or "total number of groups"
+        // Pattern: "4 kelompok" or "jadikan 4 kelompok" -> total number of groups
+        // Pattern: "isi 4 orang" or "kelompok isi 4" -> members per group
+        const isTotalGroupsRequest = /kelompok\s+\d+|\d+\s+kelompok/i.test(message) && !/isi|anggota|orang/i.test(message);
 
-        // Logic: Is it "total groups" or "members per group"?
-        // Pattern: "4 kelompok", "3 sif", "bagi 5 tim" -> total groups
-        // Pattern: "isi 4 orang", "kelompok isi 2", "tiap tim 3 orang" -> per group
-        const isPerGroupRequest = /isi|anggota|orang|tiap|per/i.test(message);
-
+        let perGroup: number;
         let groupCount: number;
 
-        if (isPerGroupRequest) {
-            groupCount = Math.ceil(itemList.length / requestedNum);
-        } else {
+        if (isTotalGroupsRequest) {
             groupCount = requestedNum;
+            perGroup = Math.ceil(studentList.length / groupCount);
+        } else {
+            perGroup = requestedNum;
+            groupCount = Math.ceil(studentList.length / perGroup);
         }
 
-        // Safety cap for groupCount
-        if (groupCount < 1) groupCount = 1;
-        if (groupCount > itemList.length) groupCount = itemList.length;
-
-        // Extract optional subject/context
+        // Extract optional subject
         let subject = '';
-        const contextMatch = message.match(/(matkul|matakuliah|jadwal|untuk|kerja|piket)\s+([A-Z0-9 ]+)/i);
-        if (contextMatch) {
-            subject = contextMatch[2].trim().toUpperCase();
+        const matkulMatch = message.match(/matkul\s+([A-Z0-9 ]+)/i) || message.match(/mata kuliah\s+([A-Z0-9 ]+)/i);
+        if (matkulMatch) {
+            subject = matkulMatch[1].trim().toUpperCase();
         }
 
-        logger.info('[Distributor] Handling request', {
-            label,
-            totalItems: itemList.length,
+        logger.info('[Kelompok] Generating groups', {
+            studentCount: studentList.length,
             requestedNum,
-            isPerGroupRequest,
+            isTotalGroupsRequest,
+            perGroup,
             groupCount,
             subject
         });
 
-        // Fisher-Yates Shuffle
-        const shuffled = fisherYatesShuffle(itemList);
+        // Fisher-Yates shuffle
+        const shuffled = fisherYatesShuffle(studentList);
 
-        // Distribute round-robin to ensure balance
-        const distribution: string[][] = Array.from({ length: groupCount }, () => []);
+        // Distribute round-robin to ensure balance (max difference of 1 member)
+        const groups: string[][] = Array.from({ length: groupCount }, () => []);
         shuffled.forEach((name, idx) => {
-            distribution[idx % groupCount].push(name);
+            groups[idx % groupCount].push(name);
         });
 
-        // Format Output
-        const headerLabel = subject ? `${label.toUpperCase()} ${subject}` : `PEMBAGIAN ${label.toUpperCase()}`;
-        let output = `*${headerLabel}*\n\n`;
-
-        distribution.forEach((members, i) => {
+        // Format output
+        const header = subject ? `KELOMPOK MATA KULIAH ${subject}` : 'PEMBAGIAN KELOMPOK';
+        let output = `${header}\n\n`;
+        groups.forEach((members, i) => {
             if (members.length > 0) {
-                output += `*${label} ${i + 1}*\n`;
+                output += `Kelompok ${i + 1}:\n`;
                 members.forEach(m => { output += `- ${m}\n`; });
                 output += '\n';
             }
         });
 
+        output += '\n\n\n—\nAutomated Message\npowered by sendr.web.id';
         return output.trim();
     }
 

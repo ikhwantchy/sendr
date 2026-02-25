@@ -732,12 +732,159 @@ async function initSchema(): Promise<void> {
     logger.warn('system_settings migration skipped', { error: e });
   }
 
+  // =====================================================================
+  // DATA CLEANUP MIGRATION: Remove legacy footer from all system prompts
+  // This runs on every startup to ensure no old footer strings survive.
+  // =====================================================================
+  try {
+    const FOOTER_PATTERNS = [
+      ' —— Automated Message powered by sendr.web.id',
+      '\n—— Automated Message powered by sendr.web.id',
+      '—— Automated Message powered by sendr.web.id',
+      '\n\n\n—\nAutomated Message\npowered by sendr.web.id',
+      '\n\n—\nAutomated System Randomizer\npowered by sendr.web.id',
+      ' —— Automated System Randomizer powered by sendr.web.id',
+      'powered by sendr.web.id',
+      '\n## 🔖 WATERMARK (WAJIB DI AKHIR)\n',
+    ];
+
+    function stripLegacyFooter(text: string): { result: string; changed: boolean } {
+      let result = text;
+      let changed = false;
+      for (const pattern of FOOTER_PATTERNS) {
+        while (result.includes(pattern)) {
+          result = result.replace(pattern, '');
+          changed = true;
+        }
+      }
+      // Also strip entire WATERMARK section blocks
+      const watermarkSection = /##\s*[🔖\u{1F516}]?\s*WATERMARK[\s\S]*?(?=\n##|\n---|\n\*\*|$)/gu;
+      const stripped = result.replace(watermarkSection, '');
+      if (stripped !== result) {
+        result = stripped;
+        changed = true;
+      }
+      return { result: result.trimEnd(), changed };
+    }
+
+    // 1. Clean llm_allowed_targets
+    const targets = (_db! as any).exec("SELECT id, llm_config FROM llm_allowed_targets WHERE llm_config IS NOT NULL");
+    if (targets.length > 0 && targets[0].values) {
+      let cleanedCount = 0;
+      for (const [id, rawConfig] of targets[0].values) {
+        try {
+          const config = JSON.parse(rawConfig as string || '{}');
+          let changed = false;
+          if (config.system_prompt) {
+            const { result, changed: c } = stripLegacyFooter(config.system_prompt);
+            if (c) { config.system_prompt = result; changed = true; }
+          }
+          if (config.systemPrompt) {
+            const { result, changed: c } = stripLegacyFooter(config.systemPrompt);
+            if (c) { config.systemPrompt = result; changed = true; }
+          }
+          if (changed) {
+            const stmt = _db!.prepare("UPDATE llm_allowed_targets SET llm_config = ? WHERE id = ?");
+            stmt.bind([JSON.stringify(config), id]);
+            stmt.step();
+            stmt.free();
+            cleanedCount++;
+          }
+        } catch (e) { /* skip malformed */ }
+      }
+      if (cleanedCount > 0) {
+        logger.info(`🧹 Footer cleanup: cleaned ${cleanedCount} llm_allowed_targets system prompts`);
+      }
+    }
+
+    // 2. Clean bots.ai_config systemPrompt
+    const bots = (_db! as any).exec("SELECT id, ai_config FROM bots WHERE ai_config IS NOT NULL");
+    if (bots.length > 0 && bots[0].values) {
+      let cleanedCount = 0;
+      for (const [id, rawConfig] of bots[0].values) {
+        try {
+          const config = JSON.parse(rawConfig as string || '{}');
+          if (config.systemPrompt) {
+            const { result, changed } = stripLegacyFooter(config.systemPrompt);
+            if (changed) {
+              config.systemPrompt = result;
+              const stmt = _db!.prepare("UPDATE bots SET ai_config = ? WHERE id = ?");
+              stmt.bind([JSON.stringify(config), id]);
+              stmt.step();
+              stmt.free();
+              cleanedCount++;
+            }
+          }
+        } catch (e) { /* skip malformed */ }
+      }
+      if (cleanedCount > 0) {
+        logger.info(`🧹 Footer cleanup: cleaned ${cleanedCount} bot system prompts`);
+      }
+    }
+
+    // 3. Clean ai_conversations message history
+    const convs = (_db! as any).exec("SELECT id, messages FROM ai_conversations WHERE messages IS NOT NULL AND messages != '[]'");
+    if (convs.length > 0 && convs[0].values) {
+      let cleanedCount = 0;
+      for (const [id, rawMessages] of convs[0].values) {
+        try {
+          const messages: Array<{ role: string; content: string }> = JSON.parse(rawMessages as string || '[]');
+          let changed = false;
+          const cleaned = messages.map(msg => {
+            const { result, changed: c } = stripLegacyFooter(msg.content || '');
+            if (c) changed = true;
+            return { ...msg, content: result };
+          });
+          if (changed) {
+            const stmt = _db!.prepare("UPDATE ai_conversations SET messages = ? WHERE id = ?");
+            stmt.bind([JSON.stringify(cleaned), id]);
+            stmt.step();
+            stmt.free();
+            cleanedCount++;
+          }
+        } catch (e) { /* skip malformed */ }
+      }
+      if (cleanedCount > 0) {
+        logger.info(`🧹 Footer cleanup: cleaned ${cleanedCount} conversation histories`);
+      }
+    }
+  } catch (cleanupErr) {
+    logger.warn('Footer cleanup migration skipped', { error: cleanupErr });
+  }
+  // =====================================================================
+
   saveDatabase();
   logger.info('✅ Database schema initialized');
 }
 
+// Debounce timer for save — prevents many simultaneous writes
+let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+let _isSaving = false;
+
 export function saveDatabase(): void {
   if (!_db) return;
+
+  // Debounce: if a save is already scheduled, just let it handle the latest state
+  if (_saveTimer) {
+    clearTimeout(_saveTimer);
+  }
+
+  _saveTimer = setTimeout(() => {
+    _saveTimer = null;
+    _flushToDisk();
+  }, 300); // batch writes within 300ms window
+}
+
+function _flushToDisk(retries = 3): void {
+  if (!_db) return;
+  if (_isSaving) {
+    // Another flush is in progress — reschedule
+    setTimeout(() => _flushToDisk(retries), 200);
+    return;
+  }
+
+  _isSaving = true;
+
   try {
     const dir = dirname(DB_PATH);
     if (!existsSync(dir)) {
@@ -746,16 +893,36 @@ export function saveDatabase(): void {
 
     const data = _db.export();
     const buffer = Buffer.from(data);
-
-    // ATOMIC WRITE: Write to temp file first, then rename
-    // renameSync is atomic on Linux (same filesystem)
     const tmpPath = DB_PATH + '.tmp';
+
     writeFileSync(tmpPath, buffer);
-    renameSync(tmpPath, DB_PATH);
-  } catch (error) {
+
+    // On Windows, renameSync can fail if the target is locked.
+    // Fallback: use copyFileSync + unlink which is more tolerant.
+    try {
+      renameSync(tmpPath, DB_PATH);
+    } catch (renameErr: any) {
+      if (renameErr.code === 'EPERM' || renameErr.code === 'EACCES') {
+        // Fallback: copy then delete temp
+        copyFileSync(tmpPath, DB_PATH);
+        try { unlinkSync(tmpPath); } catch (e) { }
+      } else {
+        throw renameErr;
+      }
+    }
+  } catch (error: any) {
+    if (retries > 0) {
+      // Retry after short delay
+      setTimeout(() => {
+        _isSaving = false;
+        _flushToDisk(retries - 1);
+      }, 150);
+      return;
+    }
     logger.error('❌ Failed to save database to disk', { error });
-    // Clean up temp file if it exists
     try { unlinkSync(DB_PATH + '.tmp'); } catch (e) { }
+  } finally {
+    if (_isSaving) _isSaving = false;
   }
 }
 
