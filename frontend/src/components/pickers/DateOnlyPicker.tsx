@@ -10,9 +10,9 @@ interface DateOnlyPickerProps {
     placeholder?: string
 }
 
-export default function DateOnlyPicker({ 
-    value, 
-    onChange, 
+export default function DateOnlyPicker({
+    value,
+    onChange,
     minDate = new Date(),
     placeholder = 'Select date'
 }: DateOnlyPickerProps) {
@@ -92,12 +92,11 @@ export default function DateOnlyPicker({
             <button
                 type="button"
                 onClick={() => setShowDatePicker(!showDatePicker)}
-                className={`w-full flex items-center gap-2 px-3 py-2 bg-zinc-900 border rounded-lg text-left transition-all hover:border-zinc-600 ${
-                    showDatePicker ? 'border-blue-500 ring-1 ring-blue-500/20' : 'border-zinc-700'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 h-[48px] bg-[#0a0a0a] border rounded-xl text-left transition-all hover:border-zinc-700 ${showDatePicker ? 'border-blue-500 ring-1 ring-blue-500/20' : 'border-zinc-800'
+                    }`}
             >
-                <div className="w-6 h-6 rounded-md bg-zinc-800 flex items-center justify-center">
-                    <Calendar size={14} className="text-zinc-400" />
+                <div className="w-8 h-8 rounded-lg bg-zinc-900 flex items-center justify-center">
+                    <Calendar size={15} className="text-zinc-500" />
                 </div>
                 <div className="flex-1">
                     <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-medium">Expiration Date</div>
@@ -144,7 +143,7 @@ export default function DateOnlyPicker({
                         {Array.from({ length: firstDayOfMonth }).map((_, i) => (
                             <div key={`empty-${i}`} className="aspect-square" />
                         ))}
-                        
+
                         {/* Days */}
                         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
                             const disabled = isPastDate(day)
@@ -157,15 +156,14 @@ export default function DateOnlyPicker({
                                     type="button"
                                     onClick={() => !disabled && handleDateClick(day)}
                                     disabled={disabled}
-                                    className={`aspect-square rounded-md flex items-center justify-center text-xs font-medium transition-all ${
-                                        disabled
+                                    className={`aspect-square rounded-md flex items-center justify-center text-xs font-medium transition-all ${disabled
                                             ? 'text-zinc-700 cursor-not-allowed'
                                             : selected
                                                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                                                 : today
                                                     ? 'bg-blue-600/20 text-blue-400 border border-blue-500/50'
                                                     : 'text-zinc-300 hover:bg-zinc-800'
-                                    }`}
+                                        }`}
                                 >
                                     {day}
                                 </button>
