@@ -404,7 +404,7 @@ class EnhancedTemplateRenderer {
 
         // Built-in aliases
         if (clean === '@length') return (context.data || []).length;
-        if (clean === '@today') return format(new Date(), 'dd/MM/yyyy');
+        if (clean === '@today') return format(toZonedTime(new Date(), context.timezone || 'Asia/Jakarta'), 'dd/MM/yyyy');
 
         return undefined;
     }
