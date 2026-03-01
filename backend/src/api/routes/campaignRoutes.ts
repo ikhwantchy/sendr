@@ -152,14 +152,26 @@ router.post('/', async (req, res) => {
             image_url,
             scheduled_at,
             start_immediately,
+            // WABA fields
+            campaign_type,
+            template_name,
+            template_language,
+            template_components_json,
         } = req.body;
 
-        // Validation
-        if (!bot_id || !name || !message_template) {
+        // Validation: for freetext campaigns require message_template; for template campaigns require template_name
+        const isFreetext = !campaign_type || campaign_type === 'freetext';
+        if (!bot_id || !name) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing required fields: bot_id, name, message_template',
+                error: 'Missing required fields: bot_id, name',
             });
+        }
+        if (isFreetext && !message_template) {
+            return res.status(400).json({ success: false, error: 'message_template is required for freetext campaigns' });
+        }
+        if (!isFreetext && !template_name) {
+            return res.status(400).json({ success: false, error: 'template_name is required for template campaigns' });
         }
 
         // Parse contacts based on source
@@ -181,7 +193,7 @@ router.post('/', async (req, res) => {
             tenant_id: tenantId,
             bot_id,
             name,
-            message_template,
+            message_template: message_template || ' ',
             contact_source: contact_source || 'manual',
             contacts: finalContacts,
             sheets_url,
@@ -190,6 +202,10 @@ router.post('/', async (req, res) => {
             custom_delay_config,
             image_url,
             scheduled_at,
+            campaign_type: campaign_type || 'freetext',
+            template_name: template_name || undefined,
+            template_language: template_language || 'id',
+            template_components_json: template_components_json || undefined,
         });
 
         // Start immediately if requested and not scheduled

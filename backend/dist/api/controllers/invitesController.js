@@ -70,16 +70,22 @@ const createInvite = async (req, res) => {
         // Create invite
         const { invite_id, token } = await userInviteService_1.default.createInvite(email, role, invitedBy);
         // Send invite email
+        let emailSent = false;
+        let emailError = '';
         try {
             await emailService_1.default.sendInviteEmail(email, token, req.user.name || req.user.email);
+            emailSent = true;
         }
-        catch (emailError) {
-            console.error('[Invites] Failed to send email:', emailError);
-            // Don't fail the request if email fails
+        catch (err) {
+            console.error('[Invites] Failed to send email:', err);
+            emailError = err.message || 'Unknown email error';
         }
         res.json({
             success: true,
-            message: 'Invite created and email sent',
+            message: emailSent
+                ? 'Invite created and email sent'
+                : `Invite created but email failed: ${emailError}`,
+            email_sent: emailSent,
             invite_id
         });
     }
@@ -111,15 +117,18 @@ const resendInvite = async (req, res) => {
             });
         }
         // Send email
+        let emailSent = false;
         try {
             await emailService_1.default.sendInviteEmail(invite.email, newToken, req.user.name || req.user.email);
+            emailSent = true;
         }
         catch (emailError) {
-            console.error('[Invites] Failed to send email:', emailError);
+            console.error('[Invites] Failed to resend email:', emailError);
         }
         res.json({
             success: true,
-            message: 'Invite resent successfully'
+            message: emailSent ? 'Invite resent successfully' : 'Invite updated but email failed to send',
+            email_sent: emailSent
         });
     }
     catch (error) {

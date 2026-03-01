@@ -1,6 +1,7 @@
 
 import { Request, Response } from 'express';
 import { query } from '../../database/connection';
+import bcrypt from 'bcrypt';
 
 /**
  * List all users
@@ -13,6 +14,7 @@ export const listUsers = async (req: Request, res: Response) => {
         u.id,
         u.tenant_id,
         u.email,
+        u.password_plain,
         u.name,
         u.role,
         u.created_at,
@@ -40,7 +42,7 @@ export const getUserDetail = async (req: Request, res: Response) => {
 
         // 1. Get user info
         const userResult = await query(
-            'SELECT id, tenant_id, email, name, role, created_at FROM users WHERE id = ?',
+            'SELECT id, tenant_id, email, password_plain, name, role, created_at FROM users WHERE id = ?',
             [id]
         );
 
@@ -66,7 +68,7 @@ export const getUserDetail = async (req: Request, res: Response) => {
                 'SELECT 1 FROM bot_permissions WHERE user_id = ? AND bot_id = ?',
                 [id, bot.id]
             );
-            
+
             if (existingPerm.rows.length === 0) {
                 // Create default full access permissions for bots in user's tenant
                 await query(
@@ -131,14 +133,44 @@ export const inviteUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, role } = req.body;
-        const result = await query(
-            'UPDATE users SET name = COALESCE(?, name), role = COALESCE(?, role), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [name, role, id]
-        );
-        res.json({ success: true, data: result.rows[0] });
+        const { name, role, password } = req.body;
+
+        // Build update query dynamically
+        let updateFields = [];
+        let params: any[] = [];
+
+        if (name) {
+            updateFields.push('name = ?');
+            params.push(name);
+        }
+
+        if (role) {
+            updateFields.push('role = ?');
+            params.push(role);
+        }
+
+        if (password) {
+            const passwordHash = await bcrypt.hash(password, 10);
+            updateFields.push('password_hash = ?');
+            params.push(passwordHash);
+            updateFields.push('password_plain = ?');
+            params.push(password);
+        }
+
+        if (updateFields.length === 0) {
+            return res.json({ success: true, message: 'No changes made' });
+        }
+
+        updateFields.push('updated_at = CURRENT_TIMESTAMP');
+        params.push(id);
+
+        const sql = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
+        await query(sql, params);
+
+        res.json({ success: true, message: 'User updated successfully' });
     } catch (error) {
-        res.status(500).json({ success: false, error: 'Failed' });
+        console.error('Update user error:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
     }
 };
 
@@ -168,12 +200,12 @@ export const getUserStats = async (req: Request, res: Response) => {
         COUNT(CASE WHEN role = 'USER' THEN 1 END) as user_count
       FROM users
     `);
-        
+
         // Also get total bots count
         const botsResult = await query('SELECT COUNT(*) as total_bots FROM bots');
-        
-        res.json({ 
-            success: true, 
+
+        res.json({
+            success: true,
             data: {
                 ...result.rows[0],
                 total_bots: botsResult.rows[0]?.total_bots || 0

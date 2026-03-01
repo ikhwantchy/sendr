@@ -18,6 +18,23 @@ export declare const db: {
 };
 export declare function initDatabase(): Promise<void>;
 export declare function saveDatabase(): void;
+/**
+ * Create a timestamped backup of the database
+ * Keeps max 10 backups, rotates oldest
+ */
+export declare function backupDatabase(): string | null;
+/**
+ * Restore database from a backup file
+ */
+export declare function restoreDatabase(backupPath: string): boolean;
+/**
+ * List available backups
+ */
+export declare function listBackups(): Array<{
+    name: string;
+    size: number;
+    date: string;
+}>;
 export declare function query(sql: string, params?: any[]): Promise<any>;
 export declare function transaction<T>(callback: (client: any) => Promise<T>): Promise<T>;
 export declare function closePool(): Promise<void>;

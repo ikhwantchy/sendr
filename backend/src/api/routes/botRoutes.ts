@@ -585,4 +585,103 @@ router.post('/:id/sync-groups', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/bots/:id/meta/test-connection
+ * Test Meta Cloud API credentials
+ */
+router.post('/:id/meta/test-connection', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { phone_number_id, access_token, waba_id, app_secret } = req.body;
+
+        if (!phone_number_id || !access_token) {
+            return res.status(400).json({ success: false, error: 'Phone Number ID dan Access Token wajib diisi' });
+        }
+
+        const { metaCloudAdapter } = await import('../../adapters/whatsapp/whatsappAdapter.meta-cloud');
+        const result = await metaCloudAdapter.testConnection(id, {
+            phone_number_id,
+            access_token,
+            waba_id: waba_id || '',
+            app_secret: app_secret || undefined,
+        });
+
+        res.json({ success: result.success, data: result });
+    } catch (error: any) {
+        logger.error('Meta test-connection failed', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/bots/:id/meta/save-config
+ * Save Meta Cloud API credentials to bot
+ */
+router.post('/:id/meta/save-config', requireRole(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { phone_number_id, access_token, waba_id, app_secret } = req.body;
+
+        if (!phone_number_id || !access_token) {
+            return res.status(400).json({ success: false, error: 'Phone Number ID dan Access Token wajib diisi' });
+        }
+
+        // Test connection first
+        const { metaCloudAdapter } = await import('../../adapters/whatsapp/whatsappAdapter.meta-cloud');
+        const testResult = await metaCloudAdapter.testConnection(id, {
+            phone_number_id, access_token, waba_id: waba_id || '',
+        });
+
+        if (!testResult.success) {
+            return res.status(400).json({ success: false, error: testResult.error || 'Gagal terhubung ke Meta API' });
+        }
+
+        // Save config
+        const updated = await botRepository.update(id, {
+            adapter_type: 'meta_cloud',
+            meta_phone_number_id: phone_number_id,
+            meta_access_token: access_token,
+            meta_waba_id: waba_id || null,
+            meta_app_secret: app_secret || null,
+            status: 'connected',
+            phone_number: testResult.phone_number || null,
+        } as any);
+
+        // Initialize the adapter
+        await metaCloudAdapter.initializeBot(id);
+
+        res.json({ success: true, data: updated });
+    } catch (error: any) {
+        logger.error('Meta save-config failed', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * GET /api/bots/:id/meta/templates
+ * Fetch approved Meta message templates
+ */
+router.get('/:id/meta/templates', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const bot = await botRepository.findById(id) as any;
+        if (!bot) return res.status(404).json({ success: false, error: 'Bot not found' });
+        if (bot.adapter_type !== 'meta_cloud') {
+            return res.status(400).json({ success: false, error: 'Bot ini bukan WABA bot' });
+        }
+
+        const { metaCloudAdapter } = await import('../../adapters/whatsapp/whatsappAdapter.meta-cloud');
+        if (!metaCloudAdapter.isInitialized(id)) {
+            await metaCloudAdapter.initializeBot(id);
+        }
+        const templates = await metaCloudAdapter.getApprovedTemplates(id);
+
+        res.json({ success: true, data: templates });
+    } catch (error: any) {
+        logger.error('Failed to get Meta templates', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 export default router;

@@ -83,9 +83,9 @@ export const createUser = async (req: Request, res: Response) => {
 
         // Create user
         await query(
-            `INSERT INTO users (id, tenant_id, email, password_hash, name, role, permissions, status, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
-            [userId, tenantId, email, passwordHash, name, role, JSON.stringify(permissions || {})]
+            `INSERT INTO users (id, tenant_id, email, password_hash, password_plain, name, role, permissions, status, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
+            [userId, tenantId, email, passwordHash, password, name, role, JSON.stringify(permissions || {})]
         );
 
         // Log creation
@@ -517,8 +517,8 @@ export const saveGoogleServiceAccount = async (req: Request, res: Response) => {
         // Validate JSON structure
         let parsed;
         try {
-            parsed = typeof serviceAccountJson === 'string' 
-                ? JSON.parse(serviceAccountJson) 
+            parsed = typeof serviceAccountJson === 'string'
+                ? JSON.parse(serviceAccountJson)
                 : serviceAccountJson;
         } catch (e) {
             return res.status(400).json({

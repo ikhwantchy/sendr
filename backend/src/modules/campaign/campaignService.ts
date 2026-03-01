@@ -38,6 +38,11 @@ export interface CampaignCreateData {
     };
     image_url?: string;
     scheduled_at?: string;
+    // WABA fields
+    campaign_type?: 'freetext' | 'template';
+    template_name?: string;
+    template_language?: string;
+    template_components_json?: string;
 }
 
 class CampaignService {
@@ -224,6 +229,10 @@ class CampaignService {
             custom_delay_config,
             image_url,
             scheduled_at,
+            campaign_type = 'freetext',
+            template_name,
+            template_language = 'id',
+            template_components_json,
         } = data;
 
         try {
@@ -258,8 +267,9 @@ class CampaignService {
                     status, total_contacts, sent_count, failed_count,
                     delay_preset, anti_spam_config, contact_source,
                     sheets_url, sheets_tab, image_url, scheduled_at,
+                    campaign_type, template_name, template_language, template_components_json,
                     created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             `, [
                 campaignId,
                 tenant_id,
@@ -275,6 +285,10 @@ class CampaignService {
                 sheets_tab || null,
                 image_url || null,
                 scheduled_at || null,
+                campaign_type || 'freetext',
+                template_name || null,
+                template_language || 'id',
+                template_components_json || null,
             ]);
 
             // 4. Insert recipients

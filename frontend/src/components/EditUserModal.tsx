@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { X, Shield, Bot, Check, Loader2, ChevronDown, User } from 'lucide-react'
+import { X, Shield, Bot, Check, Loader2, ChevronDown, User, Eye } from 'lucide-react'
 import ModalPortal from '@/components/ModalPortal'
 
 interface EditUserModalProps {
@@ -27,6 +27,8 @@ export default function EditUserModal({ isOpen, onClose, user }: EditUserModalPr
     const [formData, setFormData] = useState({
         name: '',
         role: 'USER',
+        password: '',
+        currentPasswordPlain: '',
         selectedBots: [] as string[],
     })
 
@@ -72,6 +74,8 @@ export default function EditUserModal({ isOpen, onClose, user }: EditUserModalPr
                 ...prev,
                 name: user.name || '',
                 role: user.role || 'USER',
+                currentPasswordPlain: user.password_plain || '',
+                password: '', // Reset password field on modal open
             }))
         }
 
@@ -109,6 +113,7 @@ export default function EditUserModal({ isOpen, onClose, user }: EditUserModalPr
         updateMutation.mutate({
             name: formData.name,
             role: formData.role,
+            password: formData.password || undefined,
             bot_ids: formData.selectedBots,
         })
     }
@@ -157,7 +162,21 @@ export default function EditUserModal({ isOpen, onClose, user }: EditUserModalPr
                                     placeholder="Enter full name"
                                 />
                             </div>
-
+                            {/* Password Field - New */}
+                            <div className="space-y-1.5">
+                                <label className="text-[13px] font-semibold text-zinc-400">
+                                    NEW PASSWORD (OPTIONAL)
+                                </label>
+                                <input
+                                    type="password"
+                                    value={formData.password}
+                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                    className="w-full h-[46px] px-4 bg-[#0a0a0a] border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-zinc-700 transition-all font-medium"
+                                    placeholder="Leave blank to keep current"
+                                    autoComplete="new-password"
+                                />
+                                <p className="text-[10px] text-zinc-500 font-medium">Reset user password by entering a new one here.</p>
+                            </div>
                             {/* Role Selection - Same as CreateUserModal */}
                             <div className="space-y-1.5">
                                 <label className="text-[13px] font-semibold text-zinc-400">
@@ -185,7 +204,7 @@ export default function EditUserModal({ isOpen, onClose, user }: EditUserModalPr
                                         </div>
                                         <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} />
                                     </button>
-                                    
+
                                     {isRoleDropdownOpen && (
                                         <div className="absolute top-full left-0 right-0 mt-2 bg-[#0a0a0a] border border-zinc-800 rounded-xl overflow-hidden shadow-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                                             {ROLE_OPTIONS.map((option) => {
@@ -230,15 +249,15 @@ export default function EditUserModal({ isOpen, onClose, user }: EditUserModalPr
                                     className="w-full h-[46px] px-4 bg-[#0a0a0a] border border-zinc-800 rounded-xl text-left flex items-center justify-between hover:border-zinc-700 transition-colors"
                                 >
                                     <span className={`text-sm font-medium ${selectedBotNames.length > 0 ? 'text-zinc-100' : 'text-zinc-500'}`}>
-                                        {selectedBotNames.length > 0 
-                                            ? selectedBotNames.length <= 2 
+                                        {selectedBotNames.length > 0
+                                            ? selectedBotNames.length <= 2
                                                 ? selectedBotNames.join(', ')
                                                 : `${selectedBotNames.slice(0, 2).join(', ')} +${selectedBotNames.length - 2} more`
                                             : 'Select bots...'}
                                     </span>
                                     <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${showBotDropdown ? 'rotate-180' : ''}`} />
                                 </button>
-                                
+
                                 {showBotDropdown && (
                                     <div className="bg-[#0a0a0a] border border-zinc-800 rounded-xl overflow-hidden shadow-xl mt-2 max-h-48 overflow-y-auto">
                                         {bots?.length === 0 ? (

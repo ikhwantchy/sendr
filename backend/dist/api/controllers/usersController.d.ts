@@ -14,7 +14,7 @@ export declare const inviteUser: (req: Request, res: Response) => Promise<void>;
 /**
  * Update user
  */
-export declare const updateUser: (req: Request, res: Response) => Promise<void>;
+export declare const updateUser: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 /**
  * Delete user
  */

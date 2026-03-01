@@ -8,6 +8,7 @@ const systemSettingsService_1 = __importDefault(require("../../services/systemSe
 const auditLogService_1 = __importDefault(require("../../services/auditLogService"));
 const userInviteService_1 = __importDefault(require("../../services/userInviteService"));
 const googleSheetsWriteService_1 = require("../../services/googleSheetsWriteService");
+const emailService_1 = __importDefault(require("../../services/emailService"));
 const connection_sqlite_1 = require("../../database/connection-sqlite");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const uuid_1 = require("uuid");
@@ -70,8 +71,8 @@ const createUser = async (req, res) => {
         }
         const userId = (0, uuid_1.v4)();
         // Create user
-        await (0, connection_sqlite_1.query)(`INSERT INTO users (id, tenant_id, email, password_hash, name, role, permissions, status, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`, [userId, tenantId, email, passwordHash, name, role, JSON.stringify(permissions || {})]);
+        await (0, connection_sqlite_1.query)(`INSERT INTO users (id, tenant_id, email, password_hash, password_plain, name, role, permissions, status, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`, [userId, tenantId, email, passwordHash, password, name, role, JSON.stringify(permissions || {})]);
         // Log creation
         await auditLogService_1.default.log({
             user_id: req.user.id,
@@ -82,9 +83,22 @@ const createUser = async (req, res) => {
             description: `Created user: ${name} (${email})`,
             status: 'success'
         });
+        // Try to send welcome email (non-blocking)
+        let emailSent = false;
+        try {
+            await emailService_1.default.sendWelcomeEmail(name, email, password);
+            emailSent = true;
+        }
+        catch (emailError) {
+            console.warn(`[Admin] Welcome email failed for ${email}:`, emailError.message);
+            // Don't fail user creation if email fails
+        }
         res.status(201).json({
             success: true,
-            message: 'User created successfully',
+            message: emailSent
+                ? 'User created successfully and welcome email sent'
+                : 'User created successfully',
+            email_sent: emailSent,
             user: {
                 id: userId,
                 name,
@@ -259,6 +273,12 @@ const bulkUpdateSettings = async (req, res) => {
                 });
             }
         }
+        // Clear email transporter cache if any email settings changed
+        const hasEmailChanges = keys.some(key => key.startsWith('smtp_') || key === 'from_email' || key === 'from_name');
+        if (hasEmailChanges) {
+            emailService_1.default.clearTransporter();
+            console.log('[Admin] Email settings updated via bulk, transporter cache cleared');
+        }
         res.json({
             success: true,
             message: 'Settings updated successfully'
@@ -303,6 +323,11 @@ const updateSettings = async (req, res) => {
             updated_by: userId
         }));
         await systemSettingsService_1.default.setMultiple(settingsUpdates);
+        // Clear email transporter cache when email settings change
+        if (category === 'email') {
+            emailService_1.default.clearTransporter();
+            console.log('[Admin] Email settings updated, transporter cache cleared');
+        }
         res.json({
             success: true,
             message: 'Settings updated successfully'
@@ -331,8 +356,7 @@ const testEmail = async (req, res) => {
                 message: 'Recipient email is required'
             });
         }
-        const emailService = require('../../services/emailService').default;
-        await emailService.sendTestEmail(to);
+        await emailService_1.default.sendTestEmail(to);
         res.json({
             success: true,
             message: `Test email sent to ${to}`

@@ -141,6 +141,11 @@ campaignQueue.process('send-campaign-message', 1, async (job) => {
         variables,
         template,
         image_url,
+        // WABA fields
+        campaign_type,
+        template_name,
+        template_language,
+        template_components_json,
     } = job.data;
 
     logger.info('📣 Processing campaign message', {
@@ -201,27 +206,67 @@ campaignQueue.process('send-campaign-message', 1, async (job) => {
             formattedPhone = formattedPhone + '@s.whatsapp.net';
         }
 
-        // Import WhatsApp adapter
-        const { whatsappAdapter } = await import('../adapters/whatsapp/whatsappAdapter.baileys');
+        // Import adapter factory
+        const { getAdapterForBot } = await import('../adapters/whatsapp/whatsappAdapterFactory');
+        const adapter = await getAdapterForBot(bot_id);
 
         // Send message
         let sentResult;
-        if (image_url) {
-            // Log image info for debugging
-            const isBase64 = image_url.startsWith('data:');
-            logger.info('📣 Sending image message', {
-                job_id: job.id,
-                isBase64,
-                imageLength: image_url.length,
-            });
 
-            sentResult = await whatsappAdapter.sendMessage(bot_id, formattedPhone, {
+        if (campaign_type === 'template' && template_name) {
+            // ─── WABA Template Message ───────────────────────
+            // Build template components with variable substitution
+            let components: any[] = [];
+            if (template_components_json) {
+                try {
+                    const componentsDef = typeof template_components_json === 'string'
+                        ? JSON.parse(template_components_json)
+                        : template_components_json;
+
+                    components = componentsDef.map((comp: any) => ({
+                        type: comp.type,
+                        sub_type: comp.sub_type,
+                        index: comp.index,
+                        parameters: (comp.parameters || []).map((p: any) => ({
+                            type: 'text',
+                            text: variables[p.variable] || p.default || '',
+                        })),
+                    }));
+                } catch (e) {
+                    logger.warn('Failed to parse template components', { error: e });
+                }
+            }
+
+            sentResult = await adapter.sendMessage(bot_id, phone, {
+                type: 'template',
+                template_name,
+                template_language: template_language || 'id',
+                template_components: components,
+            } as any);
+        } else if (image_url) {
+            // ─── Image Message (Baileys) ────────────────────
+            const isBase64 = image_url.startsWith('data:');
+            logger.info('📣 Sending image message', { job_id: job.id, isBase64, imageLength: image_url.length });
+
+            // Format phone for Baileys
+            let formattedPhone = phone.replace(/\D/g, '');
+            if (formattedPhone.startsWith('0')) formattedPhone = '62' + formattedPhone.slice(1);
+            else if (formattedPhone.startsWith('8')) formattedPhone = '62' + formattedPhone;
+            if (!formattedPhone.includes('@')) formattedPhone = formattedPhone + '@s.whatsapp.net';
+
+            sentResult = await adapter.sendMessage(bot_id, formattedPhone, {
                 type: 'image',
                 media_url: image_url,
                 caption: message,
             });
         } else {
-            sentResult = await whatsappAdapter.sendMessage(bot_id, formattedPhone, {
+            // ─── Text Message (Baileys) ─────────────────────
+            let formattedPhone = phone.replace(/\D/g, '');
+            if (formattedPhone.startsWith('0')) formattedPhone = '62' + formattedPhone.slice(1);
+            else if (formattedPhone.startsWith('8')) formattedPhone = '62' + formattedPhone;
+            if (!formattedPhone.includes('@')) formattedPhone = formattedPhone + '@s.whatsapp.net';
+
+            sentResult = await adapter.sendMessage(bot_id, formattedPhone, {
                 type: 'text',
                 content: message,
             });
@@ -345,7 +390,7 @@ async function checkCampaignCompletion(campaignId: string): Promise<void> {
                 // - 'completed' if at least one message sent successfully
                 // - 'failed' if all messages failed (0 sent)
                 const finalStatus = campaign.actual_sent > 0 ? 'completed' : 'failed';
-                
+
                 await query(`
                     UPDATE campaigns 
                     SET status = ?, completed_at = CURRENT_TIMESTAMP 

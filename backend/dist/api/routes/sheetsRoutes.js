@@ -47,5 +47,11 @@ router.post('/preview-enhanced', enhancedSheetsController_1.previewEnhanced);
  * Render Handlebars template with sample Google Sheets data
  */
 router.post('/render-preview', sheetsController_1.renderPreview);
+/**
+ * GET /api/sheets/columns
+ * Get column headers and sample data from a sheet tab
+ * Query params: url (Google Sheets URL), tab (optional tab/sheet name)
+ */
+router.get('/columns', sheetsController_1.getSheetColumns);
 exports.default = router;
 //# sourceMappingURL=sheetsRoutes.js.map

@@ -18,12 +18,17 @@ declare class AIEngine {
      */
     private handleNoMatch;
     /**
+     * Terminology adapts to the user's message (e.g., "tim", "sif", "kloter", "sesi").
+     * Bypasses LLM for cost-efficiency and 100% randomization accuracy.
+     */
+    private handleDistributorCommand;
+    /**
      * Check if the bot is mentioned in the message
      */
     private isBotMentioned;
     /**
-         * Check if target (group/contact) is allowed to use LLM
-         */
+     * Check if target (group/contact) is allowed to use LLM
+     */
     private isTargetAllowed;
     /**
      * Process message for AI Sheet Updater

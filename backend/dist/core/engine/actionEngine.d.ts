@@ -13,6 +13,7 @@
  * - FETCH_SPREADSHEET: Fetch data from spreadsheet
  * - COMPOSE_MESSAGE: Compose message from template + data
  * - TRIGGER_REMINDER: Schedule a reminder
+ * - SEND_SHEET_DATA: Fetch Google Sheet data and send as formatted text
  */
 declare class ActionExecutionEngine {
     constructor();
@@ -52,6 +53,12 @@ declare class ActionExecutionEngine {
      * Execute TRIGGER_REMINDER action
      */
     private executeTriggerReminder;
+    /**
+     * Execute SEND_SHEET_DATA action
+     * Fetches data from Google Sheet, applies filters, renders template, sends formatted message
+     * Works like the Reminder system but triggered by keywords
+     */
+    private executeSendSheetData;
     /**
      * Log outbound message to database
      * This is non-blocking and won't break if table doesn't exist

@@ -45,6 +45,7 @@
     "puppeteer": "^24.34.0",
     "qrcode": "^1.5.3",
     "redis": "^4.6.11",
+    "socket.io": "^4.8.3",
     "sql.js": "^1.13.0",
     "uuid": "^9.0.1",
     "whatsapp-web.js": "^1.23.0",

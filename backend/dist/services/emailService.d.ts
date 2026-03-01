@@ -31,6 +31,18 @@ declare class EmailService {
      */
     sendTestEmail(to: string): Promise<void>;
     /**
+     * Send welcome email to newly created user
+     */
+    sendWelcomeEmail(name: string, userEmail: string, password: string): Promise<void>;
+    /**
+     * Substitute template variables like {{name}}, {{email}}, etc.
+     */
+    private substituteVariables;
+    /**
+     * Default welcome email HTML template
+     */
+    private getDefaultWelcomeTemplate;
+    /**
      * Invite email template
      */
     private getInviteEmailTemplate;

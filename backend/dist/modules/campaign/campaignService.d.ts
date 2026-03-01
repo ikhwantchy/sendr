@@ -31,6 +31,10 @@ export interface CampaignCreateData {
     };
     image_url?: string;
     scheduled_at?: string;
+    campaign_type?: 'freetext' | 'template';
+    template_name?: string;
+    template_language?: string;
+    template_components_json?: string;
 }
 declare class CampaignService {
     /**

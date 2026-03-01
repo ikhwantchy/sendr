@@ -41,9 +41,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
+// Trigger restart 3
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const logger_1 = require("./utils/logger");
 const connection_1 = require("./database/connection");
 // Import core engines (this initializes event subscriptions)
@@ -54,6 +57,10 @@ require("./core/engine/aiEngine");
 require("./queue/messageWorker");
 // ✅ Import campaign worker (Bull queue) - SEPARATE from reminder
 require("./queue/campaignWorker");
+// ❌ Bro-Bot Service DISABLED - conflicts with Rule Engine's SEND_SHEET_DATA
+// It was sending "Mencari tugas..." + errors because it uses wrong spreadsheet ID
+// All keyword handling is now done via Rule Engine + Action Engine
+// import './services/broBotService';
 // ✅ Import group integration
 const groupIntegration_1 = require("./integrations/groupIntegration");
 // Import API routes
@@ -75,6 +82,8 @@ const adminRoutes_1 = __importDefault(require("./api/routes/adminRoutes"));
 const securityRoutes_1 = __importDefault(require("./api/routes/securityRoutes"));
 const sheetUpdaterRoutes_1 = __importDefault(require("./api/routes/sheetUpdaterRoutes"));
 const lidMappingRoutes_1 = __importDefault(require("./api/routes/lidMappingRoutes"));
+const metaWebhookRoutes_1 = __importDefault(require("./api/routes/metaWebhookRoutes"));
+const inboxRoutes_1 = __importDefault(require("./api/routes/inboxRoutes"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3001;
 // Middleware
@@ -110,6 +119,8 @@ app.get('/health', async (req, res) => {
         });
     }
 });
+// ✅ Meta Webhook - BEFORE auth middleware (no JWT needed)
+app.use('/api/webhooks', metaWebhookRoutes_1.default);
 // API Routes
 app.use('/api/auth', authRoutes_1.default);
 app.use('/api/bots', botRoutes_1.default);
@@ -129,6 +140,34 @@ app.use('/api/admin', adminRoutes_1.default);
 app.use('/api/security', securityRoutes_1.default);
 app.use('/api/sheet-updater', sheetUpdaterRoutes_1.default);
 app.use('/api/lid-mappings', lidMappingRoutes_1.default);
+app.use('/api/inbox', inboxRoutes_1.default);
+// Public endpoint - landing page content (no auth)
+app.get('/api/public/landing-page', async (req, res) => {
+    try {
+        const { default: systemSettingsService } = await Promise.resolve().then(() => __importStar(require('./services/systemSettingsService')));
+        const content = await systemSettingsService.get('landing_page', 'content', '{}');
+        // content may be a string or already-parsed object depending on data_type
+        const parsed = typeof content === 'string' ? JSON.parse(content) : content;
+        res.json({ success: true, content: parsed });
+    }
+    catch (error) {
+        console.error('[Landing] Public endpoint error:', error.message);
+        res.json({ success: true, content: {} });
+    }
+});
+// Public endpoint - serve uploaded images (no auth, cross-origin allowed)
+const UPLOADS_DIR = path_1.default.join(__dirname, '../data/uploads');
+app.get('/api/public/uploads/:filename', (req, res) => {
+    const filename = path_1.default.basename(req.params.filename); // prevent directory traversal
+    const filePath = path_1.default.join(UPLOADS_DIR, filename);
+    if (!fs_1.default.existsSync(filePath)) {
+        return res.status(404).json({ error: 'File not found' });
+    }
+    // Override helmet's restrictive CORP header for images
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.sendFile(filePath);
+});
 // 404 handler
 app.use((req, res) => {
     logger_1.logger.warn(`404 Not Found: ${req.method} ${req.path}`, {
@@ -157,6 +196,14 @@ const server = app.listen(PORT, async () => {
     logger_1.logger.info(`🚀 Server running on port ${PORT}`);
     logger_1.logger.info(`📡 API: http://localhost:${PORT}/api`);
     logger_1.logger.info(`🏥 Health: http://localhost:${PORT}/health`);
+    // ✅ Initialize Socket.IO
+    try {
+        const { socketService } = await Promise.resolve().then(() => __importStar(require('./services/socketService')));
+        socketService.initialize(server);
+    }
+    catch (error) {
+        logger_1.logger.error('❌ Failed to initialize Socket.IO', { error: error.message });
+    }
     // ✅ Initialize group integration (auto-sync & commands)
     (0, groupIntegration_1.initializeGroupIntegration)();
     logger_1.logger.info('✅ Group integration initialized');
@@ -165,18 +212,32 @@ const server = app.listen(PORT, async () => {
         const { botRepository } = await Promise.resolve().then(() => __importStar(require('./database/repositories/botRepository')));
         const { whatsappAdapter } = await Promise.resolve().then(() => __importStar(require('./adapters/whatsapp/whatsappAdapter.baileys')));
         const allBots = await botRepository.findAll();
-        // Filter to bots that are connected OR have valid session files
-        const botsToInitialize = allBots.filter(bot => bot.status === 'connected' || whatsappAdapter.hasValidSession(bot.id));
-        logger_1.logger.info(`🔄 Found ${botsToInitialize.length} bots to initialize (${allBots.length} total)...`);
-        for (const bot of botsToInitialize) {
+        // Separate Baileys bots and Meta WABA bots
+        const baileysBots = allBots.filter((bot) => (!bot.adapter_type || bot.adapter_type === 'baileys' || bot.adapter_type === 'web') &&
+            (bot.status === 'connected' || whatsappAdapter.hasValidSession(bot.id)));
+        const metaBots = allBots.filter((bot) => bot.adapter_type === 'meta_cloud' && bot.meta_phone_number_id && bot.meta_access_token);
+        logger_1.logger.info(`🔄 Found ${baileysBots.length} Baileys bots, ${metaBots.length} WABA bots to initialize...`);
+        // Initialize Baileys bots
+        for (const bot of baileysBots) {
             try {
-                const hasSession = whatsappAdapter.hasValidSession(bot.id);
-                logger_1.logger.info(`🔄 Initializing bot: ${bot.name} (status: ${bot.status}, hasSession: ${hasSession})`);
                 await whatsappAdapter.initializeBot(bot.id);
-                logger_1.logger.info(`✅ Bot initialized: ${bot.name} (${bot.id})`);
+                logger_1.logger.info(`✅ Baileys bot initialized: ${bot.name}`);
             }
             catch (error) {
                 logger_1.logger.error(`❌ Failed to initialize bot: ${bot.name}`, { error: error.message });
+            }
+        }
+        // Initialize WABA bots
+        if (metaBots.length > 0) {
+            const { metaCloudAdapter } = await Promise.resolve().then(() => __importStar(require('./adapters/whatsapp/whatsappAdapter.meta-cloud')));
+            for (const bot of metaBots) {
+                try {
+                    await metaCloudAdapter.initializeBot(bot.id);
+                    logger_1.logger.info(`✅ WABA bot initialized: ${bot.name}`);
+                }
+                catch (error) {
+                    logger_1.logger.warn(`⚠️ WABA bot init skipped: ${bot.name}`, { error: error.message });
+                }
             }
         }
         logger_1.logger.info('✅ Bot auto-initialization complete');

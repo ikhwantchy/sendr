@@ -195,7 +195,7 @@ class CampaignService {
      * Create a new campaign
      */
     async createCampaign(data) {
-        const { tenant_id, bot_id, name, message_template, contact_source, contacts: providedContacts, sheets_url, sheets_tab, delay_preset = 'moderate', custom_delay_config, image_url, scheduled_at, } = data;
+        const { tenant_id, bot_id, name, message_template, contact_source, contacts: providedContacts, sheets_url, sheets_tab, delay_preset = 'moderate', custom_delay_config, image_url, scheduled_at, campaign_type = 'freetext', template_name, template_language = 'id', template_components_json, } = data;
         try {
             // 1. Get contacts based on source
             let contacts = [];
@@ -225,8 +225,9 @@ class CampaignService {
                     status, total_contacts, sent_count, failed_count,
                     delay_preset, anti_spam_config, contact_source,
                     sheets_url, sheets_tab, image_url, scheduled_at,
+                    campaign_type, template_name, template_language, template_components_json,
                     created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             `, [
                 campaignId,
                 tenant_id,
@@ -242,6 +243,10 @@ class CampaignService {
                 sheets_tab || null,
                 image_url || null,
                 scheduled_at || null,
+                campaign_type || 'freetext',
+                template_name || null,
+                template_language || 'id',
+                template_components_json || null,
             ]);
             // 4. Insert recipients
             for (const contact of contacts) {

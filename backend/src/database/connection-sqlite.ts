@@ -167,6 +167,7 @@ async function initSchema(): Promise<void> {
       tenant_id TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      password_plain TEXT,
       name TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('OWNER', 'ADMIN', 'OPERATOR', 'USER', 'VIEWER')),
       permissions TEXT DEFAULT '{}',
@@ -451,6 +452,38 @@ async function initSchema(): Promise<void> {
         FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
     );
 
+    -- Inbox Conversations
+    CREATE TABLE IF NOT EXISTS inbox_conversations (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        bot_id TEXT NOT NULL,
+        contact_number TEXT NOT NULL,
+        contact_name TEXT,
+        unread_count INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'open' CHECK(status IN ('open', 'closed', 'resolved')),
+        last_message_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+    );
+
+    -- Inbox Messages
+    CREATE TABLE IF NOT EXISTS inbox_messages (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL,
+        message_id TEXT,
+        sender_type TEXT NOT NULL CHECK(sender_type IN ('contact', 'bot', 'agent')),
+        sender_id TEXT,
+        content TEXT,
+        message_type TEXT DEFAULT 'text' CHECK(message_type IN ('text', 'image', 'video', 'audio', 'document', 'template')),
+        status TEXT DEFAULT 'sent' CHECK(status IN ('sent', 'delivered', 'read', 'failed')),
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (conversation_id) REFERENCES inbox_conversations(id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
     -- Insert default tenant
     INSERT OR IGNORE INTO tenants (id, name, slug) 
     VALUES ('default-tenant-id', 'Default Tenant', 'default');
@@ -662,6 +695,25 @@ async function initSchema(): Promise<void> {
     _db!.run(`CREATE INDEX IF NOT EXISTS idx_lid_phone_mappings_phone ON lid_phone_mappings(phone)`);
   } catch (e) { }
 
+  // Message Templates Table (WABA)
+  try {
+    _db!.run(`
+        CREATE TABLE IF NOT EXISTS message_templates (
+            id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+            tenant_id TEXT NOT NULL,
+            bot_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            language TEXT NOT NULL DEFAULT 'id',
+            category TEXT NOT NULL DEFAULT 'MARKETING',
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            components_json TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+        )
+    `);
+  } catch (e) { }
+
   // Apply migrations manually here
   const migrations = [
     "ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound'))",
@@ -686,7 +738,21 @@ async function initSchema(): Promise<void> {
     "ALTER TABLE tenants ADD COLUMN google_service_account TEXT",
     "ALTER TABLE tenants ADD COLUMN settings TEXT DEFAULT '{}'",
     "ALTER TABLE bots ADD COLUMN expires_at TEXT",
-    "ALTER TABLE bots ADD COLUMN expired_reason TEXT"
+    "ALTER TABLE bots ADD COLUMN expired_reason TEXT",
+    "ALTER TABLE users ADD COLUMN password_plain TEXT",
+    // WABA Support (Migration 016)
+    "ALTER TABLE bots ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'baileys'",
+    "ALTER TABLE bots ADD COLUMN meta_phone_number_id TEXT",
+    "ALTER TABLE bots ADD COLUMN meta_access_token TEXT",
+    "ALTER TABLE bots ADD COLUMN meta_waba_id TEXT",
+    "ALTER TABLE bots ADD COLUMN meta_app_secret TEXT",
+    "ALTER TABLE bots ADD COLUMN meta_business_id TEXT",
+    "ALTER TABLE campaigns ADD COLUMN campaign_type TEXT NOT NULL DEFAULT 'freetext'",
+    "ALTER TABLE campaigns ADD COLUMN template_name TEXT",
+    "ALTER TABLE campaigns ADD COLUMN template_language TEXT DEFAULT 'id'",
+    "ALTER TABLE campaigns ADD COLUMN template_components_json TEXT",
+    "ALTER TABLE inbox_messages ADD COLUMN sender_name TEXT",
+    "ALTER TABLE inbox_messages ADD COLUMN media_meta TEXT",
   ];
 
   for (const sql of migrations) {

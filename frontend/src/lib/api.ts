@@ -81,6 +81,16 @@ export const api = {
             remove: (botId: string, targetId: string) => apiClient.delete(`/bots/${botId}/llm-targets/${targetId}`),
             bulkAdd: (botId: string, targets: any[]) => apiClient.post(`/bots/${botId}/llm-targets/bulk`, { targets }),
         },
+
+        // Meta WABA
+        meta: {
+            testConnection: (botId: string, data: { phone_number_id: string; access_token: string; waba_id?: string; app_secret?: string }) =>
+                apiClient.post(`/bots/${botId}/meta/test-connection`, data),
+            saveConfig: (botId: string, data: { phone_number_id: string; access_token: string; waba_id?: string; app_secret?: string }) =>
+                apiClient.post(`/bots/${botId}/meta/save-config`, data),
+            getTemplates: (botId: string) =>
+                apiClient.get(`/bots/${botId}/meta/templates`),
+        },
     },
 
     // AI
@@ -214,6 +224,28 @@ export const api = {
         create: (data: { bot_id: string; lid: string; phone: string; name?: string }) =>
             apiClient.post('/lid-mappings', data),
         delete: (id: string) => apiClient.delete(`/lid-mappings/${id}`),
+    },
+
+    // Inbox
+    inbox: {
+        getConversations: (botId?: string, status?: string) =>
+            apiClient.get('/inbox/conversations', { params: { bot_id: botId, status } }),
+        getMessages: (conversationId: string, limit: number = 50, offset: number = 0) =>
+            apiClient.get(`/inbox/conversations/${conversationId}/messages`, { params: { limit, offset } }),
+        sendMessage: (conversationId: string, content: string, type: string = 'text') =>
+            apiClient.post(`/inbox/conversations/${conversationId}/messages`, { content, message_type: type }),
+        sendMedia: (conversationId: string, file: File, caption?: string) => {
+            const formData = new FormData();
+            formData.append('file', file);
+            if (caption) formData.append('caption', caption);
+            return apiClient.post(`/inbox/conversations/${conversationId}/media`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+        },
+        updateStatus: (conversationId: string, status: string) =>
+            apiClient.put(`/inbox/conversations/${conversationId}/status`, { status }),
+        sync: (botId?: string) =>
+            apiClient.post('/inbox/sync', { bot_id: botId }),
     },
 
     // Generic helpers

@@ -16,6 +16,53 @@ const aiSheetUpdaterService_1 = require("../../services/aiSheetUpdaterService");
 const lidPhoneMappingService_1 = require("../../services/lidPhoneMappingService");
 const connection_1 = require("../../database/connection");
 const logger_1 = require("../../utils/logger");
+/**
+ * Fisher-Yates shuffle — truly random, NOT biased like LLM "shuffle"
+ */
+function fisherYatesShuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+/**
+ * Parse student list from system prompt.
+ * Looks for lines like "- NAMA MAHASISWA" (uppercase, after a data section header).
+ * Returns array of names, or empty array if nothing found.
+ */
+function parseStudentsFromPrompt(systemPrompt) {
+    if (!systemPrompt)
+        return [];
+    const lines = systemPrompt.split('\n');
+    const students = [];
+    // Pattern to match student list items: 
+    // - Starts with a bullet point character: - or • or *
+    // - Followed by space(s)
+    // - Followed by uppercase name (words containing A-Z, spaces, dots, dashes, apostrophes)
+    // - Minimum 2 characters for the name
+    const studentLinePattern = /^[-•*]\s+([A-Z][A-Z\s.'-]{1,})$/;
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed)
+            continue;
+        const match = trimmed.match(studentLinePattern);
+        if (match) {
+            const name = match[1].trim();
+            // Filter out common false positives or headers that might match uppercase
+            // Also skip placeholder strings like "NAMA MAHASISWA" or just "NAMA"
+            const isPlaceholder = name.includes('NAMA MAHASISWA') || name === 'NAMA' || name.includes('NAMA MAHASISWA');
+            if (name.length > 2 && name === name.toUpperCase() && !isPlaceholder) {
+                students.push(name);
+            }
+        }
+    }
+    if (students.length > 0) {
+        logger_1.logger.info(`[Kelompok] Successfully parsed ${students.length} students from prompt`);
+    }
+    return students;
+}
 class AIEngine {
     constructor() {
         this.initialize();
@@ -147,19 +194,43 @@ class AIEngine {
                 logger_1.logger.debug('AI fallback skipped: bot-level silent mode (data_collection)', { bot_id });
                 return;
             }
-            // Check if AI should respond (must be mentioned or in hybrid mode)
+            // Check if AI should respond
             const isMentioned = this.isBotMentioned(payload, bot.name, bot.phone_number, bot.lid);
             const isPrivate = !context.group_id;
+            // ✅ Find the active System Prompt (respect overrides)
+            let activeSystemPrompt = aiConfig.systemPrompt || '';
+            const targetOverrideResult = await (0, connection_1.query)('SELECT llm_config FROM llm_allowed_targets WHERE bot_id = ? AND target_jid = ? AND is_enabled = 1 ORDER BY updated_at DESC LIMIT 1', [bot_id, senderJid]);
+            if (targetOverrideResult.rows.length > 0) {
+                const override = JSON.parse(targetOverrideResult.rows[0].llm_config || '{}');
+                activeSystemPrompt = override.system_prompt || override.systemPrompt || activeSystemPrompt;
+            }
             logger_1.logger.info('AI evaluating fallback response', {
                 bot_id,
                 isPrivate,
                 isMentioned,
                 message: userMessage.substring(0, 50)
             });
-            // Logic: respond if mentioned (@bot / reply) OR always in DM
+            // Only respond if:
+            // 1. Bot is mentioned (@bot / reply to bot) → always respond
+            // 2. Private/DM chat → always respond
+            // In groups without mention → do NOT respond
             if (isMentioned || isPrivate) {
-                const conversationPartner = contact_id || payload.from;
-                logger_1.logger.info('🤖 AI generating response...', { bot_id, conversationPartner });
+                // Bypasses LLM entirely to guarantee truly random results for free
+                const groupReply = this.handleDistributorCommand(userMessage, activeSystemPrompt);
+                if (groupReply) {
+                    logger_1.logger.info('[AIEngine] Kelompok command intercepted — handling in code', { userMessage });
+                    await eventBus_1.eventBus.emit(types_1.EventType.KEYWORD_MATCHED, context, {
+                        rule_id: `kelompok-${bot_id}`,
+                        rule_name: 'Kelompok Generator',
+                        keyword: 'kelompok',
+                        match_type: 'contains',
+                        matched_text: userMessage,
+                        actions: [{ type: 'SEND_TEXT', config: { message: groupReply } }]
+                    });
+                    return;
+                }
+                const conversationPartner = senderJid;
+                logger_1.logger.info('🤖 AI generating response...', { bot_id, conversationPartner, senderJid, contact_id });
                 try {
                     const reply = await llmService_1.llmService.chat(bot_id, userMessage, conversationPartner);
                     // Emit KEYWORD_MATCHED event so Action Engine can send the response
@@ -214,12 +285,104 @@ class AIEngine {
                 }
             }
             else {
-                logger_1.logger.info('AI ignoring message: not mentioned in group', { bot_id, bot_name: bot.name });
+                logger_1.logger.debug('AI ignoring message: not mentioned in group', { bot_id, bot_name: bot.name });
             }
         }
-        catch (error) {
-            logger_1.logger.error('AI handleNoMatch error', { error, bot_id });
+        catch (err) {
+            logger_1.logger.error('AI handleNoMatch error', {
+                bot_id,
+                error: err.message,
+                stack: err.stack,
+                user_message: userMessage.substring(0, 50)
+            });
         }
+    }
+    /**
+     * Terminology adapts to the user's message (e.g., "tim", "sif", "kloter", "sesi").
+     * Bypasses LLM for cost-efficiency and 100% randomization accuracy.
+     */
+    handleDistributorCommand(message, systemPrompt) {
+        const lower = message.toLowerCase();
+        // Keywords that trigger the distributor
+        const keywords = [
+            'kelompok', 'bagi', 'bagikan', 'tim', 'sif', 'shift',
+            'kloter', 'sesi', 'grup', 'deret', 'acak'
+        ];
+        const hasKeyword = keywords.some(k => lower.includes(k));
+        if (!hasKeyword)
+            return null;
+        // Parse student/person/item list from system prompt
+        const itemList = parseStudentsFromPrompt(systemPrompt);
+        if (itemList.length === 0) {
+            return null; // Fall through to AI if no list found
+        }
+        // Extract numbers
+        const numMatch = message.match(/\d+/);
+        if (!numMatch)
+            return null;
+        const requestedNum = parseInt(numMatch[0], 10);
+        if (requestedNum < 1 || requestedNum > itemList.length)
+            return null;
+        // Determine the label to use based on message context
+        let label = 'Kelompok';
+        if (lower.includes('sif') || lower.includes('shift'))
+            label = 'Sif';
+        else if (lower.includes('tim'))
+            label = 'Tim';
+        else if (lower.includes('kloter'))
+            label = 'Kloter';
+        else if (lower.includes('sesi'))
+            label = 'Sesi';
+        else if (lower.includes('grup'))
+            label = 'Grup';
+        // Logic: Is it "total groups" or "members per group"?
+        // Pattern: "4 kelompok", "3 sif", "bagi 5 tim" -> total groups
+        // Pattern: "isi 4 orang", "kelompok isi 2", "tiap tim 3 orang" -> per group
+        const isPerGroupRequest = /isi|anggota|orang|tiap|per/i.test(message);
+        let groupCount;
+        if (isPerGroupRequest) {
+            groupCount = Math.ceil(itemList.length / requestedNum);
+        }
+        else {
+            groupCount = requestedNum;
+        }
+        // Safety cap for groupCount
+        if (groupCount < 1)
+            groupCount = 1;
+        if (groupCount > itemList.length)
+            groupCount = itemList.length;
+        // Extract optional subject/context
+        let subject = '';
+        const contextMatch = message.match(/(matkul|matakuliah|jadwal|untuk|kerja|piket)\s+([A-Z0-9 ]+)/i);
+        if (contextMatch) {
+            subject = contextMatch[2].trim().toUpperCase();
+        }
+        logger_1.logger.info('[Distributor] Handling request', {
+            label,
+            totalItems: itemList.length,
+            requestedNum,
+            isPerGroupRequest,
+            groupCount,
+            subject
+        });
+        // Fisher-Yates Shuffle
+        const shuffled = fisherYatesShuffle(itemList);
+        // Distribute round-robin to ensure balance
+        const distribution = Array.from({ length: groupCount }, () => []);
+        shuffled.forEach((name, idx) => {
+            distribution[idx % groupCount].push(name);
+        });
+        // Format Output
+        const headerLabel = subject ? `${label.toUpperCase()} ${subject}` : `PEMBAGIAN ${label.toUpperCase()}`;
+        let output = `*${headerLabel}*\n\n`;
+        distribution.forEach((members, i) => {
+            if (members.length > 0) {
+                output += `*${label} ${i + 1}*\n`;
+                members.forEach(m => { output += `- ${m}\n`; });
+                output += '\n';
+            }
+        });
+        return output.trim();
     }
     /**
      * Check if the bot is mentioned in the message
@@ -282,8 +445,8 @@ class AIEngine {
         return false;
     }
     /**
-         * Check if target (group/contact) is allowed to use LLM
-         */
+     * Check if target (group/contact) is allowed to use LLM
+     */
     async isTargetAllowed(botId, targetJid) {
         try {
             const result = await (0, connection_1.query)('SELECT id FROM llm_allowed_targets WHERE bot_id = ? AND target_jid = ?', [botId, targetJid]);

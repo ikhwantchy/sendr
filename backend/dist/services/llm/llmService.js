@@ -9,9 +9,13 @@ const uuid_1 = require("uuid");
 const google_1 = require("./providers/google");
 const openai_1 = require("./providers/openai");
 const groq_1 = require("./providers/groq");
+const nvidia_1 = require("./providers/nvidia");
+const openrouter_1 = require("./providers/openrouter");
+const byteplus_1 = require("./providers/byteplus");
 const connection_1 = require("../../database/connection");
 const logger_1 = require("../../utils/logger");
 const aiSheetUpdaterService_1 = require("../aiSheetUpdaterService");
+const knowledgeBaseService_1 = require("../knowledgeBaseService");
 class LLMService {
     providers = new Map();
     constructor() {
@@ -21,6 +25,12 @@ class LLMService {
         this.providers.set('gemini', googleProvider); // Alias for consistency
         this.providers.set('openai', new openai_1.OpenAIProvider());
         this.providers.set('groq', new groq_1.GroqProvider());
+        const nvidiaProvider = new nvidia_1.NvidiaProvider();
+        this.providers.set('nvidia', nvidiaProvider);
+        this.providers.set('nim', nvidiaProvider);
+        this.providers.set('openrouter', new openrouter_1.OpenRouterProvider());
+        this.providers.set('byteplus', new byteplus_1.BytePlusProvider());
+        this.providers.set('ark', new byteplus_1.BytePlusProvider()); // Alias for ARK
     }
     /**
      * Get provider instance
@@ -77,7 +87,48 @@ class LLMService {
             // Get or create conversation
             const conversation = await this.getOrCreateConversation(botId, contactId, 'chat');
             // Build base system prompt
-            let systemPrompt = activeConfig.systemPrompt || 'You are a helpful assistant.';
+            const now = new Date();
+            const timeContext = `[CURRENT_CONTEXT]\nToday: ${now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}\nTime: ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}\nLocation: Jakarta, Indonesia\n\n`;
+            let systemPrompt = timeContext + (activeConfig.systemPrompt || 'You are a helpful assistant.');
+            // --- Programmatic Shuffler Interceptor ---
+            // If user asks for groups, we MANUALLY shuffle the student list in the prompt 
+            // to bypass AI sorting bias and DB sync lag.
+            const isGroupingRequest = /kelompok|bagi|acak|random|group/i.test(userMessage);
+            if (isGroupingRequest && systemPrompt.includes('DATA MAHASISWA')) {
+                try {
+                    const sections = systemPrompt.split('---');
+                    let shuffled = false;
+                    for (let i = 0; i < sections.length; i++) {
+                        if (sections[i].includes('DATA MAHASISWA')) {
+                            const lines = sections[i].split('\n');
+                            const headerIdx = lines.findIndex(l => l.includes('DATA MAHASISWA'));
+                            if (headerIdx !== -1) {
+                                let names = lines.slice(headerIdx + 1).filter(l => l.trim().startsWith('-'));
+                                const otherLines = lines.slice(headerIdx + 1).filter(l => !l.trim().startsWith('-'));
+                                // Fisher-Yates Shuffle
+                                for (let j = names.length - 1; j > 0; j--) {
+                                    const k = Math.floor(Math.random() * (j + 1));
+                                    [names[j], names[k]] = [names[k], names[j]];
+                                }
+                                sections[i] = lines.slice(0, headerIdx + 1).join('\n') + '\n' +
+                                    names.join('\n') + '\n' +
+                                    otherLines.join('\n');
+                                shuffled = true;
+                            }
+                        }
+                    }
+                    if (shuffled) {
+                        systemPrompt = sections.join('---');
+                        // ADD "FORCE RANDOM" INSTRUCTION AT THE TOP OF SYSTEM PROMPT
+                        systemPrompt = `🚨 CRITICAL: THE STUDENT LIST BELOW IS ALREADY SYSTEM-SHUFFLED. DO NOT RE-SORT OR USE ALPHABETICAL ORDER. TAKE NAMES EXACTLY IN THE ORDER PROVIDED BELOW.\n\n` + systemPrompt;
+                        logger_1.logger.info('[LLMService] Programmatically shuffled student list for grouping request');
+                    }
+                }
+                catch (err) {
+                    logger_1.logger.error('[LLMService] Shuffler Interceptor failed', err);
+                }
+            }
+            // -----------------------------------------
             // Check if user is querying sheet data and inject context if available
             if (aiSheetUpdaterService_1.aiSheetUpdaterService.isQueryingSheetData(userMessage)) {
                 try {
@@ -93,6 +144,30 @@ class LLMService {
                 }
                 catch (sheetError) {
                     logger_1.logger.warn('[LLMService] Failed to get sheet data for chat', { error: sheetError.message });
+                }
+            }
+            // Knowledge Base context injection (from llm_config.knowledgeBase)
+            if (targetConfigResult.rows.length > 0) {
+                try {
+                    const override = JSON.parse(targetConfigResult.rows[0].llm_config || '{}');
+                    const kbConfig = override.knowledgeBase;
+                    if (kbConfig && kbConfig.sheets && kbConfig.sheets.length > 0) {
+                        if (knowledgeBaseService_1.knowledgeBaseService.shouldInjectContext(userMessage, kbConfig)) {
+                            const kbContext = await knowledgeBaseService_1.knowledgeBaseService.getContextForChat(kbConfig);
+                            if (kbContext) {
+                                systemPrompt += `\n\n--- KNOWLEDGE BASE ---\nBerikut adalah data referensi real-time dari sumber data yang terhubung. Gunakan data ini untuk menjawab pertanyaan pengguna dengan akurat:\n\n${kbContext}\n--- END KNOWLEDGE BASE ---\n\nGunakan data di atas untuk menjawab pertanyaan. Jawab dengan ringkas dan natural. Format untuk WhatsApp (gunakan bullet points atau numbered list). Jika data tidak relevan dengan pertanyaan, abaikan dan jawab secara umum.`;
+                                logger_1.logger.info('[LLMService] Injected Knowledge Base context', {
+                                    botId,
+                                    contactId,
+                                    sheetsCount: kbConfig.sheets.length,
+                                    mode: kbConfig.mode,
+                                });
+                            }
+                        }
+                    }
+                }
+                catch (kbError) {
+                    logger_1.logger.warn('[LLMService] Failed to inject Knowledge Base context', { error: kbError.message });
                 }
             }
             // Build messages with context
@@ -111,7 +186,7 @@ class LLMService {
                 provider: providerName,
                 model: activeConfig.model || 'gemini-1.5-flash',
                 apiKey: activeConfig.apiKey,
-                systemPrompt: activeConfig.systemPrompt,
+                systemPrompt: systemPrompt,
                 temperature: activeConfig.temperature || 0.7,
                 maxTokens: activeConfig.maxTokens || 1024
             };

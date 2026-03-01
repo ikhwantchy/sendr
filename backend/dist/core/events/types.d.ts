@@ -133,7 +133,7 @@ export interface WaDisconnectedPayload {
  * Action Configuration Types
  */
 export interface ActionConfig {
-    type: 'SEND_TEXT' | 'SEND_IMAGE' | 'FETCH_SPREADSHEET' | 'COMPOSE_MESSAGE' | 'TRIGGER_REMINDER';
+    type: 'SEND_TEXT' | 'SEND_IMAGE' | 'FETCH_SPREADSHEET' | 'COMPOSE_MESSAGE' | 'TRIGGER_REMINDER' | 'SEND_SHEET_DATA';
     config: Record<string, any>;
 }
 export interface SendTextActionConfig {
@@ -158,5 +158,26 @@ export interface ComposeMessageActionConfig {
 export interface TriggerReminderActionConfig {
     reminder_id: string;
     delay_seconds?: number;
+}
+export interface SendSheetDataActionConfig {
+    spreadsheet_url: string;
+    sheet_name?: string;
+    message_template: string;
+    is_digest_mode?: boolean;
+    filter_column?: string;
+    filter_value?: string;
+    filters?: Array<{
+        column: string;
+        operator: string;
+        value: any;
+        value2?: any;
+        caseInsensitive?: boolean;
+    }>;
+    sort?: {
+        column: string;
+        order: 'asc' | 'desc';
+    };
+    max_rows?: number;
+    image_url?: string;
 }
 //# sourceMappingURL=types.d.ts.map

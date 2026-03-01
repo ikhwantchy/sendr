@@ -48,16 +48,7 @@ class SecurityService {
             catch (err) {
                 logger_1.logger.error('Failed to log login in global audit log', { error: err.message });
             }
-            // Send Alert
-            const userDetails = await (0, connection_1.query)('SELECT name, email FROM users WHERE id = ?', [userId]);
-            const userName = userDetails.rows[0]?.name || 'Unknown User';
-            const userEmail = userDetails.rows[0]?.email || '';
-            const safeIP = ipAddress || 'Unknown';
-            const safeUA = userAgent || 'Unknown';
-            await this.sendTelegramAlert(userId, `<b>🔔 Login Alert</b>\n\n` +
-                `👤 <b>User:</b> ${userName} (${userEmail})\n` +
-                `🌐 <b>IP:</b> <code>${safeIP}</code>\n` +
-                `📱 <b>Device:</b> <i>${safeUA}</i>`);
+            // Telegram alert is now handled in authRoutes.ts to ensure it fires reliably
             return id;
         }
         catch (error) {
@@ -152,8 +143,16 @@ class SecurityService {
                     logger_1.logger.debug('Using User-specific Chat ID', { chatId });
                 }
             }
+            // Last resort: find ANY admin/owner with a telegram_chat_id
             if (!chatId) {
-                logger_1.logger.warn('Skipping Telegram alert: No Telegram Chat ID found (Admin or User)', { userId });
+                const adminResult = await (0, connection_1.query)("SELECT telegram_chat_id FROM users WHERE role IN ('OWNER', 'ADMIN') AND telegram_chat_id IS NOT NULL AND telegram_chat_id != '' LIMIT 1");
+                chatId = adminResult.rows[0]?.telegram_chat_id;
+                if (chatId) {
+                    logger_1.logger.debug('Using Admin/Owner fallback Chat ID', { chatId });
+                }
+            }
+            if (!chatId) {
+                logger_1.logger.warn('Skipping Telegram alert: No Telegram Chat ID found anywhere', { userId });
                 return;
             }
             // Check if alerts are enabled

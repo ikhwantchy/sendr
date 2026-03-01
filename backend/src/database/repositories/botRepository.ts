@@ -24,7 +24,15 @@ export interface Bot {
     created_by: string | null;
     created_at: string;
     updated_at: string;
+    // WABA fields
+    adapter_type?: 'baileys' | 'meta_cloud' | null;
+    meta_phone_number_id?: string | null;
+    meta_access_token?: string | null;
+    meta_waba_id?: string | null;
+    meta_app_secret?: string | null;
+    meta_business_id?: string | null;
 }
+
 
 class BotRepository {
     /**

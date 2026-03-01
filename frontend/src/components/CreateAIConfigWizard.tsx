@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { ChevronLeft, Save, Plus, Eye, EyeOff, X, Maximize2, Users, User, ChevronDown, Search, RefreshCw, AlertTriangle, Settings2, FileSpreadsheet, Trash2, Brain, Copy, Smile, BookOpen, Check, Cpu, Sparkles, Zap } from 'lucide-react'
+import { ChevronLeft, Save, Plus, Eye, EyeOff, X, Maximize2, Users, User, ChevronDown, Search, RefreshCw, AlertTriangle, Settings2, FileSpreadsheet, Trash2, Brain, Copy, Smile, BookOpen, Check, Cpu, Sparkles, Zap, Info, HelpCircle } from 'lucide-react'
 import { EMOJI_CATEGORIES } from '@/lib/emojiList'
 
 // Quick emoji list for category picker (subset of common emojis)
@@ -32,6 +32,16 @@ interface CreateAIConfigWizardProps {
     configId?: string
     onClose: () => void
 }
+
+const InfoTooltip = ({ text }: { text: string }) => (
+    <div className="group relative inline-block ml-1.5 align-middle">
+        <HelpCircle className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help transition-colors" />
+        <div className="invisible group-hover:visible absolute z-[200] bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-[#0c0c0e] border border-zinc-800 rounded-lg text-[11px] text-zinc-400 shadow-2xl pointer-events-none whitespace-normal backdrop-blur-md">
+            {text}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-800"></div>
+        </div>
+    </div>
+)
 
 export default function CreateAIConfigWizard({ botId, configId, onClose }: CreateAIConfigWizardProps) {
     const [showApiKey, setShowApiKey] = useState(false)
@@ -191,8 +201,8 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                 setKbMaxRows(llmConfig.knowledgeBase.maxRowsPerSheet || 30)
             }
 
-            // Load linked sheet updater config if silent_collection or hybrid_mode is enabled
-            if (llmConfig.behavior?.silentCollection || llmConfig.behavior?.hybridMode) {
+            // Load linked sheet updater config if any behavior is enabled
+            if (llmConfig.behavior) {
                 const loadLinkedSheetUpdater = async () => {
                     try {
                         const res = await api.sheetUpdater.getConfigsByTarget(botId, existingConfig.target_jid)
@@ -572,7 +582,7 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                 })
 
                 // Handle sheet updater for edit mode
-                if (enableDataCollection && (formData.silent_collection || formData.hybrid_mode)) {
+                if (enableDataCollection) {
                     const sheetUpdaterPayload = {
                         bot_id: botId,
                         name: `${formData.config_name} - Data Collection`,
@@ -1207,10 +1217,8 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                 )}
                                             </div>
                                             <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-medium text-white">💬 Conversation</span>
-                                                </div>
-                                                <p className="text-xs text-zinc-500 mt-1">AI responds to all messages</p>
+                                                <span className="text-sm font-medium text-white">💬 Conversation</span>
+                                                <InfoTooltip text="AI responds to all messages directly in the chat." />
                                             </div>
                                         </div>
                                     </button>
@@ -1239,10 +1247,8 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                 )}
                                             </div>
                                             <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-medium text-white">📊 Silent Collection</span>
-                                                </div>
-                                                <p className="text-xs text-zinc-500 mt-1">Collect data without responding</p>
+                                                <span className="text-sm font-medium text-white">📊 Silent Collection</span>
+                                                <InfoTooltip text="AI listens and collects data to Google Sheets without sending any responses." />
                                             </div>
                                         </div>
                                     </button>
@@ -1271,10 +1277,8 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                 )}
                                             </div>
                                             <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-medium text-white">🔀 Hybrid Mode</span>
-                                                </div>
-                                                <p className="text-xs text-zinc-500 mt-1">Respond when mentioned (@bot)</p>
+                                                <span className="text-sm font-medium text-white">🔀 Hybrid Mode</span>
+                                                <InfoTooltip text="AI only responds when mentioned (@bot) or quoted, but still collects data silently for all other messages." />
                                             </div>
                                         </div>
                                     </button>
@@ -1290,8 +1294,10 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                 <BookOpen className="w-5 h-5 text-emerald-500" />
                                             </div>
                                             <div>
-                                                <h3 className="text-lg font-semibold text-white">Knowledge Base</h3>
-                                                <p className="text-xs text-zinc-500">Hubungkan Google Sheets sebagai sumber data AI</p>
+                                                <h3 className="text-lg font-semibold text-white">
+                                                    Knowledge Base
+                                                    <InfoTooltip text="Connect Google Sheets as a reference source. AI will use this data to answer questions about products, schedules, prices, etc." />
+                                                </h3>
                                             </div>
                                         </div>
                                         <button
@@ -1304,9 +1310,9 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                     </div>
 
                                     {!enableKnowledgeBase ? (
-                                        <p className="text-xs text-zinc-500">
-                                            Aktifkan untuk menghubungkan Google Sheets sebagai referensi data AI. AI akan menggunakan data ini untuk menjawab pertanyaan tentang jadwal, tugas, harga, menu, dll.
-                                        </p>
+                                        <div className="mt-2 text-xs text-zinc-500 italic">
+                                            Disabled. AI will use its general knowledge only.
+                                        </div>
                                     ) : (
                                         <div className="space-y-4">
                                             {/* Injection Mode */}
@@ -1321,8 +1327,10 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                             : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
                                                             }`}
                                                     >
-                                                        <span className="font-medium">Auto</span>
-                                                        <p className="text-[10px] text-zinc-500 mt-1">Inject data hanya saat pertanyaan relevan (hemat token)</p>
+                                                        <span className="font-medium">
+                                                            Auto
+                                                            <InfoTooltip text="AI only reads sheet data when the query is relevant to the knowledge base topic (Saves tokens)." />
+                                                        </span>
                                                     </button>
                                                     <button
                                                         type="button"
@@ -1332,8 +1340,10 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                             : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
                                                             }`}
                                                     >
-                                                        <span className="font-medium">Always</span>
-                                                        <p className="text-[10px] text-zinc-500 mt-1">Selalu inject data ke setiap pesan (paling akurat)</p>
+                                                        <span className="font-medium">
+                                                            Always
+                                                            <InfoTooltip text="AI always includes sheet data in every message context for maximum accuracy." />
+                                                        </span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -1413,7 +1423,7 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                         placeholder="misal: cek harga, list menu, info produk"
                                                         className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                                                     />
-                                                    <p className="text-[10px] text-zinc-600 mt-1">Keyword bawaan sudah termasuk: jadwal, tugas, deadline, harga, menu, dll. Tambahkan keyword khusus bisnis Anda di sini.</p>
+
                                                 </div>
                                             )}
 
@@ -1423,8 +1433,11 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                     Pengaturan Lanjutan
                                                 </summary>
                                                 <div className="mt-3 grid grid-cols-2 gap-3">
-                                                    <div>
-                                                        <label className="block text-[10px] font-medium text-zinc-500 mb-1">Cache TTL (detik)</label>
+                                                    <div className="group relative">
+                                                        <label className="block text-[10px] font-medium text-zinc-500 mb-1">
+                                                            Cache TTL
+                                                            <InfoTooltip text="How long to keep sheet data in memory (default 90s)." />
+                                                        </label>
                                                         <input
                                                             type="number"
                                                             value={kbCacheTTL}
@@ -1433,10 +1446,12 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                             max={600}
                                                             className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                                                         />
-                                                        <p className="text-[10px] text-zinc-600 mt-0.5">Berapa lama cache data sheet (default 90 detik)</p>
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-[10px] font-medium text-zinc-500 mb-1">Max Baris per Sheet</label>
+                                                    <div className="group relative">
+                                                        <label className="block text-[10px] font-medium text-zinc-500 mb-1">
+                                                            Max Rows
+                                                            <InfoTooltip text="Maximum number of rows to send to AI (default 30)." />
+                                                        </label>
                                                         <input
                                                             type="number"
                                                             value={kbMaxRows}
@@ -1445,283 +1460,238 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                             max={100}
                                                             className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                                                         />
-                                                        <p className="text-[10px] text-zinc-600 mt-0.5">Limit baris yang dikirim ke AI (default 30)</p>
                                                     </div>
                                                 </div>
                                             </details>
                                         </div>
                                     )}
                                 </section>
-                            )}
+                            )
+                            }
 
                             {/* Data Collection Settings - Show for all AI modes (Conversation, Silent, Hybrid) */}
-                            {(formData.conversation_model || formData.silent_collection || formData.hybrid_mode) && (
-                                <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 animate-in fade-in slide-in-from-top-2 duration-300">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-blue-500/10 rounded-lg">
-                                                <FileSpreadsheet className="w-5 h-5 text-blue-500" />
-                                            </div>
-                                            <h3 className="text-lg font-semibold text-white">Data Collection</h3>
-                                            {linkedSheetUpdaterId && (
-                                                <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[10px] text-blue-400">
-                                                    Linked
-                                                </span>
-                                            )}
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setEnableDataCollection(!enableDataCollection)}
-                                            className={`relative w-10 h-5 rounded-full transition-colors ${enableDataCollection ? 'bg-blue-500' : 'bg-zinc-700'}`}
-                                        >
-                                            <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${enableDataCollection ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                        </button>
-                                    </div>
-
-                                    {!enableDataCollection ? (
-                                        <p className="text-xs text-zinc-500">
-                                            Enable to auto-save message data to Google Sheets.
-                                        </p>
-                                    ) : !sheetUpdaterStatus?.ready ? (
-                                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-3">
-                                            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                                            <p className="text-xs text-amber-300/70">
-                                                Google Service Account not configured. Set up GOOGLE_SERVICE_ACCOUNT_KEY in .env
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-4">
-                                            {/* Spreadsheet URL */}
-                                            <div>
-                                                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                                    Spreadsheet URL <span className="text-red-400">*</span>
-                                                </label>
-                                                <div className="flex gap-2">
-                                                    <div className="relative flex-1">
-                                                        <input
-                                                            type="text"
-                                                            value={dataCollectionData.spreadsheet_url}
-                                                            onChange={(e) => {
-                                                                setDataCollectionData({ ...dataCollectionData, spreadsheet_url: e.target.value })
-                                                                setSheetInfo(null)
-                                                            }}
-                                                            placeholder="https://docs.google.com/spreadsheets/d/..."
-                                                            className={`w-full px-3 py-2 bg-zinc-800 border rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${sheetInfo ? 'border-blue-500/50 pr-8' : 'border-zinc-700'
-                                                                }`}
-                                                        />
-                                                        {sheetInfo && (
-                                                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                                                                <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                                </svg>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={validateSheet}
-                                                        disabled={isValidatingSheet || !dataCollectionData.spreadsheet_url}
-                                                        className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                                                    >
-                                                        {isValidatingSheet && <RefreshCw className="w-3 h-3 animate-spin" />}
-                                                        {sheetInfo ? 'Refresh' : 'Connect'}
-                                                    </button>
+                            {
+                                (formData.conversation_model || formData.silent_collection || formData.hybrid_mode) && (
+                                    <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-blue-500/10 rounded-lg">
+                                                    <FileSpreadsheet className="w-5 h-5 text-blue-500" />
                                                 </div>
-                                                {/* Inline Service Account Info */}
-                                                {sheetUpdaterStatus.serviceAccountEmail && (
-                                                    <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-zinc-500">
-                                                        <span>Share with:</span>
-                                                        <code className="text-blue-400 bg-zinc-800 px-1.5 py-0.5 rounded font-mono truncate max-w-[280px]">
-                                                            {sheetUpdaterStatus.serviceAccountEmail}
-                                                        </code>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                navigator.clipboard.writeText(sheetUpdaterStatus.serviceAccountEmail!)
-                                                                toast.success('Copied!')
-                                                            }}
-                                                            className="p-0.5 hover:bg-zinc-700 rounded transition-colors"
-                                                        >
-                                                            <Copy className="w-3 h-3 text-zinc-400" />
-                                                        </button>
-                                                    </div>
+                                                <h3 className="text-lg font-semibold text-white">Data Collection</h3>
+                                                {linkedSheetUpdaterId && (
+                                                    <span className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[10px] text-blue-400">
+                                                        Linked
+                                                    </span>
                                                 )}
                                             </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEnableDataCollection(!enableDataCollection)}
+                                                className={`relative w-10 h-5 rounded-full transition-colors ${enableDataCollection ? 'bg-blue-500' : 'bg-zinc-700'}`}
+                                            >
+                                                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${enableDataCollection ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                            </button>
+                                        </div>
 
-                                            {/* Sheet Name & Mode - Show after validation */}
-                                            {sheetInfo && (
-                                                <>
-                                                    {/* Sheet Name & Mode in one row */}
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div>
-                                                            <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                                                Sheet <span className="text-red-400">*</span>
-                                                            </label>
-                                                            <select
-                                                                value={dataCollectionData.sheet_name}
-                                                                onChange={(e) => setDataCollectionData({ ...dataCollectionData, sheet_name: e.target.value })}
-                                                                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                                            >
-                                                                {sheetInfo.sheets.map(sheet => (
-                                                                    <option key={sheet} value={sheet}>{sheet}</option>
-                                                                ))}
-                                                            </select>
+                                        {!enableDataCollection ? (
+                                            <div className="mt-2 text-xs text-zinc-500 italic">
+                                                Disabled. Incoming data won't be saved to Sheets.
+                                            </div>
+                                        ) : !sheetUpdaterStatus?.ready ? (
+                                            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-3">
+                                                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                                                <p className="text-xs text-amber-300/70">
+                                                    Google Service Account not configured. Set up GOOGLE_SERVICE_ACCOUNT_KEY in .env
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {/* Spreadsheet URL */}
+                                                <div>
+                                                    <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                                        Spreadsheet URL <span className="text-red-400">*</span>
+                                                    </label>
+                                                    <div className="flex gap-2">
+                                                        <div className="relative flex-1">
+                                                            <input
+                                                                type="text"
+                                                                value={dataCollectionData.spreadsheet_url}
+                                                                onChange={(e) => {
+                                                                    setDataCollectionData({ ...dataCollectionData, spreadsheet_url: e.target.value })
+                                                                    setSheetInfo(null)
+                                                                }}
+                                                                placeholder="https://docs.google.com/spreadsheets/d/..."
+                                                                className={`w-full px-3 py-2 bg-zinc-800 border rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${sheetInfo ? 'border-blue-500/50 pr-8' : 'border-zinc-700'
+                                                                    }`}
+                                                            />
+                                                            {sheetInfo && (
+                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                                                    <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <div>
-                                                            <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                                                Mode <span className="text-red-400">*</span>
-                                                            </label>
-                                                            <div className="flex gap-2">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setDataCollectionData({ ...dataCollectionData, mode: 'update' })}
-                                                                    className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${dataCollectionData.mode === 'update'
-                                                                        ? 'bg-blue-600 text-white'
-                                                                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                                                        }`}
-                                                                >
-                                                                    📋 Update
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setDataCollectionData({
-                                                                        ...dataCollectionData,
-                                                                        mode: 'create',
-                                                                        column_schema: dataCollectionData.column_schema.length === 0 ? [
-                                                                            { name: 'Phone', source: 'sender_phone' as const, required: true },
-                                                                            { name: 'Name', source: 'sender_name' as const },
-                                                                            { name: 'Timestamp', source: 'timestamp' as const },
-                                                                            { name: 'Message', source: 'ai_extract' as const, ai_prompt: 'Extract the main content' }
-                                                                        ] : dataCollectionData.column_schema
-                                                                    })}
-                                                                    className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${dataCollectionData.mode === 'create'
-                                                                        ? 'bg-blue-600 text-white'
-                                                                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                                                        }`}
-                                                                >
-                                                                    📝 Log
-                                                                </button>
-                                                            </div>
-                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={validateSheet}
+                                                            disabled={isValidatingSheet || !dataCollectionData.spreadsheet_url}
+                                                            className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                                                        >
+                                                            {isValidatingSheet && <RefreshCw className="w-3 h-3 animate-spin" />}
+                                                            {sheetInfo ? 'Refresh' : 'Connect'}
+                                                        </button>
                                                     </div>
+                                                    {/* Inline Service Account Info */}
+                                                    {sheetUpdaterStatus?.serviceAccountEmail && (
+                                                        <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-zinc-500">
+                                                            <span>Share with:</span>
+                                                            <code className="text-blue-400 bg-zinc-800 px-1.5 py-0.5 rounded font-mono truncate max-w-[280px]">
+                                                                {sheetUpdaterStatus.serviceAccountEmail}
+                                                            </code>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (sheetUpdaterStatus?.serviceAccountEmail) {
+                                                                        navigator.clipboard.writeText(sheetUpdaterStatus.serviceAccountEmail)
+                                                                        toast.success('Copied!')
+                                                                    }
+                                                                }}
+                                                                className="p-0.5 hover:bg-zinc-700 rounded transition-colors"
+                                                            >
+                                                                <Copy className="w-3 h-3 text-zinc-400" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
 
-                                                    {/* Update Mode Config */}
-                                                    {dataCollectionData.mode === 'update' && (
-                                                        <div className="space-y-4 pt-2">
-                                                            {/* Column Mapping */}
-                                                            <div className="grid grid-cols-2 gap-4">
-                                                                <div>
-                                                                    <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                                                        Find by Column <span className="text-red-400">*</span>
-                                                                    </label>
-                                                                    <select
-                                                                        value={dataCollectionData.match_column}
-                                                                        onChange={(e) => setDataCollectionData({ ...dataCollectionData, match_column: e.target.value })}
-                                                                        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                {/* Sheet Name & Mode - Show after validation */}
+                                                {sheetInfo && (
+                                                    <>
+                                                        {/* Sheet Name & Mode in one row */}
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                                                    Sheet <span className="text-red-400">*</span>
+                                                                </label>
+                                                                <select
+                                                                    value={dataCollectionData.sheet_name}
+                                                                    onChange={(e) => setDataCollectionData({ ...dataCollectionData, sheet_name: e.target.value })}
+                                                                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                >
+                                                                    {sheetInfo?.sheets.map(sheet => (
+                                                                        <option key={sheet} value={sheet}>{sheet}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                                                    Mode <span className="text-red-400">*</span>
+                                                                </label>
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setDataCollectionData({ ...dataCollectionData, mode: 'update' })}
+                                                                        className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${dataCollectionData.mode === 'update'
+                                                                            ? 'bg-blue-600 text-white'
+                                                                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                                                            }`}
                                                                     >
-                                                                        <option value="">Select column...</option>
-                                                                        {sheetInfo.headers.map(header => (
-                                                                            <option key={header} value={header}>{header}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </div>
-                                                                <div>
-                                                                    <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                                                        Update Column <span className="text-red-400">*</span>
-                                                                    </label>
-                                                                    <select
-                                                                        value={dataCollectionData.update_column}
-                                                                        onChange={(e) => setDataCollectionData({ ...dataCollectionData, update_column: e.target.value })}
-                                                                        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                        📋 Update
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setDataCollectionData({
+                                                                            ...dataCollectionData,
+                                                                            mode: 'create',
+                                                                            column_schema: dataCollectionData.column_schema.length === 0 ? [
+                                                                                { name: 'Phone', source: 'sender_phone' as const, required: true },
+                                                                                { name: 'Name', source: 'sender_name' as const },
+                                                                                { name: 'Timestamp', source: 'timestamp' as const },
+                                                                                { name: 'Message', source: 'ai_extract' as const, ai_prompt: 'Extract the main content' }
+                                                                            ] : dataCollectionData.column_schema
+                                                                        })}
+                                                                        className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${dataCollectionData.mode === 'create'
+                                                                            ? 'bg-blue-600 text-white'
+                                                                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                                                            }`}
                                                                     >
-                                                                        <option value="">Select column...</option>
-                                                                        {sheetInfo.headers.map(header => (
-                                                                            <option key={header} value={header}>{header}</option>
-                                                                        ))}
-                                                                    </select>
+                                                                        📝 Log
+                                                                    </button>
                                                                 </div>
                                                             </div>
+                                                        </div>
 
-                                                            {/* Response Categories - Editable */}
-                                                            <div>
-                                                                <label className="block text-xs font-medium text-zinc-400 mb-2">
-                                                                    Response Categories <span className="text-red-400">*</span>
-                                                                </label>
-                                                                <div className="space-y-2">
-                                                                    {dataCollectionData.value_mappings.map((mapping, idx) => (
-                                                                        <div key={idx} className="flex items-center gap-2 p-2 bg-zinc-800 border border-zinc-700 rounded-lg">
-                                                                            {/* Emoji Picker Button */}
-                                                                            <div className="relative" data-emoji-picker>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => setOpenEmojiPickerIdx(openEmojiPickerIdx === idx ? null : idx)}
-                                                                                    className="w-10 h-8 bg-zinc-900 border border-zinc-600 rounded text-center text-lg hover:bg-zinc-800 hover:border-zinc-500 transition-colors flex items-center justify-center"
-                                                                                >
-                                                                                    {mapping.emoji || <Smile className="w-4 h-4 text-zinc-500" />}
-                                                                                </button>
-                                                                                {openEmojiPickerIdx === idx && (
-                                                                                    <div className="absolute left-0 top-full mt-1 z-50 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl overflow-hidden">
-                                                                                        {!showFullEmojiPicker ? (
-                                                                                            /* Quick Emojis View */
-                                                                                            <div className="p-2 w-[232px]">
-                                                                                                <div className="grid grid-cols-8 gap-1 mb-2">
-                                                                                                    {QUICK_EMOJIS.map(emoji => (
-                                                                                                        <button
-                                                                                                            key={emoji}
-                                                                                                            type="button"
-                                                                                                            onClick={() => {
-                                                                                                                const updated = [...dataCollectionData.value_mappings]
-                                                                                                                updated[idx] = { ...mapping, emoji }
-                                                                                                                setDataCollectionData({ ...dataCollectionData, value_mappings: updated })
-                                                                                                                setOpenEmojiPickerIdx(null)
-                                                                                                            }}
-                                                                                                            className="w-6 h-6 text-lg hover:bg-zinc-700 rounded flex items-center justify-center transition-colors"
-                                                                                                        >
-                                                                                                            {emoji}
-                                                                                                        </button>
-                                                                                                    ))}
-                                                                                                </div>
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    onClick={() => setShowFullEmojiPicker(true)}
-                                                                                                    className="w-full py-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors flex items-center justify-center gap-1"
-                                                                                                >
-                                                                                                    <span>More emojis</span>
-                                                                                                    <ChevronDown className="w-3 h-3" />
-                                                                                                </button>
-                                                                                            </div>
-                                                                                        ) : (
-                                                                                            /* Full Emoji Picker View */
-                                                                                            <div className="w-[232px]">
-                                                                                                {/* Category Tabs */}
-                                                                                                <div className="flex gap-1 p-1.5 border-b border-zinc-700 overflow-x-auto scrollbar-hide">
-                                                                                                    {Object.keys(EMOJI_CATEGORIES).map(cat => (
-                                                                                                        <button
-                                                                                                            key={cat}
-                                                                                                            type="button"
-                                                                                                            onClick={() => setSelectedEmojiCategory(cat)}
-                                                                                                            className={`px-2 py-1 text-xs rounded whitespace-nowrap transition-colors ${selectedEmojiCategory === cat
-                                                                                                                ? 'bg-blue-600 text-white'
-                                                                                                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                                                                                                                }`}
-                                                                                                        >
-                                                                                                            {cat.split(' ')[0]}
-                                                                                                        </button>
-                                                                                                    ))}
-                                                                                                </div>
-                                                                                                {/* Emoji Grid */}
-                                                                                                <div className="p-2 max-h-[200px] overflow-y-auto">
-                                                                                                    <div className="grid grid-cols-8 gap-1">
-                                                                                                        {EMOJI_CATEGORIES[selectedEmojiCategory as keyof typeof EMOJI_CATEGORIES].map((emoji, i) => (
+                                                        {/* Update Mode Config */}
+                                                        {dataCollectionData.mode === 'update' && (
+                                                            <div className="space-y-4 pt-2">
+                                                                {/* Column Mapping */}
+                                                                <div className="grid grid-cols-2 gap-4">
+                                                                    <div>
+                                                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                                                            Find by Column <span className="text-red-400">*</span>
+                                                                        </label>
+                                                                        <select
+                                                                            value={dataCollectionData.match_column}
+                                                                            onChange={(e) => setDataCollectionData({ ...dataCollectionData, match_column: e.target.value })}
+                                                                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                        >
+                                                                            <option value="">Select column...</option>
+                                                                            {sheetInfo?.headers.map(header => (
+                                                                                <option key={header} value={header}>{header}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                                                            Update Column <span className="text-red-400">*</span>
+                                                                        </label>
+                                                                        <select
+                                                                            value={dataCollectionData.update_column}
+                                                                            onChange={(e) => setDataCollectionData({ ...dataCollectionData, update_column: e.target.value })}
+                                                                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                        >
+                                                                            <option value="">Select column...</option>
+                                                                            {sheetInfo?.headers.map(header => (
+                                                                                <option key={header} value={header}>{header}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Response Categories - Editable */}
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-zinc-400 mb-2">
+                                                                        Response Categories <span className="text-red-400">*</span>
+                                                                    </label>
+                                                                    <div className="space-y-2">
+                                                                        {dataCollectionData.value_mappings.map((mapping, idx) => (
+                                                                            <div key={idx} className="flex items-center gap-2 p-2 bg-zinc-800 border border-zinc-700 rounded-lg">
+                                                                                {/* Emoji Picker Button */}
+                                                                                <div className="relative" data-emoji-picker>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => setOpenEmojiPickerIdx(openEmojiPickerIdx === idx ? null : idx)}
+                                                                                        className="w-10 h-8 bg-zinc-900 border border-zinc-600 rounded text-center text-lg hover:bg-zinc-800 hover:border-zinc-500 transition-colors flex items-center justify-center"
+                                                                                    >
+                                                                                        {mapping.emoji || <Smile className="w-4 h-4 text-zinc-500" />}
+                                                                                    </button>
+                                                                                    {openEmojiPickerIdx === idx && (
+                                                                                        <div className="absolute left-0 top-full mt-1 z-50 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl overflow-hidden">
+                                                                                            {!showFullEmojiPicker ? (
+                                                                                                /* Quick Emojis View */
+                                                                                                <div className="p-2 w-[232px]">
+                                                                                                    <div className="grid grid-cols-8 gap-1 mb-2">
+                                                                                                        {QUICK_EMOJIS.map(emoji => (
                                                                                                             <button
-                                                                                                                key={i}
+                                                                                                                key={emoji}
                                                                                                                 type="button"
                                                                                                                 onClick={() => {
                                                                                                                     const updated = [...dataCollectionData.value_mappings]
                                                                                                                     updated[idx] = { ...mapping, emoji }
                                                                                                                     setDataCollectionData({ ...dataCollectionData, value_mappings: updated })
                                                                                                                     setOpenEmojiPickerIdx(null)
-                                                                                                                    setShowFullEmojiPicker(false)
                                                                                                                 }}
                                                                                                                 className="w-6 h-6 text-lg hover:bg-zinc-700 rounded flex items-center justify-center transition-colors"
                                                                                                             >
@@ -1729,189 +1699,237 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
                                                                                                             </button>
                                                                                                         ))}
                                                                                                     </div>
-                                                                                                </div>
-                                                                                                {/* Back Button */}
-                                                                                                <div className="p-1.5 border-t border-zinc-700">
                                                                                                     <button
                                                                                                         type="button"
-                                                                                                        onClick={() => setShowFullEmojiPicker(false)}
-                                                                                                        className="w-full py-1 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+                                                                                                        onClick={() => setShowFullEmojiPicker(true)}
+                                                                                                        className="w-full py-1.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors flex items-center justify-center gap-1"
                                                                                                     >
-                                                                                                        ← Back to quick emojis
+                                                                                                        <span>More emojis</span>
+                                                                                                        <ChevronDown className="w-3 h-3" />
                                                                                                     </button>
                                                                                                 </div>
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                )}
+                                                                                            ) : (
+                                                                                                /* Full Emoji Picker View */
+                                                                                                <div className="w-[232px]">
+                                                                                                    {/* Category Tabs */}
+                                                                                                    <div className="flex gap-1 p-1.5 border-b border-zinc-700 overflow-x-auto scrollbar-hide">
+                                                                                                        {Object.keys(EMOJI_CATEGORIES).map(cat => (
+                                                                                                            <button
+                                                                                                                key={cat}
+                                                                                                                type="button"
+                                                                                                                onClick={() => setSelectedEmojiCategory(cat)}
+                                                                                                                className={`px-2 py-1 text-xs rounded whitespace-nowrap transition-colors ${selectedEmojiCategory === cat
+                                                                                                                    ? 'bg-blue-600 text-white'
+                                                                                                                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                                                                                                                    }`}
+                                                                                                            >
+                                                                                                                {cat.split(' ')[0]}
+                                                                                                            </button>
+                                                                                                        ))}
+                                                                                                    </div>
+                                                                                                    {/* Emoji Grid */}
+                                                                                                    <div className="p-2 max-h-[200px] overflow-y-auto">
+                                                                                                        <div className="grid grid-cols-8 gap-1">
+                                                                                                            {EMOJI_CATEGORIES[selectedEmojiCategory as keyof typeof EMOJI_CATEGORIES].map((emoji, i) => (
+                                                                                                                <button
+                                                                                                                    key={i}
+                                                                                                                    type="button"
+                                                                                                                    onClick={() => {
+                                                                                                                        const updated = [...dataCollectionData.value_mappings]
+                                                                                                                        updated[idx] = { ...mapping, emoji }
+                                                                                                                        setDataCollectionData({ ...dataCollectionData, value_mappings: updated })
+                                                                                                                        setOpenEmojiPickerIdx(null)
+                                                                                                                        setShowFullEmojiPicker(false)
+                                                                                                                    }}
+                                                                                                                    className="w-6 h-6 text-lg hover:bg-zinc-700 rounded flex items-center justify-center transition-colors"
+                                                                                                                >
+                                                                                                                    {emoji}
+                                                                                                                </button>
+                                                                                                            ))}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    {/* Back Button */}
+                                                                                                    <div className="p-1.5 border-t border-zinc-700">
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={() => setShowFullEmojiPicker(false)}
+                                                                                                            className="w-full py-1 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+                                                                                                        >
+                                                                                                            ← Back to quick emojis
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={mapping.value}
+                                                                                    onChange={(e) => {
+                                                                                        const updated = [...dataCollectionData.value_mappings]
+                                                                                        updated[idx] = { ...mapping, value: e.target.value }
+                                                                                        setDataCollectionData({ ...dataCollectionData, value_mappings: updated })
+                                                                                    }}
+                                                                                    placeholder="Value"
+                                                                                    className="w-24 px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white placeholder-zinc-500"
+                                                                                />
+                                                                                <input
+                                                                                    type="text"
+                                                                                    defaultValue={mapping.keywords.join(', ')}
+                                                                                    onBlur={(e) => {
+                                                                                        const updated = [...dataCollectionData.value_mappings]
+                                                                                        updated[idx] = {
+                                                                                            ...mapping,
+                                                                                            keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
+                                                                                        }
+                                                                                        setDataCollectionData({ ...dataCollectionData, value_mappings: updated })
+                                                                                    }}
+                                                                                    placeholder="Keywords (comma separated)"
+                                                                                    className="flex-1 px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white placeholder-zinc-500"
+                                                                                />
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        const updated = dataCollectionData.value_mappings.filter((_, i) => i !== idx)
+                                                                                        setDataCollectionData({ ...dataCollectionData, value_mappings: updated })
+                                                                                    }}
+                                                                                    className="p-1.5 hover:bg-red-500/10 rounded text-zinc-500 hover:text-red-400"
+                                                                                >
+                                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                                </button>
                                                                             </div>
-                                                                            <input
-                                                                                type="text"
-                                                                                value={mapping.value}
-                                                                                onChange={(e) => {
-                                                                                    const updated = [...dataCollectionData.value_mappings]
-                                                                                    updated[idx] = { ...mapping, value: e.target.value }
-                                                                                    setDataCollectionData({ ...dataCollectionData, value_mappings: updated })
-                                                                                }}
-                                                                                placeholder="Value"
-                                                                                className="w-24 px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white placeholder-zinc-500"
-                                                                            />
-                                                                            <input
-                                                                                type="text"
-                                                                                defaultValue={mapping.keywords.join(', ')}
-                                                                                onBlur={(e) => {
-                                                                                    const updated = [...dataCollectionData.value_mappings]
-                                                                                    updated[idx] = {
-                                                                                        ...mapping,
-                                                                                        keywords: e.target.value.split(',').map(k => k.trim()).filter(k => k)
-                                                                                    }
-                                                                                    setDataCollectionData({ ...dataCollectionData, value_mappings: updated })
-                                                                                }}
-                                                                                placeholder="Keywords (comma separated)"
-                                                                                className="flex-1 px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white placeholder-zinc-500"
-                                                                            />
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    const updated = dataCollectionData.value_mappings.filter((_, i) => i !== idx)
-                                                                                    setDataCollectionData({ ...dataCollectionData, value_mappings: updated })
-                                                                                }}
-                                                                                className="p-1.5 hover:bg-red-500/10 rounded text-zinc-500 hover:text-red-400"
-                                                                            >
-                                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                                            </button>
-                                                                        </div>
-                                                                    ))}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            setDataCollectionData({
-                                                                                ...dataCollectionData,
-                                                                                value_mappings: [
-                                                                                    ...dataCollectionData.value_mappings,
-                                                                                    { emoji: '', value: '', keywords: [] }
-                                                                                ]
-                                                                            })
-                                                                        }}
-                                                                        className="w-full py-2 border border-dashed border-zinc-700 rounded-lg text-xs text-zinc-500 hover:text-zinc-400 hover:border-zinc-600 transition-colors"
-                                                                    >
-                                                                        + Add Category
-                                                                    </button>
+                                                                        ))}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setDataCollectionData({
+                                                                                    ...dataCollectionData,
+                                                                                    value_mappings: [
+                                                                                        ...dataCollectionData.value_mappings,
+                                                                                        { emoji: '', value: '', keywords: [] }
+                                                                                    ]
+                                                                                })
+                                                                            }}
+                                                                            className="w-full py-2 border border-dashed border-zinc-700 rounded-lg text-xs text-zinc-500 hover:text-zinc-400 hover:border-zinc-600 transition-colors"
+                                                                        >
+                                                                            + Add Category
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    )}
+                                                        )}
 
-                                                    {/* Step 3b: Create Mode Config */}
-                                                    {dataCollectionData.mode === 'create' && (
-                                                        <div className="space-y-2 pt-2">
-                                                            <label className="block text-xs font-medium text-zinc-400 mb-2">
-                                                                Columns <span className="text-red-400">*</span>
+                                                        {/* Step 3b: Create Mode Config */}
+                                                        {dataCollectionData.mode === 'create' && (
+                                                            <div className="space-y-2 pt-2">
+                                                                <label className="block text-xs font-medium text-zinc-400 mb-2">
+                                                                    Columns <span className="text-red-400">*</span>
+                                                                </label>
+                                                                {dataCollectionData.column_schema.map((col, idx) => (
+                                                                    <div key={idx} className="flex items-center gap-2 p-2 bg-zinc-800 border border-zinc-700 rounded-lg">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={col.name}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...dataCollectionData.column_schema]
+                                                                                updated[idx] = { ...col, name: e.target.value }
+                                                                                setDataCollectionData({ ...dataCollectionData, column_schema: updated })
+                                                                            }}
+                                                                            placeholder="Column name"
+                                                                            className="w-28 px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white"
+                                                                        />
+                                                                        <select
+                                                                            value={col.source}
+                                                                            onChange={(e) => {
+                                                                                const updated = [...dataCollectionData.column_schema]
+                                                                                updated[idx] = { ...col, source: e.target.value as ColumnSchema['source'] }
+                                                                                setDataCollectionData({ ...dataCollectionData, column_schema: updated })
+                                                                            }}
+                                                                            className="px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white min-w-[130px]"
+                                                                        >
+                                                                            <option value="sender_phone">📱 Phone</option>
+                                                                            <option value="sender_name">👤 Name</option>
+                                                                            <option value="timestamp">🕐 Time</option>
+                                                                            <option value="ai_extract">🤖 AI Extract</option>
+                                                                            <option value="static">📌 Fixed</option>
+                                                                        </select>
+                                                                        {col.source === 'ai_extract' && (
+                                                                            <input
+                                                                                type="text"
+                                                                                value={col.ai_prompt || ''}
+                                                                                onChange={(e) => {
+                                                                                    const updated = [...dataCollectionData.column_schema]
+                                                                                    updated[idx] = { ...col, ai_prompt: e.target.value }
+                                                                                    setDataCollectionData({ ...dataCollectionData, column_schema: updated })
+                                                                                }}
+                                                                                placeholder="What to extract?"
+                                                                                className="flex-1 px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white placeholder-zinc-500"
+                                                                            />
+                                                                        )}
+                                                                        {col.source === 'static' && (
+                                                                            <input
+                                                                                type="text"
+                                                                                value={col.static_value || ''}
+                                                                                onChange={(e) => {
+                                                                                    const updated = [...dataCollectionData.column_schema]
+                                                                                    updated[idx] = { ...col, static_value: e.target.value }
+                                                                                    setDataCollectionData({ ...dataCollectionData, column_schema: updated })
+                                                                                }}
+                                                                                placeholder="Fixed value"
+                                                                                className="flex-1 px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white placeholder-zinc-500"
+                                                                            />
+                                                                        )}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const updated = dataCollectionData.column_schema.filter((_, i) => i !== idx)
+                                                                                setDataCollectionData({ ...dataCollectionData, column_schema: updated })
+                                                                            }}
+                                                                            className="p-1.5 hover:bg-red-500/10 rounded text-zinc-500 hover:text-red-400"
+                                                                        >
+                                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const newCol: ColumnSchema = { name: '', source: 'ai_extract', ai_prompt: '' }
+                                                                        setDataCollectionData({
+                                                                            ...dataCollectionData,
+                                                                            column_schema: [...dataCollectionData.column_schema, newCol]
+                                                                        })
+                                                                    }}
+                                                                    className="w-full py-2 border border-dashed border-zinc-700 rounded-lg text-xs text-zinc-500 hover:text-zinc-400 hover:border-zinc-600 transition-colors"
+                                                                >
+                                                                    + Add Column
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Trigger Keywords */}
+                                                        <div className="pt-3">
+                                                            <label className="block text-xs font-medium text-zinc-400 mb-1">
+                                                                Trigger Keywords <span className="text-zinc-600">(Optional)</span>
                                                             </label>
-                                                            {dataCollectionData.column_schema.map((col, idx) => (
-                                                                <div key={idx} className="flex items-center gap-2 p-2 bg-zinc-800 border border-zinc-700 rounded-lg">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={col.name}
-                                                                        onChange={(e) => {
-                                                                            const updated = [...dataCollectionData.column_schema]
-                                                                            updated[idx] = { ...col, name: e.target.value }
-                                                                            setDataCollectionData({ ...dataCollectionData, column_schema: updated })
-                                                                        }}
-                                                                        placeholder="Column name"
-                                                                        className="w-28 px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white"
-                                                                    />
-                                                                    <select
-                                                                        value={col.source}
-                                                                        onChange={(e) => {
-                                                                            const updated = [...dataCollectionData.column_schema]
-                                                                            updated[idx] = { ...col, source: e.target.value as ColumnSchema['source'] }
-                                                                            setDataCollectionData({ ...dataCollectionData, column_schema: updated })
-                                                                        }}
-                                                                        className="px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white min-w-[130px]"
-                                                                    >
-                                                                        <option value="sender_phone">📱 Phone</option>
-                                                                        <option value="sender_name">👤 Name</option>
-                                                                        <option value="timestamp">🕐 Time</option>
-                                                                        <option value="ai_extract">🤖 AI Extract</option>
-                                                                        <option value="static">📌 Fixed</option>
-                                                                    </select>
-                                                                    {col.source === 'ai_extract' && (
-                                                                        <input
-                                                                            type="text"
-                                                                            value={col.ai_prompt || ''}
-                                                                            onChange={(e) => {
-                                                                                const updated = [...dataCollectionData.column_schema]
-                                                                                updated[idx] = { ...col, ai_prompt: e.target.value }
-                                                                                setDataCollectionData({ ...dataCollectionData, column_schema: updated })
-                                                                            }}
-                                                                            placeholder="What to extract?"
-                                                                            className="flex-1 px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white placeholder-zinc-500"
-                                                                        />
-                                                                    )}
-                                                                    {col.source === 'static' && (
-                                                                        <input
-                                                                            type="text"
-                                                                            value={col.static_value || ''}
-                                                                            onChange={(e) => {
-                                                                                const updated = [...dataCollectionData.column_schema]
-                                                                                updated[idx] = { ...col, static_value: e.target.value }
-                                                                                setDataCollectionData({ ...dataCollectionData, column_schema: updated })
-                                                                            }}
-                                                                            placeholder="Fixed value"
-                                                                            className="flex-1 px-2 py-1.5 bg-zinc-900 border border-zinc-600 rounded text-xs text-white placeholder-zinc-500"
-                                                                        />
-                                                                    )}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            const updated = dataCollectionData.column_schema.filter((_, i) => i !== idx)
-                                                                            setDataCollectionData({ ...dataCollectionData, column_schema: updated })
-                                                                        }}
-                                                                        className="p-1.5 hover:bg-red-500/10 rounded text-zinc-500 hover:text-red-400"
-                                                                    >
-                                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                </div>
-                                                            ))}
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const newCol: ColumnSchema = { name: '', source: 'ai_extract', ai_prompt: '' }
-                                                                    setDataCollectionData({
-                                                                        ...dataCollectionData,
-                                                                        column_schema: [...dataCollectionData.column_schema, newCol]
-                                                                    })
-                                                                }}
-                                                                className="w-full py-2 border border-dashed border-zinc-700 rounded-lg text-xs text-zinc-500 hover:text-zinc-400 hover:border-zinc-600 transition-colors"
-                                                            >
-                                                                + Add Column
-                                                            </button>
+                                                            <input
+                                                                type="text"
+                                                                value={dataCollectionData.trigger_keywords.join(', ')}
+                                                                onChange={(e) => setDataCollectionData({
+                                                                    ...dataCollectionData,
+                                                                    trigger_keywords: e.target.value ? e.target.value.split(',').map(k => k.trim()).filter(k => k) : []
+                                                                })}
+                                                                placeholder="Leave empty to process all messages"
+                                                                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                            />
                                                         </div>
-                                                    )}
-
-                                                    {/* Trigger Keywords */}
-                                                    <div className="pt-3">
-                                                        <label className="block text-xs font-medium text-zinc-400 mb-1">
-                                                            Trigger Keywords <span className="text-zinc-600">(Optional)</span>
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            value={dataCollectionData.trigger_keywords.join(', ')}
-                                                            onChange={(e) => setDataCollectionData({
-                                                                ...dataCollectionData,
-                                                                trigger_keywords: e.target.value ? e.target.value.split(',').map(k => k.trim()).filter(k => k) : []
-                                                            })}
-                                                            placeholder="Leave empty to process all messages"
-                                                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-xs placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                                        />
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    )}
-                                </section>
-                            )}
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </section>
+                                )}
 
                         </form>
                     </div>
@@ -1932,42 +1950,41 @@ export default function CreateAIConfigWizard({ botId, configId, onClose }: Creat
             </div>
 
             {/* Full Page System Prompt Modal */}
-            {
-                showPromptModal && (
-                    <div className="fixed inset-0 z-[200] bg-black flex flex-col">
-                        {/* Modal Header */}
-                        <div className="shrink-0 bg-black border-b border-zinc-800 px-6 py-4">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPromptModal(false)}
-                                        className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
-                                    >
-                                        <ChevronLeft size={20} />
-                                    </button>
-                                    <div>
-                                        <h2 className="text-lg font-semibold text-white">System Prompt Editor</h2>
-                                        <p className="text-sm text-zinc-500">{formData.system_prompt.length} characters</p>
-                                    </div>
-                                </div>
+            {showPromptModal && (
+                <div className="fixed inset-0 z-[200] bg-black flex flex-col">
+                    {/* Modal Header */}
+                    <div className="shrink-0 bg-black border-b border-zinc-800 px-6 py-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
                                 <button
                                     type="button"
                                     onClick={() => setShowPromptModal(false)}
-                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+                                    className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
                                 >
-                                    Done
+                                    <ChevronLeft size={20} />
                                 </button>
+                                <div>
+                                    <h2 className="text-lg font-semibold text-white">System Prompt Editor</h2>
+                                    <p className="text-sm text-zinc-500">{formData.system_prompt.length} characters</p>
+                                </div>
                             </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowPromptModal(false)}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+                            >
+                                Done
+                            </button>
                         </div>
+                    </div>
 
-                        {/* Modal Content */}
-                        <div className="flex-1 p-6 overflow-hidden">
-                            <textarea
-                                ref={promptTextareaRef}
-                                value={formData.system_prompt}
-                                onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
-                                placeholder="Write your system prompt here...
+                    {/* Modal Content */}
+                    <div className="flex-1 p-6 overflow-hidden">
+                        <textarea
+                            ref={promptTextareaRef}
+                            value={formData.system_prompt}
+                            onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
+                            placeholder="Write your system prompt here...
 
 Example:
 You are a helpful customer support assistant for [Company Name]. Your role is to:
@@ -1976,13 +1993,12 @@ You are a helpful customer support assistant for [Company Name]. Your role is to
 - Escalate complex issues to human agents when needed
 
 Always maintain a friendly and helpful tone. If you don't know the answer, admit it and offer to connect the customer with a human agent."
-                                className="w-full h-full px-4 py-4 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all resize-none font-mono leading-relaxed"
-                                autoFocus
-                            />
-                        </div>
+                            className="w-full h-full px-4 py-4 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all resize-none font-mono leading-relaxed"
+                            autoFocus
+                        />
                     </div>
-                )
-            }
-        </div >
+                </div>
+            )}
+        </div>
     )
 }

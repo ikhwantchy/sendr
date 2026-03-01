@@ -16,6 +16,7 @@ import ActivityChart from '@/components/ActivityChart'
 import RecentActivityList from '@/components/RecentActivityList'
 import AIAssistantPanel from '@/components/AIAssistantPanel'
 import ConnectBotModal from '@/components/modals/ConnectBotModal'
+import MetaConfigPanel from '@/components/MetaConfigPanel'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
     ChevronLeft,
@@ -44,7 +45,8 @@ import {
     RefreshCw,
     Activity,
     Bot,
-    Check
+    Check,
+    Shield
 } from 'lucide-react'
 
 export default function BotDetailPage() {
@@ -58,7 +60,7 @@ export default function BotDetailPage() {
     const [activeTab, setActiveTab] = useState<string>(() => {
         if (typeof window === 'undefined') return 'overview'
         const hash = window.location.hash.replace('#', '')
-        if (hash && ['overview', 'rules', 'ai-assistant', 'ai-config', 'ai-mappings', 'campaigns', 'reminders'].includes(hash)) {
+        if (hash && ['overview', 'rules', 'ai-assistant', 'ai-config', 'ai-mappings', 'campaigns', 'reminders', 'waba'].includes(hash)) {
             return hash
         }
         return 'overview'
@@ -80,7 +82,7 @@ export default function BotDetailPage() {
         const handleHashChange = () => {
             const hash = window.location.hash.replace('#', '')
             // Include AI subtabs
-            if (hash && ['overview', 'rules', 'ai-assistant', 'ai-config', 'ai-mappings', 'campaigns', 'reminders'].includes(hash)) {
+            if (hash && ['overview', 'rules', 'ai-assistant', 'ai-config', 'ai-mappings', 'campaigns', 'reminders', 'waba'].includes(hash)) {
                 setActiveTab(hash)
             } else {
                 setActiveTab('overview')
@@ -331,12 +333,15 @@ export default function BotDetailPage() {
         totalReminders: remindersData?.length || 0,
     }
 
+    const isWabaBot = bot?.adapter_type === 'meta_cloud'
+
     const tabs = [
         { id: 'overview', name: 'Overview' },
         { id: 'rules', name: 'Auto-Reply', permission: 'auto_reply' },
         { id: 'ai-assistant', name: 'AI Assistant', permission: 'ai_assistant' },
         { id: 'campaigns', name: 'Campaigns', permission: 'campaigns' },
         { id: 'reminders', name: 'Reminders', permission: 'reminders' },
+        { id: 'waba', name: isWabaBot ? 'WABA Config ●' : 'WABA Config' },
     ].filter(tab => !tab.permission || hasModuleAccess(tab.permission, botId))
 
     if (isLoading) {
@@ -426,6 +431,13 @@ export default function BotDetailPage() {
                                     <div className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-amber-500/5 border border-amber-500/20 rounded-lg sm:rounded-xl text-amber-500 text-[10px] sm:text-xs font-semibold shadow-sm shadow-amber-500/5">
                                         <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
                                         <span className="truncate max-w-[100px] sm:max-w-none">{bot.phone_number}</span>
+                                    </div>
+                                )}
+                                {/* WABA Badge */}
+                                {bot.adapter_type === 'meta_cloud' && (
+                                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-500/10 border border-green-500/25 rounded-lg text-[10px] sm:text-xs font-bold text-green-400 uppercase tracking-wide">
+                                        <Shield className="w-3 h-3" />
+                                        WABA
                                     </div>
                                 )}
                                 {(() => {
@@ -573,6 +585,15 @@ export default function BotDetailPage() {
                 {activeTab === 'reminders' && hasModuleAccess('reminders', botId) && (
                     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <RemindersTable botId={botId} />
+                    </div>
+                )}
+
+                {/* WABA Config Tab */}
+                {activeTab === 'waba' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <div className="max-w-5xl">
+                            <MetaConfigPanel botId={botId} bot={bot} />
+                        </div>
                     </div>
                 )}
 

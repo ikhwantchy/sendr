@@ -264,6 +264,43 @@ CREATE INDEX idx_messages_contact ON messages(contact_id);
 CREATE INDEX idx_messages_created ON messages(created_at);
 
 -- =====================================================
+-- INBOX FOR MULTI-AGENT CHAT
+-- =====================================================
+
+CREATE TABLE inbox_conversations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+    contact_number VARCHAR(50) NOT NULL,
+    contact_name VARCHAR(255),
+    unread_count INT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'open' CHECK (status IN ('open', 'closed', 'resolved')),
+    last_message_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_inbox_conv_tenant ON inbox_conversations(tenant_id);
+CREATE INDEX idx_inbox_conv_bot ON inbox_conversations(bot_id);
+
+CREATE TABLE inbox_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES inbox_conversations(id) ON DELETE CASCADE,
+    message_id TEXT,
+    sender_type VARCHAR(20) NOT NULL CHECK (sender_type IN ('contact', 'bot', 'agent')),
+    sender_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    sender_name VARCHAR(255),
+    content TEXT,
+    message_type VARCHAR(20) DEFAULT 'text',
+    status VARCHAR(20) DEFAULT 'sent' CHECK (status IN ('sent', 'delivered', 'read', 'failed')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_inbox_msg_conv ON inbox_messages(conversation_id);
+CREATE INDEX idx_inbox_msg_created ON inbox_messages(created_at);
+
+-- =====================================================
 -- FUNCTIONS & TRIGGERS
 -- =====================================================
 

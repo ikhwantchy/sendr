@@ -9,7 +9,7 @@ import {
     Bold, Italic, Image as ImageIcon, Smile, Globe,
     Strikethrough, Code, Search, ArrowRight, ArrowLeft, Lock, Eye, MessageSquare, Paperclip,
     Cat, Coffee, Dumbbell, Car, Lightbulb, Heart, Hand, Send, Trash2, ExternalLink,
-    ChevronLeft, ShieldCheck, Zap, Activity, Edit, Maximize2, Minimize2
+    ChevronLeft, ShieldCheck, Zap, Activity, Edit, Maximize2, Minimize2, Shield, Layers
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, API_URL } from '@/lib/api'
@@ -56,6 +56,12 @@ interface FormData {
     message: string
     imageFile: File | null
     imagePreview: string | null
+
+    // WABA Template
+    campaign_type: 'freetext' | 'template'
+    template_name: string
+    template_language: string
+    template_components_json: string
 }
 
 // Storage key for contact table data
@@ -168,7 +174,25 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
 
         message: '',
         imageFile: null,
-        imagePreview: null
+        imagePreview: null,
+
+        // WABA Template defaults
+        campaign_type: 'freetext',
+        template_name: '',
+        template_language: 'id',
+        template_components_json: '',
+    })
+
+    // Detect if selected bot is WABA (computed after formData is declared)
+    const selectedBot = botsData?.find((b: any) => b.id === formData.botId)
+    const isWabaBot = selectedBot?.adapter_type === 'meta_cloud'
+
+    // Fetch WABA templates when bot is WABA
+    const { data: wabaTemplates, isLoading: isLoadingTemplates } = useQuery({
+        queryKey: ['waba-templates', formData.botId],
+        queryFn: () => api.bots.meta.getTemplates(formData.botId).then(res => res.data.data || []),
+        enabled: isWabaBot && !!formData.botId,
+        staleTime: 60000,
     })
 
     // Load contact table data from localStorage on mount
@@ -396,7 +420,7 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
 
             if (formData.contactMethod === 'manual' && contacts.length === 0) throw new Error('No contacts found')
 
-            const payload = {
+            const payload: any = {
                 bot_id: formData.botId,
                 name: formData.name,
                 message_template: formData.message,
@@ -415,7 +439,12 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                 },
                 image_url: formData.imagePreview || undefined,
                 scheduled_at: formData.isScheduled ? new Date(formData.scheduledAt).toISOString() : undefined,
-                start_immediately: !formData.isScheduled
+                start_immediately: !formData.isScheduled,
+                // WABA fields
+                campaign_type: formData.campaign_type,
+                template_name: formData.template_name || undefined,
+                template_language: formData.template_language || 'id',
+                template_components_json: formData.template_components_json || undefined,
             }
 
             const token = localStorage.getItem('token')
@@ -812,94 +841,202 @@ export default function CreateCampaignWizard({ initialBotId, onClose, campaignId
                         <section className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 sm:p-6 hover:border-zinc-700/50 transition-colors mb-20">
                             <SectionHeader step={5} title="Message Content" desc="" />
 
-                            {/* Message editor will go here, media attachment moved below */}
-
-
-                            {/* Rich Text Editor */}
-                            {/* Backdrop when expanded */}
-                            {/* Rich Text Editor - DUAL MODE (Inline + Modal) */}
-                            <div className="relative">
-                                {/* 1. Inline Editor (Always there, keeping layout stable) */}
-                                <SharedMessageEditor
-                                    value={formData.message}
-                                    onChange={(val) => setFormData({ ...formData, message: val })}
-                                    variables={formData.contactMethod === 'manual' ? getContactTableVariables(formData.tableColumns) : formData.sheetVariables}
-                                    isExpanded={false}
-                                    onToggleExpand={() => setIsEditorExpanded(true)}
-                                />
-
-                                {/* 2. Modal Editor (Only when Expanded) */}
-                                {isEditorExpanded && (
-                                    <>
-                                        <div
-                                            className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm animate-in fade-in duration-300"
-                                            onClick={() => setIsEditorExpanded(false)}
-                                        />
-                                        <div className="fixed top-[5vh] bottom-[5vh] left-1/2 -translate-x-1/2 w-[95vw] max-w-5xl z-[200] flex flex-col animate-in zoom-in-95 duration-300">
-                                            <SharedMessageEditor
-                                                value={formData.message}
-                                                onChange={(val) => setFormData({ ...formData, message: val })}
-                                                variables={formData.contactMethod === 'manual' ? getContactTableVariables(formData.tableColumns) : formData.sheetVariables}
-                                                isExpanded={true}
-                                                onToggleExpand={() => setIsEditorExpanded(false)}
-                                            />
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-
-                            {/* Image Attachment - COMPACT VERSION */}
-                            <div className="mt-4">
-                                {!formData.imagePreview ? (
-                                    <label className="flex items-center justify-center gap-3 w-full py-4 bg-zinc-900/30 border-2 border-dashed border-zinc-800 rounded-2xl cursor-pointer hover:bg-zinc-900/50 transition-all group hover:border-blue-500/40">
-                                        <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
-                                            <ImageIcon size={20} className="text-zinc-500 group-hover:text-blue-500 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[-10deg]" />
-                                        </div>
-                                        <div className="text-left">
-                                            <span className="text-sm font-bold text-zinc-300 group-hover:text-white block">Attach Media</span>
-                                            <span className="text-[10px] text-zinc-500 uppercase tracking-tighter">Images, flyers, or promo banners</span>
-                                        </div>
-                                        <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
-                                    </label>
-                                ) : (
-                                    <div className="flex items-center justify-between p-4 bg-zinc-950 border border-zinc-800 rounded-2xl group animate-in slide-in-from-top-2 duration-300">
-                                        <div className="flex items-center gap-4">
-                                            <div
-                                                className="w-14 h-14 rounded-xl border border-zinc-800 overflow-hidden cursor-pointer hover:border-blue-500/50 transition-colors shrink-0"
-                                                onClick={() => setIsFullImageOpen(true)}
-                                            >
-                                                <img src={formData.imagePreview} className="w-full h-full object-cover" />
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-0.5">
-                                                    <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold rounded uppercase tracking-wider border border-emerald-500/20">Media Attached</div>
-                                                    <span className="text-xs font-bold text-zinc-300">Image file selected</span>
-                                                </div>
-                                                <p className="text-[10px] text-zinc-500">This media will be sent as a caption to your message.</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsFullImageOpen(true)}
-                                                className="flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-bold transition-all border border-zinc-800 focus:ring-2 focus:ring-blue-500/20"
-                                            >
-                                                <Eye size={14} />
-                                                Full View
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setFormData({ ...formData, imageFile: null, imagePreview: null })}
-                                                className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
-                                                title="Remove media"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
+                            {/* WABA: Campaign Type Toggle */}
+                            {isWabaBot && (
+                                <div className="mb-5">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Shield size={14} className="text-green-400" />
+                                        <span className="text-xs font-semibold text-green-400 uppercase tracking-wider">WABA Mode</span>
                                     </div>
-                                )}
-                            </div>
+                                    <div className="flex p-1 bg-zinc-900 border border-zinc-800 rounded-xl w-fit gap-1">
+                                        {(['freetext', 'template'] as const).map(type => (
+                                            <button
+                                                key={type}
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, campaign_type: type })}
+                                                className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${formData.campaign_type === type
+                                                    ? 'bg-blue-600 text-white shadow-sm'
+                                                    : 'text-zinc-400 hover:text-zinc-200'
+                                                    }`}
+                                            >
+                                                {type === 'freetext' ? <MessageSquare size={13} /> : <Layers size={13} />}
+                                                {type === 'freetext' ? 'Free Text' : 'Template'}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Template selector */}
+                                    {formData.campaign_type === 'template' && (
+                                        <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            {isLoadingTemplates ? (
+                                                <div className="flex items-center gap-2 text-xs text-zinc-500 py-2">
+                                                    <RefreshCw size={12} className="animate-spin" />
+                                                    Memuat template...
+                                                </div>
+                                            ) : wabaTemplates && wabaTemplates.length > 0 ? (
+                                                <div>
+                                                    <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-1.5">
+                                                        Pilih Template
+                                                    </label>
+                                                    <select
+                                                        value={formData.template_name}
+                                                        onChange={e => {
+                                                            const tpl = wabaTemplates.find((t: any) => t.name === e.target.value)
+                                                            setFormData({
+                                                                ...formData,
+                                                                template_name: e.target.value,
+                                                                template_language: tpl?.language || 'id',
+                                                                template_components_json: tpl?.components ? JSON.stringify(tpl.components) : '',
+                                                            })
+                                                        }}
+                                                        className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500 transition-all"
+                                                    >
+                                                        <option value="">-- Pilih Template --</option>
+                                                        {wabaTemplates.map((tpl: any) => (
+                                                            <option key={tpl.name} value={tpl.name}>
+                                                                {tpl.name} ({tpl.language}) — {tpl.status}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+
+                                                    {formData.template_name && (
+                                                        <div className="mt-2 p-3 bg-green-500/5 border border-green-500/20 rounded-xl">
+                                                            <p className="text-xs text-green-400 font-medium">
+                                                                ✓ Template dipilih: <span className="font-mono">{formData.template_name}</span>
+                                                            </p>
+                                                            <p className="text-[10px] text-zinc-500 mt-0.5">
+                                                                Bahasa: {formData.template_language}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl text-xs text-amber-400">
+                                                    Tidak ada template yang disetujui Meta. Buat template di Meta Business Manager, lalu ketikkan nama template secara manual:
+                                                </div>
+                                            )}
+
+                                            {/* Manual template name input (fallback) */}
+                                            {(!wabaTemplates || wabaTemplates.length === 0 || !formData.template_name) && (
+                                                <div>
+                                                    <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-1.5">
+                                                        Nama Template (Manual)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={formData.template_name}
+                                                        onChange={e => setFormData({ ...formData, template_name: e.target.value })}
+                                                        placeholder="e.g. hello_world"
+                                                        className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm font-mono placeholder-zinc-600 focus:outline-none focus:border-blue-500 transition-all"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={formData.template_language}
+                                                        onChange={e => setFormData({ ...formData, template_language: e.target.value })}
+                                                        placeholder="Language code e.g. id, en_US"
+                                                        className="w-full mt-2 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-white text-sm font-mono placeholder-zinc-600 focus:outline-none focus:border-blue-500 transition-all"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Hide editor for template campaigns */}
+                            {formData.campaign_type === 'template' && isWabaBot ? null : (
+                                <>
+
+
+
+                                    {/* Rich Text Editor */}
+                                    {/* Backdrop when expanded */}
+                                    {/* Rich Text Editor - DUAL MODE (Inline + Modal) */}
+                                    <div className="relative">
+                                        {/* 1. Inline Editor (Always there, keeping layout stable) */}
+                                        <SharedMessageEditor
+                                            value={formData.message}
+                                            onChange={(val) => setFormData({ ...formData, message: val })}
+                                            variables={formData.contactMethod === 'manual' ? getContactTableVariables(formData.tableColumns) : formData.sheetVariables}
+                                            isExpanded={false}
+                                            onToggleExpand={() => setIsEditorExpanded(true)}
+                                        />
+
+                                        {/* 2. Modal Editor (Only when Expanded) */}
+                                        {isEditorExpanded && (
+                                            <>
+                                                <div
+                                                    className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm animate-in fade-in duration-300"
+                                                    onClick={() => setIsEditorExpanded(false)}
+                                                />
+                                                <div className="fixed top-[5vh] bottom-[5vh] left-1/2 -translate-x-1/2 w-[95vw] max-w-5xl z-[200] flex flex-col animate-in zoom-in-95 duration-300">
+                                                    <SharedMessageEditor
+                                                        value={formData.message}
+                                                        onChange={(val) => setFormData({ ...formData, message: val })}
+                                                        variables={formData.contactMethod === 'manual' ? getContactTableVariables(formData.tableColumns) : formData.sheetVariables}
+                                                        isExpanded={true}
+                                                        onToggleExpand={() => setIsEditorExpanded(false)}
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Image Attachment - COMPACT VERSION */}
+                                    <div className="mt-4">
+                                        {!formData.imagePreview ? (
+                                            <label className="flex items-center justify-center gap-3 w-full py-4 bg-zinc-900/30 border-2 border-dashed border-zinc-800 rounded-2xl cursor-pointer hover:bg-zinc-900/50 transition-all group hover:border-blue-500/40">
+                                                <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-500/10 transition-colors">
+                                                    <ImageIcon size={20} className="text-zinc-500 group-hover:text-blue-500 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[-10deg]" />
+                                                </div>
+                                                <div className="text-left">
+                                                    <span className="text-sm font-bold text-zinc-300 group-hover:text-white block">Attach Media</span>
+                                                    <span className="text-[10px] text-zinc-500 uppercase tracking-tighter">Images, flyers, or promo banners</span>
+                                                </div>
+                                                <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                                            </label>
+                                        ) : (
+                                            <div className="flex items-center justify-between p-4 bg-zinc-950 border border-zinc-800 rounded-2xl group animate-in slide-in-from-top-2 duration-300">
+                                                <div className="flex items-center gap-4">
+                                                    <div
+                                                        className="w-14 h-14 rounded-xl border border-zinc-800 overflow-hidden cursor-pointer hover:border-blue-500/50 transition-colors shrink-0"
+                                                        onClick={() => setIsFullImageOpen(true)}
+                                                    >
+                                                        <img src={formData.imagePreview} className="w-full h-full object-cover" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                            <div className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] font-bold rounded uppercase tracking-wider border border-emerald-500/20">Media Attached</div>
+                                                            <span className="text-xs font-bold text-zinc-300">Image file selected</span>
+                                                        </div>
+                                                        <p className="text-[10px] text-zinc-500">This media will be sent as a caption to your message.</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsFullImageOpen(true)}
+                                                        className="flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-bold transition-all border border-zinc-800 focus:ring-2 focus:ring-blue-500/20"
+                                                    >
+                                                        <Eye size={14} />
+                                                        Full View
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, imageFile: null, imagePreview: null })}
+                                                        className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                                                        title="Remove media"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </section>
+
                     </div>
                 </div>
             </div>

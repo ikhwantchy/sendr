@@ -5,6 +5,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Trigger restart 3
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -51,6 +52,8 @@ import adminRoutes from './api/routes/adminRoutes';
 import securityRoutes from './api/routes/securityRoutes';
 import sheetUpdaterRoutes from './api/routes/sheetUpdaterRoutes';
 import lidMappingRoutes from './api/routes/lidMappingRoutes';
+import metaWebhookRoutes from './api/routes/metaWebhookRoutes';
+import inboxRoutes from './api/routes/inboxRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -90,6 +93,9 @@ app.get('/health', async (req, res) => {
     }
 });
 
+// ✅ Meta Webhook - BEFORE auth middleware (no JWT needed)
+app.use('/api/webhooks', metaWebhookRoutes);
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/bots', botRoutes);
@@ -109,6 +115,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/security', securityRoutes);
 app.use('/api/sheet-updater', sheetUpdaterRoutes);
 app.use('/api/lid-mappings', lidMappingRoutes);
+app.use('/api/inbox', inboxRoutes);
 
 // Public endpoint - landing page content (no auth)
 app.get('/api/public/landing-page', async (req, res) => {
@@ -171,6 +178,14 @@ const server = app.listen(PORT, async () => {
     logger.info(`📡 API: http://localhost:${PORT}/api`);
     logger.info(`🏥 Health: http://localhost:${PORT}/health`);
 
+    // ✅ Initialize Socket.IO
+    try {
+        const { socketService } = await import('./services/socketService');
+        socketService.initialize(server);
+    } catch (error: any) {
+        logger.error('❌ Failed to initialize Socket.IO', { error: error.message });
+    }
+
     // ✅ Initialize group integration (auto-sync & commands)
     initializeGroupIntegration();
     logger.info('✅ Group integration initialized');
@@ -182,22 +197,37 @@ const server = app.listen(PORT, async () => {
 
         const allBots = await botRepository.findAll();
 
-        // Filter to bots that are connected OR have valid session files
-        const botsToInitialize = allBots.filter(bot =>
-            bot.status === 'connected' || whatsappAdapter.hasValidSession(bot.id)
+        // Separate Baileys bots and Meta WABA bots
+        const baileysBots = allBots.filter((bot: any) =>
+            (!bot.adapter_type || bot.adapter_type === 'baileys' || bot.adapter_type === 'web') &&
+            (bot.status === 'connected' || whatsappAdapter.hasValidSession(bot.id))
+        );
+        const metaBots = allBots.filter((bot: any) =>
+            bot.adapter_type === 'meta_cloud' && bot.meta_phone_number_id && bot.meta_access_token
         );
 
-        logger.info(`🔄 Found ${botsToInitialize.length} bots to initialize (${allBots.length} total)...`);
+        logger.info(`🔄 Found ${baileysBots.length} Baileys bots, ${metaBots.length} WABA bots to initialize...`);
 
-        for (const bot of botsToInitialize) {
+        // Initialize Baileys bots
+        for (const bot of baileysBots) {
             try {
-                const hasSession = whatsappAdapter.hasValidSession(bot.id);
-                logger.info(`🔄 Initializing bot: ${bot.name} (status: ${bot.status}, hasSession: ${hasSession})`);
-
                 await whatsappAdapter.initializeBot(bot.id);
-                logger.info(`✅ Bot initialized: ${bot.name} (${bot.id})`);
+                logger.info(`✅ Baileys bot initialized: ${bot.name}`);
             } catch (error: any) {
                 logger.error(`❌ Failed to initialize bot: ${bot.name}`, { error: error.message });
+            }
+        }
+
+        // Initialize WABA bots
+        if (metaBots.length > 0) {
+            const { metaCloudAdapter } = await import('./adapters/whatsapp/whatsappAdapter.meta-cloud');
+            for (const bot of metaBots) {
+                try {
+                    await metaCloudAdapter.initializeBot(bot.id);
+                    logger.info(`✅ WABA bot initialized: ${bot.name}`);
+                } catch (error: any) {
+                    logger.warn(`⚠️ WABA bot init skipped: ${bot.name}`, { error: error.message });
+                }
             }
         }
 
@@ -255,7 +285,7 @@ process.on('SIGINT', async () => {
     });
 });
 
-export default app; 
- 
- 
- 
+export default app;
+
+
+

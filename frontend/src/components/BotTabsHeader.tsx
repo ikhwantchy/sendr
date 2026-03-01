@@ -37,7 +37,9 @@ const TABS: Tab[] = [
     },
     { id: 'campaigns', name: 'Campaigns', permission: 'campaigns', action: 'New Campaign', actionPath: '/dashboard/campaigns/create' },
     { id: 'reminders', name: 'Reminders', permission: 'reminders', action: 'New Reminder', actionPath: '/dashboard/reminders/create' },
+    { id: 'waba', name: 'WABA Config' },
 ]
+
 
 export default function BotTabsHeader({ botId }: { botId: string }) {
     const { hasModuleAccess } = usePermissions()
@@ -70,6 +72,11 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
     const isAISubTab = activeTab === 'ai-config' || activeTab === 'ai-mappings'
     const currentTabId = isAISubTab ? 'ai-assistant' : activeTab
     const currentTab = TABS.find(t => t.id === currentTabId)
+    const currentSubTab = currentTab?.subTabs?.find(st => st.id === activeTab)
+
+    const displayAction = currentSubTab?.action || currentTab?.action;
+    const displayActionPath = currentTab?.actionPath;
+    const isEventAction = currentSubTab?.actionType === 'event';
 
     if (!mounted) return null
 
@@ -92,7 +99,7 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
     return (
         <div className="relative flex items-center justify-center w-full h-full">
             {/* Center: Tabs */}
-            <div className="flex-1 flex items-center justify-start md:justify-center gap-2 sm:gap-4 md:gap-8 lg:gap-12 h-full px-1 sm:px-2 overflow-x-auto scrollbar-hide">
+            <div className="flex-1 flex items-center justify-start md:justify-center gap-2 sm:gap-4 md:gap-8 lg:gap-12 h-full px-1 sm:px-2">
                 {tabs.map((tab) => {
                     const isActive = tab.id === currentTabId || (tab.subTabs?.some(st => st.id === activeTab))
                     const hasSubTabs = tab.subTabs && tab.subTabs.length > 0
@@ -100,25 +107,25 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
                     return (
                         <div
                             key={tab.id}
-                            className="relative h-full"
+                            className="relative h-full flex items-center"
                             onMouseEnter={() => hasSubTabs && setHoveredTab(tab.id)}
                             onMouseLeave={() => setHoveredTab(null)}
                         >
                             <button
                                 onClick={() => handleTabClick(tab.id)}
-                                className={`group relative flex items-center gap-0.5 sm:gap-1 h-[70px] md:h-[89px] px-0.5 sm:px-1 text-[11px] sm:text-xs md:text-sm font-medium transition-all whitespace-nowrap ${isActive
+                                className={`group relative flex items-center gap-1 h-full px-1 text-[11px] sm:text-xs md:text-sm font-medium transition-all whitespace-nowrap ${isActive
                                     ? 'text-white'
                                     : 'text-zinc-500 hover:text-zinc-200'
                                     }`}
                             >
                                 <span>{tab.name}</span>
                                 {hasSubTabs && (
-                                    <ChevronDown className={`w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-3.5 md:h-3.5 transition-transform duration-200 ${hoveredTab === tab.id ? 'rotate-180' : ''}`} />
+                                    <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${hoveredTab === tab.id ? 'rotate-180' : ''}`} />
                                 )}
                                 {isActive ? (
-                                    <div className="absolute bottom-0 left-0 right-0 h-[2px] md:h-[3px] bg-blue-500 shadow-[0_-4px_12px_rgba(59,130,246,0.3)] animate-in slide-in-from-bottom-1 duration-300"></div>
+                                    <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 shadow-[0_-4px_12px_rgba(59,130,246,0.3)]"></div>
                                 ) : (
-                                    <div className="absolute bottom-0 left-0 right-0 h-[2px] md:h-[3px] bg-transparent group-hover:bg-zinc-800 transition-colors"></div>
+                                    <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-transparent group-hover:bg-zinc-800 transition-colors"></div>
                                 )}
                             </button>
 
@@ -153,16 +160,27 @@ export default function BotTabsHeader({ botId }: { botId: string }) {
             </div>
 
             {/* Right: Create Action Button */}
-            {currentTab?.action && currentTab?.actionPath && (
+            {displayAction && (
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 pr-2 sm:pr-4">
-                    <Link
-                        href={`${currentTab.actionPath}?botId=${botId}`}
-                        className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
-                    >
-                        <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        <span className="hidden sm:inline">{currentTab.action}</span>
-                        <span className="sm:hidden">New</span>
-                    </Link>
+                    {isEventAction ? (
+                        <button
+                            onClick={() => window.dispatchEvent(new CustomEvent('openAddMapping'))}
+                            className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                        >
+                            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <span className="hidden sm:inline">{displayAction}</span>
+                            <span className="sm:hidden">New</span>
+                        </button>
+                    ) : displayActionPath ? (
+                        <Link
+                            href={`${displayActionPath}?botId=${botId}`}
+                            className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                        >
+                            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <span className="hidden sm:inline">{displayAction}</span>
+                            <span className="sm:hidden">New</span>
+                        </Link>
+                    ) : null}
                 </div>
             )}
         </div>

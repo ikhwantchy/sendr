@@ -11,6 +11,21 @@ interface ScheduledReminder {
 declare class ReminderSchedulerService {
     private scheduledReminders;
     /**
+     * Anti-spam delay between messages (randomized to look human-like)
+     * WhatsApp can disconnect bots that send too fast
+     */
+    private antiSpamDelay;
+    /**
+     * Check if bot is still connected before sending
+     * Uses a lightweight check that does NOT modify connection state
+     */
+    private isBotConnected;
+    /**
+     * Check bot connection before a batch send - only check once, not per-message
+     * This avoids excessive status polling that could interfere with the connection
+     */
+    private ensureBotConnected;
+    /**
      * Initialize scheduler - load all active reminders
      */
     initialize(): Promise<void>;
@@ -27,7 +42,7 @@ declare class ReminderSchedulerService {
      */
     executeReminder(reminderId: string): Promise<void>;
     /**
-     * Fetch and filter data from Google Sheets
+     * Fetch and filter data from Google Sheets (Multi-Sheet Support)
      */
     private fetchAndFilterSheetData;
     /**

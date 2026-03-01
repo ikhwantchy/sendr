@@ -7,7 +7,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.renderPreview = exports.previewDigest = exports.getSheetTabs = void 0;
+exports.renderPreview = exports.getSheetColumns = exports.previewDigest = exports.getSheetTabs = void 0;
 const googleSheetsService_1 = __importDefault(require("../../services/googleSheetsService"));
 /**
  * GET /api/sheets/tabs
@@ -87,8 +87,7 @@ const smartSheetsProcessor_1 = __importDefault(require("../../services/smartShee
 const enhancedTemplateRenderer_1 = __importDefault(require("../../services/enhancedTemplateRenderer"));
 const previewDigest = async (req, res) => {
     try {
-        const { url, selectedSheets, template, timezone = 'Asia/Jakarta', triggerColumn, triggerValue, filters, sort, useEnhancedRenderer = true // Flag to use new renderer
-         } = req.body;
+        const { url, selectedSheets, template, timezone = 'Asia/Jakarta', triggerColumn, triggerValue, filters, sort, useEnhancedRenderer = true } = req.body;
         if (!url || !selectedSheets || !Array.isArray(selectedSheets) || !template) {
             return res.status(400).json({
                 success: false,
@@ -99,8 +98,28 @@ const previewDigest = async (req, res) => {
         if (!spreadsheetId) {
             return res.status(400).json({ success: false, message: 'Invalid Google Sheets URL' });
         }
+        // Check if template uses multi-sheet sections
+        const hasSections = /\{\{\s*#section/.test(template);
+        // Determine which sheets to fetch
+        let sheetsToFetch = [...selectedSheets];
+        if (hasSections) {
+            // Extract section sheet names from template
+            // Extract section sheet names from template
+            // Matches {{#section "Sheet Name"}} or {{#section SheetName filter:...}}
+            // Group 1 captures the sheet name. It stops at the first unquoted space or quote.
+            const sectionNameRegex = /\{\{\s*#section\s+(?:["']([^"']+)["']|([^\s"'}]+))/g;
+            let sMatch;
+            while ((sMatch = sectionNameRegex.exec(template)) !== null) {
+                // if quoted match (group 1) usually has spaces, otherwise group 2
+                const sectionSheet = (sMatch[1] || sMatch[2]).trim();
+                if (!sheetsToFetch.find(s => s.toLowerCase() === sectionSheet.toLowerCase())) {
+                    sheetsToFetch.push(sectionSheet);
+                }
+            }
+            console.log(`📋 [Preview] Multi-section detected. Fetching sheets: ${sheetsToFetch.join(', ')}`);
+        }
         // Fetch needed sheets
-        const sheetsData = await googleSheetsService_1.default.fetchMultipleSheets(spreadsheetId, selectedSheets);
+        const sheetsData = await googleSheetsService_1.default.fetchMultipleSheets(spreadsheetId, sheetsToFetch);
         // Convert to objects
         const dataObjects = sheetsData.map(sheet => ({
             name: sheet.sheetName,
@@ -119,22 +138,30 @@ const previewDigest = async (req, res) => {
                 sort
             });
         }
-        // Use enhanced renderer if flag is set and template uses new syntax (flexible regex)
-        const hasEnhancedSyntax = /{{\s*#each/.test(template) ||
-            /{{\s*#if/.test(template) ||
-            /{{\s*#group/.test(template);
+        // Use enhanced renderer if flag is set and template uses new syntax
+        const hasEnhancedSyntax = /\{\{\s*#each/.test(template) ||
+            /\{\{\s*#if/.test(template) ||
+            /\{\{\s*#group/.test(template) ||
+            hasSections;
         if (useEnhancedRenderer && hasEnhancedSyntax) {
-            console.log(`🚀 [Preview] Render started. Items: ${items.length}, Template Length: ${template.length}`);
-            if (items.length > 0) {
-                console.log(`📊 [Preview] Sample Entry Keys: ${Object.keys(items[0]).join(', ')}`);
+            // Build sheetsData map for multi-section templates
+            let sheetsDataMap;
+            if (hasSections) {
+                sheetsDataMap = {};
+                for (const obj of dataObjects) {
+                    sheetsDataMap[obj.name] = obj.data;
+                }
+                console.log(`📊 [Preview] SheetsData loaded: ${Object.entries(sheetsDataMap).map(([k, v]) => `${k}(${v.length})`).join(', ')}`);
             }
+            console.log(`🚀 [Preview] Render started. Items: ${items.length}, Template Length: ${template.length}, HasSections: ${hasSections}`);
             const preview = enhancedTemplateRenderer_1.default.render(template, {
                 data: items,
                 globalVars: {
                     '@today': (0, date_fns_1.format)(new Date(), 'dd/MM/yyyy'),
                     '@today_name': ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][new Date().getDay()]
                 },
-                timezone
+                timezone,
+                sheetsData: sheetsDataMap
             });
             console.log(`✅ [Preview] Render complete. Result length: ${preview.length}`);
             return res.json({
@@ -145,7 +172,6 @@ const previewDigest = async (req, res) => {
             });
         }
         // Legacy rendering (backward compatibility)
-        // 1. Process as General Template with Loops if needed
         if (template.includes('{{#LOOP}}') || template.includes('{{')) {
             const preview = templateEngineService_1.default.renderGeneralTemplate(template, items, {
                 TODAY: new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -157,7 +183,7 @@ const previewDigest = async (req, res) => {
                 renderer: 'legacy'
             });
         }
-        // 2. Fallback: Academic Digest (Legacy)
+        // Fallback: Academic Digest (Legacy)
         const scheduleSheet = dataObjects.find(s => s.name.toLowerCase().includes('jadwal') || s.name.toLowerCase().includes('schedule'));
         const tasksSheet = dataObjects.find(s => s.name.toLowerCase().includes('tugas') || s.name.toLowerCase().includes('task'));
         const variables = templateEngineService_1.default.generateAcademicDigestVariables(scheduleSheet?.data || [], tasksSheet?.data || [], timezone);
@@ -179,6 +205,61 @@ const previewDigest = async (req, res) => {
     }
 };
 exports.previewDigest = previewDigest;
+/**
+ * GET /api/sheets/columns
+ * Fetch column headers and sample data from a specific sheet tab
+ *
+ * Query params:
+ *   - url: Google Sheets URL (required)
+ *   - tab: Sheet tab name (optional, defaults to first tab)
+ *
+ * Returns:
+ *   - columns: string[] (header names)
+ *   - sampleData: object[] (first 5 rows as objects)
+ *   - totalRows: number
+ */
+const getSheetColumns = async (req, res) => {
+    try {
+        const { url, tab } = req.query;
+        if (!url || typeof url !== 'string') {
+            return res.status(400).json({
+                success: false,
+                message: 'URL parameter is required'
+            });
+        }
+        const spreadsheetId = googleSheetsService_1.default.extractSpreadsheetId(url);
+        if (!spreadsheetId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid Google Sheets URL'
+            });
+        }
+        const sheetName = tab || 'Sheet1';
+        const sheetData = await googleSheetsService_1.default.fetchSheetData(spreadsheetId, sheetName);
+        if (!sheetData) {
+            return res.status(404).json({
+                success: false,
+                message: 'Could not fetch sheet data. Check URL and tab name.'
+            });
+        }
+        const objects = googleSheetsService_1.default.convertToObjects(sheetData);
+        res.json({
+            success: true,
+            columns: sheetData.headers.map(h => h.trim()).filter(h => h),
+            sampleData: objects.slice(0, 5),
+            totalRows: objects.length
+        });
+    }
+    catch (error) {
+        console.error('[Sheets] Columns error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch columns',
+            error: error.message
+        });
+    }
+};
+exports.getSheetColumns = getSheetColumns;
 /**
  * POST /api/sheets/render-preview
  * Renders a Handlebars template with sample data from Google Sheets

@@ -3,14 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSystemStats = exports.cleanupLogs = exports.optimizeDatabase = exports.getBackups = exports.createBackup = exports.getSystemHealth = void 0;
+exports.getSystemStats = exports.cleanupLogs = exports.optimizeDatabase = exports.downloadBackup = exports.getBackups = exports.createBackup = exports.getSystemHealth = void 0;
 const connection_sqlite_1 = require("../../database/connection-sqlite");
 const auditLogService_1 = __importDefault(require("../../services/auditLogService"));
-const child_process_1 = require("child_process");
-const util_1 = require("util");
 const path_1 = __importDefault(require("path"));
-const promises_1 = __importDefault(require("fs/promises"));
-const execAsync = (0, util_1.promisify)(child_process_1.exec);
+const fs_1 = require("fs");
 /**
  * System Controller
  * Handles system maintenance, backup, and health checks
@@ -84,40 +81,25 @@ const getSystemHealth = async (req, res) => {
 exports.getSystemHealth = getSystemHealth;
 /**
  * POST /api/admin/system/backup
- * Create a database backup
+ * Create a database backup (SQLite)
  */
 const createBackup = async (req, res) => {
     try {
         const userId = req.user.id;
-        const timestamp = Date.now();
-        const filename = `backup_${timestamp}.sql`;
-        const backupDir = path_1.default.join(process.cwd(), 'backups');
-        const filepath = path_1.default.join(backupDir, filename);
-        // Ensure backup directory exists
-        await promises_1.default.mkdir(backupDir, { recursive: true });
-        // Get database connection info from env
-        const dbName = process.env.DB_NAME || 'wa_automation';
-        const dbUser = process.env.DB_USER || 'postgres';
-        const dbHost = process.env.DB_HOST || 'localhost';
-        const dbPort = process.env.DB_PORT || '5432';
-        // Create backup using pg_dump
-        const command = `pg_dump -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName} -f "${filepath}"`;
-        await execAsync(command, {
-            env: { ...process.env, PGPASSWORD: process.env.DB_PASSWORD }
-        });
-        // Get file size
-        const stats = await promises_1.default.stat(filepath);
-        const fileSize = stats.size;
-        // Record backup in database
-        await (0, connection_sqlite_1.query)(`INSERT INTO system_backups (filename, file_path, file_size, backup_type, status, created_by)
-             VALUES ($1, $2, $3, 'manual', 'completed', $4)`, [filename, filepath, fileSize, userId]);
+        const backupPath = (0, connection_sqlite_1.backupDatabase)();
+        if (!backupPath) {
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to create backup'
+            });
+        }
+        const filename = path_1.default.basename(backupPath);
         // Log backup creation
         await auditLogService_1.default.log({
             user_id: userId,
             action_type: 'backup.create',
             action_category: 'system',
             description: `Created database backup: ${filename}`,
-            metadata: { filename, size: fileSize },
             status: 'success'
         });
         res.json({
@@ -125,7 +107,7 @@ const createBackup = async (req, res) => {
             message: 'Backup created successfully',
             backup: {
                 filename,
-                size: `${Math.round(fileSize / 1024 / 1024)} MB`,
+                path: backupPath,
                 created_at: new Date()
             }
         });
@@ -142,20 +124,17 @@ const createBackup = async (req, res) => {
 exports.createBackup = createBackup;
 /**
  * GET /api/admin/system/backups
- * Get list of backups
+ * Get list of backups (SQLite)
  */
 const getBackups = async (req, res) => {
     try {
-        const result = await (0, connection_sqlite_1.query)(`SELECT 
-                id, filename, file_size, backup_type, status, created_at,
-                u.email as created_by_email
-             FROM system_backups sb
-             LEFT JOIN users u ON sb.created_by = u.id
-             ORDER BY created_at DESC
-             LIMIT 50`);
-        const backups = result.rows.map(row => ({
-            ...row,
-            file_size_mb: Math.round(row.file_size / 1024 / 1024)
+        const backups = (0, connection_sqlite_1.listBackups)().map(b => ({
+            filename: b.name,
+            file_size: b.size,
+            file_size_display: b.size > 1024 * 1024
+                ? `${(b.size / 1024 / 1024).toFixed(1)} MB`
+                : `${(b.size / 1024).toFixed(0)} KB`,
+            created_at: b.date
         }));
         res.json({
             success: true,
@@ -173,20 +152,48 @@ const getBackups = async (req, res) => {
 };
 exports.getBackups = getBackups;
 /**
+ * GET /api/admin/system/backups/download/:filename
+ * Download a backup file
+ */
+const downloadBackup = async (req, res) => {
+    try {
+        const { filename } = req.params;
+        // Security: prevent directory traversal
+        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+            return res.status(400).json({ success: false, message: 'Invalid filename' });
+        }
+        const backupDir = path_1.default.join(process.cwd(), 'data', 'backups');
+        const filepath = path_1.default.join(backupDir, filename);
+        if (!(0, fs_1.existsSync)(filepath)) {
+            return res.status(404).json({ success: false, message: 'Backup file not found' });
+        }
+        res.download(filepath, filename);
+    }
+    catch (error) {
+        console.error('[System] Download backup error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to download backup',
+            error: error.message
+        });
+    }
+};
+exports.downloadBackup = downloadBackup;
+/**
  * POST /api/admin/system/maintenance/optimize-db
  * Optimize database (vacuum, analyze)
  */
 const optimizeDatabase = async (req, res) => {
     try {
         const userId = req.user.id;
-        // Run VACUUM ANALYZE
-        await (0, connection_sqlite_1.query)('VACUUM ANALYZE');
+        // Run VACUUM for SQLite
+        await (0, connection_sqlite_1.query)('VACUUM');
         // Log maintenance
         await auditLogService_1.default.log({
             user_id: userId,
             action_type: 'maintenance.optimize_db',
             action_category: 'system',
-            description: 'Optimized database (VACUUM ANALYZE)',
+            description: 'Optimized database (VACUUM)',
             status: 'success'
         });
         res.json({

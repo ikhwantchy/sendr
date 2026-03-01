@@ -54,11 +54,76 @@ const fs_1 = __importDefault(require("fs"));
 class BaileysWhatsAppAdapter {
     sockets = new Map();
     qrCodes = new Map();
-    pausedBots = new Set(); // Track paused bots
-    lidToPhone = new Map(); // Cache LID -> phone number mapping
+    pairingCodes = new Map();
+    pausedBots = new Set();
+    reconnecting = new Set();
+    lidToPhone = new Map();
     sessionPath;
+    cachedWAVersion = null;
+    // Cache of contacts per bot: botId -> Map<jid, contact>
+    contactsCache = new Map();
+    // Cache of all chats per bot: botId -> Map<jid, ChatMetadata> (includes individual + groups)
+    chatsCache = new Map();
     constructor() {
         this.sessionPath = process.env.WA_SESSION_PATH || './sessions';
+    }
+    /** Path to the chats store file for a bot */
+    chatsStorePath(botId) {
+        return path_1.default.join(this.sessionPath, `session-${botId}`, 'chats-store.json');
+    }
+    /** Save chats cache to disk so it persists across restarts */
+    saveChatsToFile(botId) {
+        try {
+            const cache = this.chatsCache.get(botId);
+            if (!cache || cache.size === 0)
+                return;
+            const data = {};
+            for (const [jid, chat] of cache.entries()) {
+                data[jid] = chat;
+            }
+            const filePath = this.chatsStorePath(botId);
+            fs_1.default.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+            logger_1.logger.info(`💾 Saved ${cache.size} chats to disk`, { bot_id: botId });
+        }
+        catch (err) {
+            logger_1.logger.warn('Failed to save chats store to file', { bot_id: botId, error: err });
+        }
+    }
+    /** Read chats from disk file (used when in-memory cache is empty) */
+    readChatsFromFile(botId) {
+        const result = new Map();
+        try {
+            const filePath = this.chatsStorePath(botId);
+            if (!fs_1.default.existsSync(filePath))
+                return result;
+            const data = JSON.parse(fs_1.default.readFileSync(filePath, 'utf8'));
+            for (const [jid, chat] of Object.entries(data)) {
+                result.set(jid, chat);
+            }
+            logger_1.logger.info(`📂 Loaded ${result.size} chats from disk`, { bot_id: botId });
+        }
+        catch (err) {
+            logger_1.logger.warn('Failed to read chats store from file', { bot_id: botId, error: err });
+        }
+        return result;
+    }
+    /**
+     * Fetch & cache WhatsApp Web version (only fetches once per process lifetime)
+     */
+    async getWAVersion() {
+        if (this.cachedWAVersion)
+            return this.cachedWAVersion;
+        try {
+            const { version, isLatest } = await (0, baileys_1.fetchLatestBaileysVersion)();
+            logger_1.logger.info('Fetched latest WA version', { version, isLatest });
+            this.cachedWAVersion = version;
+            return version;
+        }
+        catch (err) {
+            logger_1.logger.warn('Failed to fetch latest WA version, using fallback', { error: err });
+            // Fallback to a known-good version
+            return [2, 3000, 1023028715];
+        }
     }
     /**
      * Check if a bot has a valid session (creds.json exists)
@@ -74,15 +139,37 @@ class BaileysWhatsAppAdapter {
         }
     }
     /**
+     * Clear session files for a bot, forcing fresh QR on next init.
+     * Called when WhatsApp returns 405 or badSession.
+     */
+    clearSession(botId) {
+        const authPath = path_1.default.join(this.sessionPath, `session-${botId}`);
+        try {
+            if (fs_1.default.existsSync(authPath)) {
+                fs_1.default.rmSync(authPath, { recursive: true, force: true });
+                logger_1.logger.info('🗑️ Session files cleared', { bot_id: botId, path: authPath });
+            }
+        }
+        catch (err) {
+            logger_1.logger.error('Failed to clear session files', { bot_id: botId, error: err });
+        }
+    }
+    /**
      * Initialize a bot session
      */
     async initializeBot(botId) {
+        // Initialization lock - prevent concurrent inits that cause connectionReplaced
+        if (this.reconnecting.has(botId)) {
+            logger_1.logger.warn('Initialization already in progress, skipping', { bot_id: botId });
+            return;
+        }
         // Check if already initialized
         const existingSocket = this.sockets.get(botId);
         if (existingSocket) {
             logger_1.logger.warn('Bot already initialized - reusing existing socket', { bot_id: botId });
             return;
         }
+        this.reconnecting.add(botId);
         // Remove from paused bots if resuming
         this.pausedBots.delete(botId);
         logger_1.logger.info('Initializing WhatsApp bot with Baileys', { bot_id: botId });
@@ -94,11 +181,22 @@ class BaileysWhatsAppAdapter {
             // Setup auth state
             const authPath = path_1.default.join(this.sessionPath, `session-${botId}`);
             const { state, saveCreds } = await (0, baileys_1.useMultiFileAuthState)(authPath);
+            // Fetch the latest WhatsApp Web version — using outdated versions causes 405 rejection
+            const version = await this.getWAVersion();
+            logger_1.logger.info('Using WA Web version', { bot_id: botId, version });
             // Create socket with proper config
             const sock = (0, baileys_1.default)({
+                version,
                 auth: state,
                 printQRInTerminal: false,
-                markOnlineOnConnect: true, // ✅ IMPORTANT!
+                markOnlineOnConnect: true,
+                browser: ['Sendr', 'Chrome', '124.0.0'], // Realistic browser fingerprint
+                connectTimeoutMs: 30000,
+                keepAliveIntervalMs: 20000,
+                // getMessage is required for message retry mechanism stability
+                getMessage: async (key) => {
+                    return undefined;
+                },
                 logger: {
                     level: 'silent',
                     fatal: () => { },
@@ -135,11 +233,14 @@ class BaileysWhatsAppAdapter {
             // Setup event handlers AFTER socket stored
             this.setupEventHandlers(sock, bot, saveCreds);
             logger_1.logger.info('Event handlers registered successfully', { bot_id: botId });
+            // Release init lock after a short delay (let connection establish)
+            setTimeout(() => this.reconnecting.delete(botId), 10000);
         }
         catch (error) {
             logger_1.logger.error('Failed to initialize bot', { error, bot_id: botId });
             // Cleanup on failure
             this.sockets.delete(botId);
+            this.reconnecting.delete(botId);
             throw error;
         }
     }
@@ -229,6 +330,36 @@ class BaileysWhatsAppAdapter {
                         connected_at: new Date().toISOString(),
                     });
                     logger_1.logger.info('Connection event emitted', { bot_id: botId });
+                    // ── Auto-sync groups to inbox after connect (with delay for WA to settle) ──
+                    setTimeout(async () => {
+                        try {
+                            logger_1.logger.info('🔄 Auto-syncing groups to inbox...', { bot_id: botId });
+                            const { inboxRepository } = await Promise.resolve().then(() => __importStar(require('../../database/repositories/inboxRepository')));
+                            const groups = await this.getAllGroupsForBot(botId);
+                            let synced = 0;
+                            for (const [jid, meta] of Object.entries(groups)) {
+                                if (!jid.endsWith('@g.us'))
+                                    continue;
+                                const existing = await inboxRepository.findConversationByContact(botId, jid);
+                                if (existing)
+                                    continue;
+                                await inboxRepository.createConversation({
+                                    tenant_id: tenantId,
+                                    bot_id: botId,
+                                    contact_number: jid,
+                                    contact_name: meta.subject || 'Group',
+                                    status: 'open',
+                                });
+                                synced++;
+                            }
+                            if (synced > 0) {
+                                logger_1.logger.info(`✅ Auto-synced ${synced} groups to inbox`, { bot_id: botId });
+                            }
+                        }
+                        catch (syncErr) {
+                            logger_1.logger.warn('Auto group sync failed (non-critical)', { bot_id: botId, error: syncErr });
+                        }
+                    }, 5000);
                 }
                 catch (error) {
                     logger_1.logger.error('Failed to update bot status on connection', { error, bot_id: botId });
@@ -237,7 +368,11 @@ class BaileysWhatsAppAdapter {
             // Disconnected
             if (connection === 'close') {
                 const disconnectReason = lastDisconnect?.error?.output?.statusCode;
-                // Don't auto-reconnect if logged out or connection replaced (another session took over)
+                // 405 = Method Not Allowed: WA rejected our session entirely → must clear & re-auth
+                // badSession = corrupted local session → must clear & re-auth
+                const isSessionInvalid = disconnectReason === 405 ||
+                    disconnectReason === baileys_1.DisconnectReason.badSession;
+                // Don't auto-reconnect if logged out or connection replaced
                 const shouldReconnect = disconnectReason !== baileys_1.DisconnectReason.loggedOut &&
                     disconnectReason !== baileys_1.DisconnectReason.connectionReplaced;
                 const reasonMap = new Map([
@@ -248,11 +383,13 @@ class BaileysWhatsAppAdapter {
                     [baileys_1.DisconnectReason.loggedOut, 'Logged Out'],
                     [baileys_1.DisconnectReason.restartRequired, 'Restart Required'],
                     [baileys_1.DisconnectReason.timedOut, 'Timed Out'],
+                    [405, 'Session Rejected by WhatsApp (405)'],
                 ]);
                 const reasonText = disconnectReason ? reasonMap.get(disconnectReason) || `Unknown (${disconnectReason})` : 'Unknown';
                 logger_1.logger.warn('WhatsApp disconnected', {
                     bot_id: botId,
                     shouldReconnect,
+                    isSessionInvalid,
                     disconnect_code: disconnectReason,
                     disconnect_reason: reasonText,
                     error: lastDisconnect?.error
@@ -261,7 +398,6 @@ class BaileysWhatsAppAdapter {
                 const wasPaused = this.pausedBots.has(botId);
                 await botRepository_1.botRepository.update(botId, {
                     status: 'disconnected',
-                    // Only clear phone_number if logged out AND not paused
                     ...(disconnectReason === baileys_1.DisconnectReason.loggedOut && !wasPaused ? { phone_number: null } : {}),
                 });
                 // Emit disconnect event
@@ -280,16 +416,38 @@ class BaileysWhatsAppAdapter {
                 });
                 this.sockets.delete(botId);
                 this.qrCodes.delete(botId);
-                // Don't auto-reconnect if bot was paused by user
+                // If session is invalid (405 / badSession), wipe session files so next init gets fresh QR
+                if (isSessionInvalid) {
+                    logger_1.logger.warn('🗑️ Session invalid - clearing session files to force re-authentication', { bot_id: botId, disconnect_code: disconnectReason });
+                    this.clearSession(botId);
+                    // IMPORTANT: Force-clear the reconnecting lock so the next manual connect works
+                    this.reconnecting.delete(botId);
+                }
                 if (shouldReconnect && !wasPaused) {
-                    // Auto-reconnect with longer delay to avoid WhatsApp anti-spam
-                    logger_1.logger.info('⏳ Will attempt reconnect in 30 seconds...', { bot_id: botId });
-                    setTimeout(() => {
-                        logger_1.logger.info('🔄 Attempting to reconnect...', { bot_id: botId });
-                        this.initializeBot(botId).catch(err => {
-                            logger_1.logger.error('Failed to reconnect', { error: err, bot_id: botId });
-                        });
-                    }, 30000); // 30 seconds delay (safer than 5 seconds)
+                    if (isSessionInvalid && disconnectReason === 405) {
+                        // 405 = WhatsApp server is actively rejecting this device.
+                        // Do NOT auto-reconnect — it will just keep failing.
+                        // User must remove linked device from their phone first.
+                        logger_1.logger.warn('🚫 Not auto-reconnecting after 405 - WhatsApp rejected the session. ' +
+                            'User must go to WhatsApp > Settings > Linked Devices > Remove this device, then reconnect manually.', { bot_id: botId });
+                        await botRepository_1.botRepository.update(botId, { status: 'error' });
+                    }
+                    else if (this.reconnecting.has(botId)) {
+                        logger_1.logger.warn('⏳ Reconnect already in progress, skipping duplicate attempt', { bot_id: botId });
+                    }
+                    else {
+                        this.reconnecting.add(botId);
+                        // Longer delay for session-invalid cases to avoid hammering WA servers
+                        const reconnectDelay = isSessionInvalid ? 15000 : 30000;
+                        logger_1.logger.info(`⏳ Will attempt reconnect in ${reconnectDelay / 1000}s...`, { bot_id: botId, reason: reasonText });
+                        setTimeout(() => {
+                            logger_1.logger.info('🔄 Attempting to reconnect...', { bot_id: botId });
+                            this.reconnecting.delete(botId);
+                            this.initializeBot(botId).catch(err => {
+                                logger_1.logger.error('Failed to reconnect', { error: err, bot_id: botId });
+                            });
+                        }, reconnectDelay);
+                    }
                 }
                 else if (wasPaused) {
                     logger_1.logger.info('⏸️ Bot was paused by user - not auto-reconnecting', { bot_id: botId });
@@ -304,15 +462,20 @@ class BaileysWhatsAppAdapter {
         });
         // Credentials update
         sock.ev.on('creds.update', saveCreds);
-        // ✅ AUTO-CAPTURE CONTACTS (LID → Phone mapping)
+        // ✅ AUTO-CAPTURE CONTACTS (LID → Phone mapping + contacts cache)
         sock.ev.on('contacts.upsert', async (contacts) => {
             logger_1.logger.info('📇 Contacts upsert event', { bot_id: botId, count: contacts.length });
+            // Update contacts cache
+            if (!this.contactsCache.has(botId))
+                this.contactsCache.set(botId, new Map());
+            const cache = this.contactsCache.get(botId);
+            for (const c of contacts) {
+                if (c.id)
+                    cache.set(c.id, c);
+            }
             try {
                 const { lidPhoneMappingService } = await Promise.resolve().then(() => __importStar(require('../../services/lidPhoneMappingService')));
                 for (const contact of contacts) {
-                    // contact.id could be either LID or phone format
-                    // contact.lid is the LID if the contact has one
-                    // We need to map LID ↔ Phone
                     const contactId = contact.id || '';
                     const lidValue = contact.lid;
                     logger_1.logger.info('📇 Contact info', {
@@ -322,7 +485,6 @@ class BaileysWhatsAppAdapter {
                         name: contact.name || contact.notify,
                         raw: JSON.stringify(contact)
                     });
-                    // If contact has both phone JID and LID, save mapping
                     if (contactId.includes('@s.whatsapp.net') && lidValue) {
                         const phone = contactId.split('@')[0];
                         const lid = lidValue.split('@')[0];
@@ -339,6 +501,77 @@ class BaileysWhatsAppAdapter {
             catch (err) {
                 logger_1.logger.error('Failed to process contacts upsert', { error: err });
             }
+        });
+        // ✅ CONTACTS SET (initial bulk load on startup)
+        sock.ev.on('contacts.set', async ({ contacts }) => {
+            logger_1.logger.info('📇 Contacts set event (initial load)', { bot_id: botId, count: contacts?.length || 0 });
+            if (!this.contactsCache.has(botId))
+                this.contactsCache.set(botId, new Map());
+            const cache = this.contactsCache.get(botId);
+            if (Array.isArray(contacts)) {
+                for (const c of contacts) {
+                    if (c.id)
+                        cache.set(c.id, c);
+                }
+            }
+        });
+        // ✅ CHATS SET (initial full chat list - includes ALL individual + group chats)
+        sock.ev.on('chats.set', async ({ chats }) => {
+            logger_1.logger.info('💬 Chats set event (initial load)', { bot_id: botId, count: chats?.length || 0 });
+            if (!this.chatsCache.has(botId))
+                this.chatsCache.set(botId, new Map());
+            const cache = this.chatsCache.get(botId);
+            if (Array.isArray(chats)) {
+                for (const c of chats) {
+                    if (c.id)
+                        cache.set(c.id, c);
+                }
+            }
+            // Persist to disk immediately
+            this.saveChatsToFile(botId);
+            // Auto-sync to inbox (non-blocking)
+            setImmediate(async () => {
+                try {
+                    const { inboxRepository } = await Promise.resolve().then(() => __importStar(require('../../database/repositories/inboxRepository')));
+                    let synced = 0;
+                    for (const [jid, chat] of cache.entries()) {
+                        if (jid.includes('status@broadcast') || jid.includes('newsletter'))
+                            continue;
+                        if (!jid.endsWith('@s.whatsapp.net') && !jid.endsWith('@g.us'))
+                            continue;
+                        const existing = await inboxRepository.findConversationByContact(botId, jid);
+                        if (existing)
+                            continue;
+                        const isGroup = jid.endsWith('@g.us');
+                        await inboxRepository.createConversation({
+                            tenant_id: tenantId,
+                            bot_id: botId,
+                            contact_number: jid,
+                            contact_name: chat.name || (isGroup ? 'Group' : jid.split('@')[0]),
+                            status: 'open',
+                        });
+                        synced++;
+                    }
+                    if (synced > 0)
+                        logger_1.logger.info(`✅ Auto-synced ${synced} chats to inbox`, { bot_id: botId });
+                }
+                catch (err) {
+                    logger_1.logger.warn('Auto chat sync failed (chats.set)', { bot_id: botId, error: err });
+                }
+            });
+        });
+        // ✅ CHATS UPSERT (new chat or update)
+        sock.ev.on('chats.upsert', (chats) => {
+            if (!this.chatsCache.has(botId))
+                this.chatsCache.set(botId, new Map());
+            const cache = this.chatsCache.get(botId);
+            for (const c of (Array.isArray(chats) ? chats : [])) {
+                if (c?.id)
+                    cache.set(c.id, c);
+            }
+            // Persist updated chats to disk (debounced by 5s to avoid too many writes)
+            clearTimeout(this[`_saveChatTimer_${botId}`]);
+            this[`_saveChatTimer_${botId}`] = setTimeout(() => this.saveChatsToFile(botId), 5000);
         });
         // ✅ AUTO-DETECT GROUPS ON UPSERT
         sock.ev.on('groups.upsert', async (groups) => {
@@ -419,6 +652,7 @@ class BaileysWhatsAppAdapter {
                 content: messageContent,
                 timestamp
             });
+            const waMsgId = msg.key.id || `manual_${Date.now()}`;
             // NOTE: source MUST be 'auto_reply' because SQLite CHECK constraint restricts values.
             await (0, connection_1.query)(`
                 INSERT INTO messages (
@@ -428,10 +662,49 @@ class BaileysWhatsAppAdapter {
             `, [
                 (0, uuid_1.v4)(),
                 bot.id,
-                msg.key.id || `manual_${Date.now()}`,
+                waMsgId,
                 messageContent,
                 timestamp
             ]);
+            // Track for Inbox!
+            try {
+                const jid = msg.key.remoteJid || '';
+                const isGroup = jid.endsWith('@g.us');
+                let groupName;
+                if (isGroup) {
+                    try {
+                        const sock = this.sockets.get(bot.id);
+                        if (sock) {
+                            const metadata = await sock.groupMetadata(jid);
+                            groupName = metadata.subject;
+                        }
+                    }
+                    catch (e) {
+                        logger_1.logger.warn('Failed to fetch group metadata for outbound', { error: e.message });
+                    }
+                }
+                await eventBus_1.eventBus.emit(types_1.EventType.MESSAGE_SENT, {
+                    tenant_id: bot.tenant_id,
+                    bot_id: bot.id,
+                    channel: 'wa',
+                    group_id: isGroup ? jid : null,
+                    contact_id: jid,
+                    message: messageContent,
+                    timestamp: timestamp,
+                }, {
+                    wa_message_id: waMsgId,
+                    to: jid,
+                    message_type: 'text',
+                    content: messageContent,
+                    sender_type: 'bot', // Treat fromMe as bot/agent
+                    is_group: isGroup,
+                    group_name: groupName,
+                    sender_name: bot.name,
+                });
+            }
+            catch (err) {
+                logger_1.logger.error('Failed to emit MESSAGE_SENT for tracking', { error: err });
+            }
         }
         catch (error) {
             logger_1.logger.error('❌ Failed to log outbound manual message', { error });
@@ -454,6 +727,21 @@ class BaileysWhatsAppAdapter {
                 '';
             const remoteJid = msg.key.remoteJid || '';
             const senderId = msg.key.participant || msg.key.remoteJid || '';
+            // Fetch group metadata if group
+            let groupName;
+            if (remoteJid.endsWith('@g.us')) {
+                try {
+                    const sock = this.sockets.get(bot.id);
+                    if (sock) {
+                        // Optimistic caching or fetch
+                        const metadata = await sock.groupMetadata(remoteJid);
+                        groupName = metadata.subject;
+                    }
+                }
+                catch (e) {
+                    logger_1.logger.warn('Failed to fetch group metadata for incoming', { error: e.message });
+                }
+            }
             // Try to resolve LID to phone number
             let senderPhone;
             if (remoteJid.includes('@lid') || senderId.includes('@lid')) {
@@ -495,6 +783,7 @@ class BaileysWhatsAppAdapter {
                 message_type: 'text',
                 content: messageContent,
                 is_group: remoteJid.endsWith('@g.us') || false,
+                group_name: groupName,
                 sender_id: senderId,
                 sender_name: msg.pushName || 'Unknown',
                 timestamp: new Date(msg.messageTimestamp * 1000).toISOString(),
@@ -511,13 +800,62 @@ class BaileysWhatsAppAdapter {
                 stanzaId: contextInfo.stanzaId,
                 content: contextInfo.quotedMessage.conversation || contextInfo.quotedMessage.extendedTextMessage?.text
             } : undefined;
+            const messageTypeKey = Object.keys(msg.message || {})[0];
+            let media_meta;
+            if (messageTypeKey && ['imageMessage', 'videoMessage', 'documentMessage', 'audioMessage', 'stickerMessage'].includes(messageTypeKey)) {
+                try {
+                    const sock = this.sockets.get(bot.id);
+                    const buffer = await (0, baileys_1.downloadMediaMessage)(msg, 'buffer', {}, {
+                        logger: logger_1.logger,
+                        // pass the socket instance
+                        reuploadRequest: sock?.updateMediaMessage
+                    });
+                    const mediaMsgObj = msg.message[messageTypeKey];
+                    const originalName = mediaMsgObj?.fileName || `${messageTypeKey}.${messageTypeKey === 'imageMessage' ? 'jpg' : 'bin'}`;
+                    const mimetype = mediaMsgObj?.mimetype;
+                    let ext = path_1.default.extname(originalName);
+                    if (!ext && mimetype) {
+                        const mimeExt = mimetype.split('/')[1]?.split(';')[0];
+                        if (mimeExt)
+                            ext = `.${mimeExt}`;
+                    }
+                    if (!ext)
+                        ext = '.bin';
+                    const uniqueFilename = `${(0, uuid_1.v4)()}${ext}`;
+                    const uploadDir = path_1.default.join(__dirname, '../../../../data/uploads');
+                    if (!fs_1.default.existsSync(uploadDir)) {
+                        fs_1.default.mkdirSync(uploadDir, { recursive: true });
+                    }
+                    const filePath = path_1.default.join(uploadDir, uniqueFilename);
+                    fs_1.default.writeFileSync(filePath, buffer);
+                    let normalizedType = 'document';
+                    if (messageTypeKey === 'imageMessage' || messageTypeKey === 'stickerMessage')
+                        normalizedType = 'image';
+                    if (messageTypeKey === 'videoMessage')
+                        normalizedType = 'video';
+                    if (messageTypeKey === 'audioMessage')
+                        normalizedType = 'audio';
+                    incomingMessage.message_type = normalizedType;
+                    media_meta = {
+                        filename: originalName,
+                        mimetype,
+                        file_size: buffer.length,
+                        message_type: normalizedType,
+                        media_url: `/api/public/uploads/${uniqueFilename}`
+                    };
+                    logger_1.logger.info(`💾 Downloaded incoming media`, { bot_id: bot.id, file: uniqueFilename });
+                }
+                catch (e) {
+                    logger_1.logger.error('Failed to download incoming media', { error: e.message, bot_id: bot.id });
+                }
+            }
             logger_1.logger.info('✅ Incoming message parsed', {
                 bot_id: bot.id,
                 from: incomingMessage.from,
                 content: incomingMessage.content,
                 mentions: mentioned_jids,
                 has_quote: !!quoted_message,
-                message_type: Object.keys(msg.message || {})[0],
+                message_type: messageTypeKey,
             });
             // Log INBOUND message to database
             try {
@@ -550,7 +888,8 @@ class BaileysWhatsAppAdapter {
             }, {
                 ...incomingMessage,
                 mentioned_jids,
-                quoted_message
+                quoted_message,
+                media_meta
             });
         }
         catch (error) {
@@ -563,35 +902,109 @@ class BaileysWhatsAppAdapter {
     async requestQRCode(botId) {
         try {
             logger_1.logger.info('Requesting QR code', { bot_id: botId });
-            if (!this.sockets.has(botId)) {
-                logger_1.logger.info('Initializing bot for QR request', { bot_id: botId });
-                await this.initializeBot(botId);
+            // Always destroy existing socket and clear session FIRST so we start fresh
+            if (this.sockets.has(botId)) {
+                logger_1.logger.info('Destroying existing socket before QR request', { bot_id: botId });
+                try {
+                    const oldSock = this.sockets.get(botId);
+                    oldSock?.end(undefined);
+                }
+                catch (e) { /* ignore */ }
+                this.sockets.delete(botId);
             }
-            // Wait for QR code (max 30 seconds)
-            const maxWait = 30000;
+            // Clear any stale reconnecting lock
+            this.reconnecting.delete(botId);
+            // Clear old QR
+            this.qrCodes.delete(botId);
+            // Always clear session so a fresh QR is generated (avoids 405 from stale session)
+            this.clearSession(botId);
+            logger_1.logger.info('Initializing bot for QR request', { bot_id: botId });
+            await this.initializeBot(botId);
+            // Wait up to 15 seconds for either: QR code OR connection close (fast-fail)
+            const maxWait = 15000;
             const startTime = Date.now();
             let attempts = 0;
             while (Date.now() - startTime < maxWait) {
                 attempts++;
+                // ✅ Happy path: QR appeared
                 const qrData = this.qrCodes.get(botId);
                 if (qrData) {
                     logger_1.logger.info('QR code found', { bot_id: botId, attempts });
                     return qrData;
                 }
-                if (attempts % 10 === 0) {
-                    logger_1.logger.debug('Still waiting for QR code', {
-                        bot_id: botId,
-                        attempts,
-                        elapsed: Date.now() - startTime
-                    });
+                // ❌ Fast-fail: socket disappeared — means WA rejected/disconnected early
+                if (!this.sockets.has(botId)) {
+                    logger_1.logger.warn('Socket disappeared during QR wait — WA likely rejected connection', { bot_id: botId, attempts });
+                    throw new Error('WhatsApp rejected the connection. Please try using Phone Number Pairing instead: click "Use Phone Number" on the connect page.');
                 }
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                await new Promise((resolve) => setTimeout(resolve, 200));
             }
+            // Timeout reached without QR
             logger_1.logger.error('QR code generation timeout', { bot_id: botId, attempts });
-            throw new Error('QR code generation timeout - please try again');
+            throw new Error('QR code not received in time. Try using Phone Number Pairing instead.');
         }
         catch (error) {
             logger_1.logger.error('Failed to request QR code', { error, bot_id: botId });
+            throw error;
+        }
+    }
+    /**
+     * Request a phone number pairing code (alternative to QR scan)
+     * Phone number is read automatically from the bot's DB record.
+     * User enters this 8-digit code in WhatsApp > Linked Devices > Link with Phone Number
+     */
+    async requestPairingCode(botId) {
+        try {
+            // Fetch bot to get its registered phone number
+            const bot = await botRepository_1.botRepository.findById(botId);
+            if (!bot)
+                throw new Error('Bot not found');
+            const rawPhone = bot.phone_number || '';
+            const cleanPhone = rawPhone.replace(/\D/g, '');
+            if (!cleanPhone) {
+                throw new Error('This bot has no phone number configured. Please set the phone number in bot settings first.');
+            }
+            logger_1.logger.info('Requesting pairing code', { bot_id: botId, phone: cleanPhone });
+            // Cleanup existing socket
+            if (this.sockets.has(botId)) {
+                try {
+                    this.sockets.get(botId)?.end(undefined);
+                }
+                catch (e) { }
+                this.sockets.delete(botId);
+            }
+            this.reconnecting.delete(botId);
+            this.pairingCodes.delete(botId);
+            this.clearSession(botId);
+            // Init with pairing mode (no QR needed)
+            const authPath = path_1.default.join(this.sessionPath, `session-${botId}`);
+            const { state, saveCreds } = await (0, baileys_1.useMultiFileAuthState)(authPath);
+            const version = await this.getWAVersion();
+            const sock = (0, baileys_1.default)({
+                version,
+                auth: state,
+                printQRInTerminal: false,
+                markOnlineOnConnect: false, // Must be false for pairing
+                browser: ['Sendr', 'Chrome', '124.0.0'],
+                connectTimeoutMs: 30000,
+            });
+            this.sockets.set(botId, sock);
+            this.setupEventHandlers(sock, bot, saveCreds);
+            // Wait briefly for open connection before requesting code
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Request pairing code from WA
+            const code = await sock.requestPairingCode(cleanPhone);
+            const formattedCode = `${code.slice(0, 4)}-${code.slice(4)}`;
+            const expiresAt = new Date(Date.now() + 120000).toISOString();
+            logger_1.logger.info('✅ Pairing code generated', { bot_id: botId, code: formattedCode });
+            this.pairingCodes.set(botId, { code: formattedCode, expires_at: expiresAt });
+            setTimeout(() => this.reconnecting.delete(botId), 10000);
+            return { code: formattedCode, phone: cleanPhone, expires_at: expiresAt };
+        }
+        catch (error) {
+            logger_1.logger.error('Failed to request pairing code', { error, bot_id: botId });
+            this.sockets.delete(botId);
+            this.reconnecting.delete(botId);
             throw error;
         }
     }
@@ -607,16 +1020,14 @@ class BaileysWhatsAppAdapter {
         // @ts-ignore - accessing internal state
         const connectionState = sock.ws?.readyState;
         // WebSocket.OPEN = 1, WebSocket.CLOSED = 3
+        // NOTE: Do NOT delete socket or update DB here - this method should be
+        // read-only. Destructive cleanup is handled by the 'connection.close' event.
+        // Deleting the socket here caused race conditions where transient states
+        // during sends would permanently destroy the connection.
         if (connectionState !== 1) {
             logger_1.logger.warn('Socket exists but WebSocket is not open', {
                 bot_id: botId,
                 ws_state: connectionState
-            });
-            // Clean up disconnected socket
-            this.sockets.delete(botId);
-            // Update database status
-            await botRepository_1.botRepository.update(botId, {
-                status: 'disconnected',
             });
             return { status: 'disconnected' };
         }
@@ -694,32 +1105,53 @@ class BaileysWhatsAppAdapter {
             const hasSession = this.hasValidSession(botId);
             // Re-initialize if: (1) connected status, OR (2) has valid session file
             if (bot && (bot.status === 'connected' || hasSession)) {
-                logger_1.logger.info('🔄 Attempting to re-initialize bot...', {
-                    bot_id: botId,
-                    bot_name: bot.name,
-                    bot_status: bot.status,
-                    has_valid_session: hasSession
-                });
-                // Re-initialize the bot
-                await this.initializeBot(botId);
-                // Wait for connection to establish with retries
-                let connected = false;
-                for (let i = 0; i < 10; i++) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    sock = this.sockets.get(botId);
-                    if (sock) {
-                        // Also check if connection is actually open
-                        const botStatus = await botRepository_1.botRepository.findById(botId);
-                        if (botStatus?.status === 'connected') {
-                            connected = true;
-                            logger_1.logger.info('✅ Bot re-initialized and connected', { bot_id: botId, attempt: i + 1 });
-                            break;
+                // Skip if reconnect is already in progress
+                if (this.reconnecting.has(botId)) {
+                    logger_1.logger.warn('⏳ Reconnect already in progress, waiting...', { bot_id: botId });
+                    // Wait for ongoing reconnect to finish (up to 35 seconds)
+                    for (let i = 0; i < 70; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        sock = this.sockets.get(botId);
+                        if (sock) {
+                            const botStatus = await botRepository_1.botRepository.findById(botId);
+                            if (botStatus?.status === 'connected') {
+                                logger_1.logger.info('✅ Reconnect completed, proceeding with send', { bot_id: botId });
+                                break;
+                            }
                         }
                     }
+                    if (!sock) {
+                        throw new Error(`Bot reconnection in progress but timed out: ${botId}`);
+                    }
                 }
-                if (!connected || !sock) {
-                    logger_1.logger.error('❌ Re-initialization failed - bot not connected after retries', { bot_id: botId });
-                    throw new Error(`Bot not connected: ${botId}. Please wait for connection or reconnect.`);
+                else {
+                    logger_1.logger.info('🔄 Attempting to re-initialize bot...', {
+                        bot_id: botId,
+                        bot_name: bot.name,
+                        bot_status: bot.status,
+                        has_valid_session: hasSession
+                    });
+                    // Re-initialize the bot
+                    await this.initializeBot(botId);
+                    // Wait for connection to establish with retries
+                    let connected = false;
+                    for (let i = 0; i < 10; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        sock = this.sockets.get(botId);
+                        if (sock) {
+                            // Also check if connection is actually open
+                            const botStatus = await botRepository_1.botRepository.findById(botId);
+                            if (botStatus?.status === 'connected') {
+                                connected = true;
+                                logger_1.logger.info('✅ Bot re-initialized and connected', { bot_id: botId, attempt: i + 1 });
+                                break;
+                            }
+                        }
+                    }
+                    if (!connected || !sock) {
+                        logger_1.logger.error('❌ Re-initialization failed - bot not connected after retries', { bot_id: botId });
+                        throw new Error(`Bot not connected: ${botId}. Please wait for connection or reconnect.`);
+                    }
                 }
             }
             else {
@@ -763,6 +1195,10 @@ class BaileysWhatsAppAdapter {
                 else if (message.media_url) {
                     media = { url: message.media_url };
                 }
+                else if (message.buffer) {
+                    media = message.buffer;
+                    mimetype = message.mimetype || 'image/jpeg';
+                }
                 if (!media)
                     throw new Error('Invalid media configuration');
                 const payload = { image: media, caption: message.caption };
@@ -770,6 +1206,60 @@ class BaileysWhatsAppAdapter {
                     payload.mimetype = mimetype;
                 result = await sock.sendMessage(jid, payload);
                 logger_1.logger.info('✅ Image message sent successfully', {
+                    bot_id: botId,
+                    recipient: jid,
+                    message_id: result?.key?.id
+                });
+            }
+            else if (message.type === 'document') {
+                let media;
+                let mimetype = 'application/octet-stream';
+                const filename = message.filename || 'file';
+                if (message.media_url?.startsWith('data:')) {
+                    const matches = message.media_url.match(/^data:([^;]+);base64,(.+)$/);
+                    if (matches && matches[2]) {
+                        media = Buffer.from(matches[2], 'base64');
+                        mimetype = matches[1];
+                    }
+                }
+                else if (message.media_url) {
+                    media = { url: message.media_url };
+                }
+                else if (message.buffer) {
+                    media = message.buffer;
+                    mimetype = message.mimetype || 'application/octet-stream';
+                }
+                if (!media)
+                    throw new Error('Invalid media configuration for document');
+                const docPayload = {
+                    document: media,
+                    mimetype,
+                    fileName: filename,
+                    caption: message.caption
+                };
+                result = await sock.sendMessage(jid, docPayload);
+                logger_1.logger.info('✅ Document message sent successfully', {
+                    bot_id: botId,
+                    recipient: jid,
+                    filename,
+                    message_id: result?.key?.id
+                });
+            }
+            else if (message.type === 'video') {
+                let media;
+                let mimetype = 'video/mp4';
+                if (message.buffer) {
+                    media = message.buffer;
+                    mimetype = message.mimetype || 'video/mp4';
+                }
+                else if (message.media_url) {
+                    media = { url: message.media_url };
+                }
+                if (!media)
+                    throw new Error('Invalid media configuration for video');
+                const videoPayload = { video: media, mimetype, caption: message.caption };
+                result = await sock.sendMessage(jid, videoPayload);
+                logger_1.logger.info('✅ Video message sent successfully', {
                     bot_id: botId,
                     recipient: jid,
                     message_id: result?.key?.id
@@ -844,6 +1334,54 @@ class BaileysWhatsAppAdapter {
      */
     getSocket(botId) {
         return this.sockets.get(botId);
+    }
+    /**
+     * Get cached contacts for a bot.
+     */
+    getContactsForBot(botId) {
+        return this.contactsCache.get(botId) || new Map();
+    }
+    /**
+     * Get all cached chats for a bot (individual + groups).
+     * Falls back to file-based store if in-memory cache is empty.
+     */
+    getChatsForBot(botId) {
+        const inMem = this.chatsCache.get(botId);
+        if (inMem && inMem.size > 0)
+            return inMem;
+        // Fallback: read from disk
+        const fromFile = this.readChatsFromFile(botId);
+        if (fromFile.size > 0) {
+            this.chatsCache.set(botId, fromFile); // warm in-memory cache
+        }
+        return fromFile;
+    }
+    /**
+     * Fetch all groups the bot is participating in via Baileys API.
+     */
+    async getAllGroupsForBot(botId) {
+        const sock = this.sockets.get(botId);
+        if (!sock)
+            return {};
+        try {
+            const groups = await sock.groupFetchAllParticipating();
+            return groups;
+        }
+        catch (err) {
+            logger_1.logger.warn('Failed to fetch groups for bot', { bot_id: botId, error: err });
+            return {};
+        }
+    }
+    /**
+     * Force bot to reconnect (triggers chats.set which refreshes the full chat list).
+     * Useful for sync when cache is empty.
+     */
+    async forceReconnect(botId) {
+        const sock = this.sockets.get(botId);
+        if (!sock)
+            throw new Error('Bot not connected');
+        logger_1.logger.info('🔄 Forcing bot reconnect for chat list refresh', { bot_id: botId });
+        sock.end(undefined); // triggers connection.close → auto-reconnect
     }
 }
 exports.whatsappAdapter = new BaileysWhatsAppAdapter();

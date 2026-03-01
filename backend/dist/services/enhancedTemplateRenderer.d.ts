@@ -12,16 +12,35 @@ export interface RenderContext {
     data: any[];
     globalVars?: Record<string, any>;
     timezone?: string;
+    sheetsData?: Record<string, any[]>;
 }
 declare class EnhancedTemplateRenderer {
     /**
      * Render template with data
      */
     render(template: string, context: RenderContext): string;
+    /**
+     * Process {{#filter items column="value"}}...{{/filter}} blocks
+     * Filters data inline and renders the inner content as a sub-digest
+     * Example: {{#filter items tipe="Jadwal"}}{{@index}}. *{{nama}}*{{/filter}}
+     */
+    private processFilterBlocks;
+    /**
+     * Process {{#section "sheetName"}}...{{/section}} blocks
+     * Each section can reference a different sheet and optionally filter data inline
+     *
+     * Syntax:
+     *   {{#section schedules}}...{{/section}}
+     *   {{#section schedules filter:Hari=@dayName}}...{{/section}}
+     *   {{#section deadlines filter:Deadline=within3days}}...{{/section}}
+     */
+    private processSectionBlocks;
     private processGroups;
     private processLoops;
     /**
      * Process simple inline conditionals like {{#if PropertyName}}...{{/if}}
+     * Supports both single-word and multi-word property names: {{#if Tugas}}, {{#if Mata Kuliah}}
+     * Uses fuzzy key matching (case-insensitive) same as replaceItemProperties
      */
     private processInlineConditionals;
     /**

@@ -6,7 +6,7 @@
  */
 export interface FilterCondition {
     column: string;
-    operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'greater_than' | 'less_than' | 'between' | 'in_list' | 'is_empty' | 'not_empty' | 'date_equals' | 'date_before' | 'date_after' | 'date_between' | 'date_today' | 'date_within_days';
+    operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'greater_than' | 'less_than' | 'between' | 'in_list' | 'is_empty' | 'not_empty' | 'date_equals' | 'date_before' | 'date_after' | 'date_between' | 'date_today' | 'date_within_days' | 'day_equals_today' | 'date_within_hours';
     value?: any;
     value2?: any;
     caseInsensitive?: boolean;

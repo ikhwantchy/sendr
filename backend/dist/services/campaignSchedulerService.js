@@ -167,6 +167,11 @@ class CampaignSchedulerService {
                     messagesInBatch = 0;
                     logger_1.logger.info(`📣 Batch pause: ${batchPause}s after ${antiSpamConfig.batchSize} messages`);
                 }
+                // For WABA template campaigns, no anti-spam delay needed (Meta handles rate limits)
+                const isWabaTemplate = campaign.campaign_type === 'template';
+                if (isWabaTemplate) {
+                    currentDelay = messagesInBatch * 500; // 500ms stagger for WABA
+                }
                 // Queue the message
                 await campaignQueue.add('send-campaign-message', {
                     campaign_id: campaignId,
@@ -177,6 +182,11 @@ class CampaignSchedulerService {
                     variables: JSON.parse(recipient.variables || '{}'),
                     template: campaign.message_template,
                     image_url: campaign.image_url,
+                    // WABA template fields
+                    campaign_type: campaign.campaign_type || 'freetext',
+                    template_name: campaign.template_name,
+                    template_language: campaign.template_language || 'id',
+                    template_components_json: campaign.template_components_json,
                 }, {
                     delay: currentDelay,
                     attempts: 3,

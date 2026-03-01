@@ -20,6 +20,7 @@ import {
     SidebarSimple,     // Toggle sidebar icon
     Sun,
     Moon,
+    ChatsCircle,       // Inbox
     IconProps
 } from '@phosphor-icons/react'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -89,6 +90,7 @@ export default function Sidebar() {
     const navigation = useMemo(() => {
         const base: Array<{ name: string, href: string, icon: PhosphorIcon }> = [
             { name: 'Dashboard', href: '/dashboard', icon: SquaresFour },
+            { name: 'Inbox', href: '/dashboard/inbox', icon: ChatsCircle },
             { name: 'Bots', href: '/dashboard/bots', icon: Robot },
         ]
 
@@ -126,14 +128,14 @@ export default function Sidebar() {
 
     const bottomNavigation = useMemo(() => {
         const items: Array<{ name: string, href: string, icon: PhosphorIcon }> = []
-        
+
         // API Key - admin only
         if (isAdmin) {
             items.push({ name: 'Get API Key', href: '/dashboard/api-keys', icon: Key })
             // Settings - admin only
             items.push({ name: 'Settings', href: '/dashboard/settings', icon: GearSix })
         }
-        
+
         return items
     }, [isAdmin])
 

@@ -146,7 +146,9 @@ async function simulateTyping(messageLength) {
  * Campaign Message Worker
  */
 campaignQueue_1.campaignQueue.process('send-campaign-message', 1, async (job) => {
-    const { campaign_id, recipient_id, bot_id, phone, name, variables, template, image_url, } = job.data;
+    const { campaign_id, recipient_id, bot_id, phone, name, variables, template, image_url, 
+    // WABA fields
+    campaign_type, template_name, template_language, template_components_json, } = job.data;
     logger_1.logger.info('📣 Processing campaign message', {
         job_id: job.id,
         campaign_id,
@@ -192,26 +194,69 @@ campaignQueue_1.campaignQueue.process('send-campaign-message', 1, async (job) =>
         if (!formattedPhone.includes('@')) {
             formattedPhone = formattedPhone + '@s.whatsapp.net';
         }
-        // Import WhatsApp adapter
-        const { whatsappAdapter } = await Promise.resolve().then(() => __importStar(require('../adapters/whatsapp/whatsappAdapter.baileys')));
+        // Import adapter factory
+        const { getAdapterForBot } = await Promise.resolve().then(() => __importStar(require('../adapters/whatsapp/whatsappAdapterFactory')));
+        const adapter = await getAdapterForBot(bot_id);
         // Send message
         let sentResult;
-        if (image_url) {
-            // Log image info for debugging
-            const isBase64 = image_url.startsWith('data:');
-            logger_1.logger.info('📣 Sending image message', {
-                job_id: job.id,
-                isBase64,
-                imageLength: image_url.length,
+        if (campaign_type === 'template' && template_name) {
+            // ─── WABA Template Message ───────────────────────
+            // Build template components with variable substitution
+            let components = [];
+            if (template_components_json) {
+                try {
+                    const componentsDef = typeof template_components_json === 'string'
+                        ? JSON.parse(template_components_json)
+                        : template_components_json;
+                    components = componentsDef.map((comp) => ({
+                        type: comp.type,
+                        sub_type: comp.sub_type,
+                        index: comp.index,
+                        parameters: (comp.parameters || []).map((p) => ({
+                            type: 'text',
+                            text: variables[p.variable] || p.default || '',
+                        })),
+                    }));
+                }
+                catch (e) {
+                    logger_1.logger.warn('Failed to parse template components', { error: e });
+                }
+            }
+            sentResult = await adapter.sendMessage(bot_id, phone, {
+                type: 'template',
+                template_name,
+                template_language: template_language || 'id',
+                template_components: components,
             });
-            sentResult = await whatsappAdapter.sendMessage(bot_id, formattedPhone, {
+        }
+        else if (image_url) {
+            // ─── Image Message (Baileys) ────────────────────
+            const isBase64 = image_url.startsWith('data:');
+            logger_1.logger.info('📣 Sending image message', { job_id: job.id, isBase64, imageLength: image_url.length });
+            // Format phone for Baileys
+            let formattedPhone = phone.replace(/\D/g, '');
+            if (formattedPhone.startsWith('0'))
+                formattedPhone = '62' + formattedPhone.slice(1);
+            else if (formattedPhone.startsWith('8'))
+                formattedPhone = '62' + formattedPhone;
+            if (!formattedPhone.includes('@'))
+                formattedPhone = formattedPhone + '@s.whatsapp.net';
+            sentResult = await adapter.sendMessage(bot_id, formattedPhone, {
                 type: 'image',
                 media_url: image_url,
                 caption: message,
             });
         }
         else {
-            sentResult = await whatsappAdapter.sendMessage(bot_id, formattedPhone, {
+            // ─── Text Message (Baileys) ─────────────────────
+            let formattedPhone = phone.replace(/\D/g, '');
+            if (formattedPhone.startsWith('0'))
+                formattedPhone = '62' + formattedPhone.slice(1);
+            else if (formattedPhone.startsWith('8'))
+                formattedPhone = '62' + formattedPhone;
+            if (!formattedPhone.includes('@'))
+                formattedPhone = formattedPhone + '@s.whatsapp.net';
+            sentResult = await adapter.sendMessage(bot_id, formattedPhone, {
                 type: 'text',
                 content: message,
             });

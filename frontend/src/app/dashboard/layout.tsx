@@ -7,6 +7,7 @@ import { MessageCircle, HelpCircle } from 'lucide-react'
 import { api } from '@/lib/api'
 import BotTabsHeader from '@/components/BotTabsHeader'
 import BotDetailTopBar from '@/components/BotDetailTopBar'
+import { cn } from '@/lib/utils'
 
 export default function DashboardLayout({
     children,
@@ -21,6 +22,8 @@ export default function DashboardLayout({
 
     // Check if current page is bot detail page
     const isBotDetailPage = pathname?.match(/^\/dashboard\/bots\/[^/]+$/)
+    // Inbox page - full width, no padding
+    const isInboxPage = pathname === '/dashboard/inbox'
 
     // Check if current page should hide sidebar (fullscreen mode)
     const isFullscreenPage = pathname?.includes('/reminders/create') ||
@@ -86,12 +89,12 @@ export default function DashboardLayout({
     }
 
     return (
-        <div className="flex min-h-screen bg-zinc-50 dark:bg-black overflow-hidden">
+        <div className={cn("flex bg-zinc-50 dark:bg-black overflow-hidden", isInboxPage ? "h-screen" : "min-h-screen")}>
             <Suspense fallback={<div className="w-20 md:w-64 bg-white dark:bg-black border-r border-zinc-200 dark:border-zinc-800" />}>
                 <Sidebar />
             </Suspense>
             <main
-                className={`flex-1 flex flex-col pt-16 md:pt-0 transition-all duration-300 overflow-hidden ${isBotDetailPage ? 'md:ml-20' : (sidebarExpanded ? 'md:ml-64' : 'md:ml-20')
+                className={`flex-1 flex flex-col pt-16 md:pt-0 transition-all duration-300 overflow-hidden min-h-0 ${isBotDetailPage ? 'md:ml-20' : (sidebarExpanded ? 'md:ml-64' : 'md:ml-20')
                     }`}
             >
                 {/* Header - Show tabs on mobile for bot detail pages */}
@@ -130,12 +133,12 @@ export default function DashboardLayout({
                 </header>
 
                 {/* Main Content */}
-                <div className="flex-1 overflow-auto">
+                <div className={cn("min-h-0", isInboxPage ? "flex-1 overflow-hidden flex flex-col" : "flex-1 overflow-auto")}>
                     <div
-                        className={`transition-all duration-200 ease-out ${isNavigating ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
+                        className={`transition-all duration-200 ease-out ${isInboxPage ? 'flex-1 flex flex-col min-h-0' : ''} ${isNavigating ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
                             }`}
                     >
-                        <div className="max-w-[1440px] mx-auto w-full">
+                        {isInboxPage ? (
                             <Suspense fallback={
                                 <div className="flex items-center justify-center p-12">
                                     <div className="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-800 border-t-zinc-600 dark:border-t-white rounded-full animate-spin" />
@@ -143,7 +146,17 @@ export default function DashboardLayout({
                             }>
                                 {children}
                             </Suspense>
-                        </div>
+                        ) : (
+                            <div className="max-w-[1440px] mx-auto w-full">
+                                <Suspense fallback={
+                                    <div className="flex items-center justify-center p-12">
+                                        <div className="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-800 border-t-zinc-600 dark:border-t-white rounded-full animate-spin" />
+                                    </div>
+                                }>
+                                    {children}
+                                </Suspense>
+                            </div>
+                        )}
                     </div>
                 </div>
             </main>

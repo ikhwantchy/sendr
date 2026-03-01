@@ -9,6 +9,7 @@ import makeWASocket, {
     fetchLatestBaileysVersion,
     WASocket,
     WAMessage,
+    downloadMediaMessage
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import QRCode from 'qrcode';
@@ -30,10 +31,53 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
     private reconnecting: Set<string> = new Set();
     private lidToPhone: Map<string, string> = new Map();
     private sessionPath: string;
-    private cachedWAVersion: [number, number, number] | null = null; // Cache WA version to avoid repeated fetches
+    private cachedWAVersion: [number, number, number] | null = null;
+    // Cache of contacts per bot: botId -> Map<jid, contact>
+    private contactsCache: Map<string, Map<string, any>> = new Map();
+    // Cache of all chats per bot: botId -> Map<jid, ChatMetadata> (includes individual + groups)
+    private chatsCache: Map<string, Map<string, any>> = new Map();
 
     constructor() {
         this.sessionPath = process.env.WA_SESSION_PATH || './sessions';
+    }
+
+    /** Path to the chats store file for a bot */
+    private chatsStorePath(botId: string): string {
+        return path.join(this.sessionPath, `session-${botId}`, 'chats-store.json');
+    }
+
+    /** Save chats cache to disk so it persists across restarts */
+    private saveChatsToFile(botId: string): void {
+        try {
+            const cache = this.chatsCache.get(botId);
+            if (!cache || cache.size === 0) return;
+            const data: Record<string, any> = {};
+            for (const [jid, chat] of cache.entries()) {
+                data[jid] = chat;
+            }
+            const filePath = this.chatsStorePath(botId);
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+            logger.info(`💾 Saved ${cache.size} chats to disk`, { bot_id: botId });
+        } catch (err) {
+            logger.warn('Failed to save chats store to file', { bot_id: botId, error: err });
+        }
+    }
+
+    /** Read chats from disk file (used when in-memory cache is empty) */
+    private readChatsFromFile(botId: string): Map<string, any> {
+        const result = new Map<string, any>();
+        try {
+            const filePath = this.chatsStorePath(botId);
+            if (!fs.existsSync(filePath)) return result;
+            const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            for (const [jid, chat] of Object.entries(data)) {
+                result.set(jid, chat);
+            }
+            logger.info(`📂 Loaded ${result.size} chats from disk`, { bot_id: botId });
+        } catch (err) {
+            logger.warn('Failed to read chats store from file', { bot_id: botId, error: err });
+        }
+        return result;
     }
 
     /**
@@ -292,6 +336,34 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                     );
 
                     logger.info('Connection event emitted', { bot_id: botId });
+
+                    // ── Auto-sync groups to inbox after connect (with delay for WA to settle) ──
+                    setTimeout(async () => {
+                        try {
+                            logger.info('🔄 Auto-syncing groups to inbox...', { bot_id: botId });
+                            const { inboxRepository } = await import('../../database/repositories/inboxRepository');
+                            const groups = await this.getAllGroupsForBot(botId);
+                            let synced = 0;
+                            for (const [jid, meta] of Object.entries(groups)) {
+                                if (!jid.endsWith('@g.us')) continue;
+                                const existing = await inboxRepository.findConversationByContact(botId, jid);
+                                if (existing) continue;
+                                await inboxRepository.createConversation({
+                                    tenant_id: tenantId,
+                                    bot_id: botId,
+                                    contact_number: jid,
+                                    contact_name: (meta as any).subject || 'Group',
+                                    status: 'open',
+                                });
+                                synced++;
+                            }
+                            if (synced > 0) {
+                                logger.info(`✅ Auto-synced ${synced} groups to inbox`, { bot_id: botId });
+                            }
+                        } catch (syncErr) {
+                            logger.warn('Auto group sync failed (non-critical)', { bot_id: botId, error: syncErr });
+                        }
+                    }, 5000);
                 } catch (error) {
                     logger.error('Failed to update bot status on connection', { error, bot_id: botId });
                 }
@@ -408,17 +480,21 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
         // Credentials update
         sock.ev.on('creds.update', saveCreds);
 
-        // ✅ AUTO-CAPTURE CONTACTS (LID → Phone mapping)
+        // ✅ AUTO-CAPTURE CONTACTS (LID → Phone mapping + contacts cache)
         sock.ev.on('contacts.upsert', async (contacts) => {
             logger.info('📇 Contacts upsert event', { bot_id: botId, count: contacts.length });
+
+            // Update contacts cache
+            if (!this.contactsCache.has(botId)) this.contactsCache.set(botId, new Map());
+            const cache = this.contactsCache.get(botId)!;
+            for (const c of contacts) {
+                if (c.id) cache.set(c.id, c);
+            }
+
             try {
                 const { lidPhoneMappingService } = await import('../../services/lidPhoneMappingService');
 
                 for (const contact of contacts) {
-                    // contact.id could be either LID or phone format
-                    // contact.lid is the LID if the contact has one
-                    // We need to map LID ↔ Phone
-
                     const contactId = contact.id || '';
                     const lidValue = (contact as any).lid;
 
@@ -430,7 +506,6 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                         raw: JSON.stringify(contact)
                     });
 
-                    // If contact has both phone JID and LID, save mapping
                     if (contactId.includes('@s.whatsapp.net') && lidValue) {
                         const phone = contactId.split('@')[0];
                         const lid = lidValue.split('@')[0];
@@ -447,6 +522,69 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             } catch (err) {
                 logger.error('Failed to process contacts upsert', { error: err });
             }
+        });
+
+        // ✅ CONTACTS SET (initial bulk load on startup)
+        sock.ev.on('contacts.set' as any, async ({ contacts }: any) => {
+            logger.info('📇 Contacts set event (initial load)', { bot_id: botId, count: contacts?.length || 0 });
+            if (!this.contactsCache.has(botId)) this.contactsCache.set(botId, new Map());
+            const cache = this.contactsCache.get(botId)!;
+            if (Array.isArray(contacts)) {
+                for (const c of contacts) {
+                    if (c.id) cache.set(c.id, c);
+                }
+            }
+        });
+
+        // ✅ CHATS SET (initial full chat list - includes ALL individual + group chats)
+        sock.ev.on('chats.set' as any, async ({ chats }: any) => {
+            logger.info('💬 Chats set event (initial load)', { bot_id: botId, count: chats?.length || 0 });
+            if (!this.chatsCache.has(botId)) this.chatsCache.set(botId, new Map());
+            const cache = this.chatsCache.get(botId)!;
+            if (Array.isArray(chats)) {
+                for (const c of chats) {
+                    if (c.id) cache.set(c.id, c);
+                }
+            }
+            // Persist to disk immediately
+            this.saveChatsToFile(botId);
+            // Auto-sync to inbox (non-blocking)
+            setImmediate(async () => {
+                try {
+                    const { inboxRepository } = await import('../../database/repositories/inboxRepository');
+                    let synced = 0;
+                    for (const [jid, chat] of cache.entries()) {
+                        if (jid.includes('status@broadcast') || jid.includes('newsletter')) continue;
+                        if (!jid.endsWith('@s.whatsapp.net') && !jid.endsWith('@g.us')) continue;
+                        const existing = await inboxRepository.findConversationByContact(botId, jid);
+                        if (existing) continue;
+                        const isGroup = jid.endsWith('@g.us');
+                        await inboxRepository.createConversation({
+                            tenant_id: tenantId,
+                            bot_id: botId,
+                            contact_number: jid,
+                            contact_name: chat.name || (isGroup ? 'Group' : jid.split('@')[0]),
+                            status: 'open',
+                        });
+                        synced++;
+                    }
+                    if (synced > 0) logger.info(`✅ Auto-synced ${synced} chats to inbox`, { bot_id: botId });
+                } catch (err) {
+                    logger.warn('Auto chat sync failed (chats.set)', { bot_id: botId, error: err });
+                }
+            });
+        });
+
+        // ✅ CHATS UPSERT (new chat or update)
+        sock.ev.on('chats.upsert' as any, (chats: any[]) => {
+            if (!this.chatsCache.has(botId)) this.chatsCache.set(botId, new Map());
+            const cache = this.chatsCache.get(botId)!;
+            for (const c of (Array.isArray(chats) ? chats : [])) {
+                if (c?.id) cache.set(c.id, c);
+            }
+            // Persist updated chats to disk (debounced by 5s to avoid too many writes)
+            clearTimeout((this as any)[`_saveChatTimer_${botId}`]);
+            (this as any)[`_saveChatTimer_${botId}`] = setTimeout(() => this.saveChatsToFile(botId), 5000);
         });
 
         // ✅ AUTO-DETECT GROUPS ON UPSERT
@@ -541,6 +679,7 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 timestamp
             });
 
+            const waMsgId = msg.key.id || `manual_${Date.now()}`;
             // NOTE: source MUST be 'auto_reply' because SQLite CHECK constraint restricts values.
             await query(`
                 INSERT INTO messages (
@@ -550,10 +689,54 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
             `, [
                 uuidv4(),
                 bot.id,
-                msg.key.id || `manual_${Date.now()}`,
+                waMsgId,
                 messageContent,
                 timestamp
             ]);
+
+            // Track for Inbox!
+            try {
+                const jid = msg.key.remoteJid || '';
+                const isGroup = jid.endsWith('@g.us');
+                let groupName: string | undefined;
+
+                if (isGroup) {
+                    try {
+                        const sock = this.sockets.get(bot.id);
+                        if (sock) {
+                            const metadata = await sock.groupMetadata(jid);
+                            groupName = metadata.subject;
+                        }
+                    } catch (e) {
+                        logger.warn('Failed to fetch group metadata for outbound', { error: (e as Error).message });
+                    }
+                }
+
+                await eventBus.emit(
+                    EventType.MESSAGE_SENT,
+                    {
+                        tenant_id: bot.tenant_id,
+                        bot_id: bot.id,
+                        channel: 'wa',
+                        group_id: isGroup ? jid : null,
+                        contact_id: jid,
+                        message: messageContent,
+                        timestamp: timestamp,
+                    },
+                    {
+                        wa_message_id: waMsgId,
+                        to: jid,
+                        message_type: 'text',
+                        content: messageContent,
+                        sender_type: 'bot', // Treat fromMe as bot/agent
+                        is_group: isGroup,
+                        group_name: groupName,
+                        sender_name: bot.name,
+                    }
+                );
+            } catch (err) {
+                logger.error('Failed to emit MESSAGE_SENT for tracking', { error: err });
+            }
         } catch (error) {
             logger.error('❌ Failed to log outbound manual message', { error });
         }
@@ -578,6 +761,21 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
 
             const remoteJid = msg.key.remoteJid || '';
             const senderId = msg.key.participant || msg.key.remoteJid || '';
+
+            // Fetch group metadata if group
+            let groupName: string | undefined;
+            if (remoteJid.endsWith('@g.us')) {
+                try {
+                    const sock = this.sockets.get(bot.id);
+                    if (sock) {
+                        // Optimistic caching or fetch
+                        const metadata = await sock.groupMetadata(remoteJid);
+                        groupName = metadata.subject;
+                    }
+                } catch (e) {
+                    logger.warn('Failed to fetch group metadata for incoming', { error: (e as Error).message });
+                }
+            }
 
             // Try to resolve LID to phone number
             let senderPhone: string | undefined;
@@ -620,6 +818,7 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 message_type: 'text',
                 content: messageContent,
                 is_group: remoteJid.endsWith('@g.us') || false,
+                group_name: groupName,
                 sender_id: senderId,
                 sender_name: msg.pushName || 'Unknown',
                 timestamp: new Date((msg.messageTimestamp as number) * 1000).toISOString(),
@@ -639,13 +838,67 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 content: contextInfo.quotedMessage.conversation || contextInfo.quotedMessage.extendedTextMessage?.text
             } : undefined;
 
+            const messageTypeKey = Object.keys(msg.message || {})[0];
+            let media_meta: any;
+
+            if (messageTypeKey && ['imageMessage', 'videoMessage', 'documentMessage', 'audioMessage', 'stickerMessage'].includes(messageTypeKey)) {
+                try {
+                    const sock = this.sockets.get(bot.id);
+                    const buffer = await downloadMediaMessage(
+                        msg,
+                        'buffer',
+                        {},
+                        {
+                            logger: logger as any,
+                            // pass the socket instance
+                            reuploadRequest: sock?.updateMediaMessage
+                        }
+                    );
+                    const mediaMsgObj = (msg.message as any)[messageTypeKey];
+                    const originalName = mediaMsgObj?.fileName || `${messageTypeKey}.${messageTypeKey === 'imageMessage' ? 'jpg' : 'bin'}`;
+                    const mimetype = mediaMsgObj?.mimetype;
+                    let ext = path.extname(originalName);
+                    if (!ext && mimetype) {
+                        const mimeExt = mimetype.split('/')[1]?.split(';')[0];
+                        if (mimeExt) ext = `.${mimeExt}`;
+                    }
+                    if (!ext) ext = '.bin';
+
+                    const uniqueFilename = `${uuidv4()}${ext}`;
+                    const uploadDir = path.join(__dirname, '../../../../data/uploads');
+                    if (!fs.existsSync(uploadDir)) {
+                        fs.mkdirSync(uploadDir, { recursive: true });
+                    }
+                    const filePath = path.join(uploadDir, uniqueFilename);
+                    fs.writeFileSync(filePath, buffer as Buffer);
+
+                    let normalizedType = 'document';
+                    if (messageTypeKey === 'imageMessage' || messageTypeKey === 'stickerMessage') normalizedType = 'image';
+                    if (messageTypeKey === 'videoMessage') normalizedType = 'video';
+                    if (messageTypeKey === 'audioMessage') normalizedType = 'audio';
+
+                    incomingMessage.message_type = normalizedType as any;
+
+                    media_meta = {
+                        filename: originalName,
+                        mimetype,
+                        file_size: (buffer as Buffer).length,
+                        message_type: normalizedType,
+                        media_url: `/api/public/uploads/${uniqueFilename}`
+                    };
+                    logger.info(`💾 Downloaded incoming media`, { bot_id: bot.id, file: uniqueFilename });
+                } catch (e: any) {
+                    logger.error('Failed to download incoming media', { error: e.message, bot_id: bot.id });
+                }
+            }
+
             logger.info('✅ Incoming message parsed', {
                 bot_id: bot.id,
                 from: incomingMessage.from,
                 content: incomingMessage.content,
                 mentions: mentioned_jids,
                 has_quote: !!quoted_message,
-                message_type: Object.keys(msg.message || {})[0],
+                message_type: messageTypeKey,
             });
 
             // Log INBOUND message to database
@@ -682,7 +935,8 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                 {
                     ...incomingMessage,
                     mentioned_jids,
-                    quoted_message
+                    quoted_message,
+                    media_meta
                 } as MessageReceivedPayload
             );
         } catch (error) {
@@ -1035,6 +1289,9 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
                     }
                 } else if (message.media_url) {
                     media = { url: message.media_url };
+                } else if ((message as any).buffer) {
+                    media = (message as any).buffer;
+                    mimetype = (message as any).mimetype || 'image/jpeg';
                 }
 
                 if (!media) throw new Error('Invalid media configuration');
@@ -1044,6 +1301,61 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
 
                 result = await sock.sendMessage(jid, payload);
                 logger.info('✅ Image message sent successfully', {
+                    bot_id: botId,
+                    recipient: jid,
+                    message_id: result?.key?.id
+                });
+            } else if (message.type === 'document') {
+                let media: any;
+                let mimetype: string = 'application/octet-stream';
+                const filename = message.filename || 'file';
+
+                if (message.media_url?.startsWith('data:')) {
+                    const matches = message.media_url.match(/^data:([^;]+);base64,(.+)$/);
+                    if (matches && matches[2]) {
+                        media = Buffer.from(matches[2], 'base64');
+                        mimetype = matches[1];
+                    }
+                } else if (message.media_url) {
+                    media = { url: message.media_url };
+                } else if ((message as any).buffer) {
+                    media = (message as any).buffer;
+                    mimetype = (message as any).mimetype || 'application/octet-stream';
+                }
+
+                if (!media) throw new Error('Invalid media configuration for document');
+
+                const docPayload: any = {
+                    document: media,
+                    mimetype,
+                    fileName: filename,
+                    caption: message.caption
+                };
+
+                result = await sock.sendMessage(jid, docPayload);
+                logger.info('✅ Document message sent successfully', {
+                    bot_id: botId,
+                    recipient: jid,
+                    filename,
+                    message_id: result?.key?.id
+                });
+            } else if (message.type === 'video') {
+                let media: any;
+                let mimetype: string = 'video/mp4';
+
+                if ((message as any).buffer) {
+                    media = (message as any).buffer;
+                    mimetype = (message as any).mimetype || 'video/mp4';
+                } else if (message.media_url) {
+                    media = { url: message.media_url };
+                }
+
+                if (!media) throw new Error('Invalid media configuration for video');
+
+                const videoPayload: any = { video: media, mimetype, caption: message.caption };
+
+                result = await sock.sendMessage(jid, videoPayload);
+                logger.info('✅ Video message sent successfully', {
                     bot_id: botId,
                     recipient: jid,
                     message_id: result?.key?.id
@@ -1125,6 +1437,54 @@ class BaileysWhatsAppAdapter implements IWhatsAppAdapter {
      */
     public getSocket(botId: string): WASocket | undefined {
         return this.sockets.get(botId);
+    }
+
+    /**
+     * Get cached contacts for a bot.
+     */
+    public getContactsForBot(botId: string): Map<string, any> {
+        return this.contactsCache.get(botId) || new Map();
+    }
+
+    /**
+     * Get all cached chats for a bot (individual + groups).
+     * Falls back to file-based store if in-memory cache is empty.
+     */
+    public getChatsForBot(botId: string): Map<string, any> {
+        const inMem = this.chatsCache.get(botId);
+        if (inMem && inMem.size > 0) return inMem;
+        // Fallback: read from disk
+        const fromFile = this.readChatsFromFile(botId);
+        if (fromFile.size > 0) {
+            this.chatsCache.set(botId, fromFile); // warm in-memory cache
+        }
+        return fromFile;
+    }
+
+    /**
+     * Fetch all groups the bot is participating in via Baileys API.
+     */
+    public async getAllGroupsForBot(botId: string): Promise<Record<string, any>> {
+        const sock = this.sockets.get(botId);
+        if (!sock) return {};
+        try {
+            const groups = await sock.groupFetchAllParticipating();
+            return groups;
+        } catch (err) {
+            logger.warn('Failed to fetch groups for bot', { bot_id: botId, error: err });
+            return {};
+        }
+    }
+
+    /**
+     * Force bot to reconnect (triggers chats.set which refreshes the full chat list).
+     * Useful for sync when cache is empty.
+     */
+    public async forceReconnect(botId: string): Promise<void> {
+        const sock = this.sockets.get(botId);
+        if (!sock) throw new Error('Bot not connected');
+        logger.info('🔄 Forcing bot reconnect for chat list refresh', { bot_id: botId });
+        sock.end(undefined); // triggers connection.close → auto-reconnect
     }
 }
 

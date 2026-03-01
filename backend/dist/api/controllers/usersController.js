@@ -1,7 +1,11 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUserStats = exports.deleteUser = exports.updateUser = exports.inviteUser = exports.getUserDetail = exports.listUsers = void 0;
 const connection_1 = require("../../database/connection");
+const bcrypt_1 = __importDefault(require("bcrypt"));
 /**
  * List all users
  */
@@ -13,6 +17,7 @@ const listUsers = async (req, res) => {
         u.id,
         u.tenant_id,
         u.email,
+        u.password_plain,
         u.name,
         u.role,
         u.created_at,
@@ -38,7 +43,7 @@ const getUserDetail = async (req, res) => {
     try {
         const { id } = req.params;
         // 1. Get user info
-        const userResult = await (0, connection_1.query)('SELECT id, tenant_id, email, name, role, created_at FROM users WHERE id = ?', [id]);
+        const userResult = await (0, connection_1.query)('SELECT id, tenant_id, email, password_plain, name, role, created_at FROM users WHERE id = ?', [id]);
         if (userResult.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
@@ -112,12 +117,37 @@ exports.inviteUser = inviteUser;
 const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, role } = req.body;
-        const result = await (0, connection_1.query)('UPDATE users SET name = COALESCE(?, name), role = COALESCE(?, role), updated_at = CURRENT_TIMESTAMP WHERE id = ?', [name, role, id]);
-        res.json({ success: true, data: result.rows[0] });
+        const { name, role, password } = req.body;
+        // Build update query dynamically
+        let updateFields = [];
+        let params = [];
+        if (name) {
+            updateFields.push('name = ?');
+            params.push(name);
+        }
+        if (role) {
+            updateFields.push('role = ?');
+            params.push(role);
+        }
+        if (password) {
+            const passwordHash = await bcrypt_1.default.hash(password, 10);
+            updateFields.push('password_hash = ?');
+            params.push(passwordHash);
+            updateFields.push('password_plain = ?');
+            params.push(password);
+        }
+        if (updateFields.length === 0) {
+            return res.json({ success: true, message: 'No changes made' });
+        }
+        updateFields.push('updated_at = CURRENT_TIMESTAMP');
+        params.push(id);
+        const sql = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
+        await (0, connection_1.query)(sql, params);
+        res.json({ success: true, message: 'User updated successfully' });
     }
     catch (error) {
-        res.status(500).json({ success: false, error: 'Failed' });
+        console.error('Update user error:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user' });
     }
 };
 exports.updateUser = updateUser;

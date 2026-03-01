@@ -285,6 +285,48 @@ router.post('/:id/connect', (0, auth_1.requireRole)(['OWNER', 'ADMIN', 'OPERATOR
         });
     }
 });
+// POST /api/bots/:id/pair
+// Request a phone number pairing code — phone number can be provided in body or read from bot DB
+router.post('/:id/pair', (0, auth_1.requireRole)(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { phone_number } = req.body; // optional: user can provide phone directly on connect page
+        const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'OWNER';
+        let bot = await botRepository_1.botRepository.findById(id);
+        if (!bot)
+            return res.status(404).json({ success: false, error: 'Bot not found' });
+        if (bot.expires_at && new Date(bot.expires_at) < new Date()) {
+            return res.status(403).json({ success: false, error: 'Bot subscription has expired' });
+        }
+        if (!isAdmin && bot.tenant_id !== req.user.tenant_id) {
+            const permCheck = await (0, connection_1.query)(`SELECT 1 FROM bot_permissions WHERE user_id = ? AND bot_id = ? AND (can_edit = 1 OR can_edit = 'true')`, [req.user.id, id]);
+            if (permCheck.rows.length === 0)
+                return res.status(403).json({ success: false, error: 'Permission denied' });
+        }
+        // If phone_number provided in body (from connect page), save it to the bot first
+        if (phone_number) {
+            const cleanPhone = String(phone_number).replace(/\D/g, '');
+            if (!cleanPhone || cleanPhone.length < 7) {
+                return res.status(400).json({ success: false, error: 'Nomor HP tidak valid. Masukkan nomor dengan kode negara (contoh: 628123456789)' });
+            }
+            logger_1.logger.info('Saving phone number from connect page to bot', { bot_id: id, phone: cleanPhone });
+            await botRepository_1.botRepository.update(id, { phone_number: cleanPhone });
+        }
+        const pairingData = await whatsappAdapter_baileys_1.whatsappAdapter.requestPairingCode(id);
+        res.json({
+            success: true,
+            data: {
+                code: pairingData.code,
+                phone: pairingData.phone,
+                expires_at: pairingData.expires_at,
+            },
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Failed to generate pairing code', { error });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 /**
  * GET /api/bots/:id/status
  * Get bot connection status
@@ -496,6 +538,94 @@ router.post('/:id/sync-groups', async (req, res) => {
     }
     catch (error) {
         logger_1.logger.error('Failed to sync groups', { error });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+/**
+ * POST /api/bots/:id/meta/test-connection
+ * Test Meta Cloud API credentials
+ */
+router.post('/:id/meta/test-connection', (0, auth_1.requireRole)(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { phone_number_id, access_token, waba_id, app_secret } = req.body;
+        if (!phone_number_id || !access_token) {
+            return res.status(400).json({ success: false, error: 'Phone Number ID dan Access Token wajib diisi' });
+        }
+        const { metaCloudAdapter } = await Promise.resolve().then(() => __importStar(require('../../adapters/whatsapp/whatsappAdapter.meta-cloud')));
+        const result = await metaCloudAdapter.testConnection(id, {
+            phone_number_id,
+            access_token,
+            waba_id: waba_id || '',
+            app_secret: app_secret || undefined,
+        });
+        res.json({ success: result.success, data: result });
+    }
+    catch (error) {
+        logger_1.logger.error('Meta test-connection failed', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+/**
+ * POST /api/bots/:id/meta/save-config
+ * Save Meta Cloud API credentials to bot
+ */
+router.post('/:id/meta/save-config', (0, auth_1.requireRole)(['OWNER', 'ADMIN', 'OPERATOR', 'USER']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { phone_number_id, access_token, waba_id, app_secret } = req.body;
+        if (!phone_number_id || !access_token) {
+            return res.status(400).json({ success: false, error: 'Phone Number ID dan Access Token wajib diisi' });
+        }
+        // Test connection first
+        const { metaCloudAdapter } = await Promise.resolve().then(() => __importStar(require('../../adapters/whatsapp/whatsappAdapter.meta-cloud')));
+        const testResult = await metaCloudAdapter.testConnection(id, {
+            phone_number_id, access_token, waba_id: waba_id || '',
+        });
+        if (!testResult.success) {
+            return res.status(400).json({ success: false, error: testResult.error || 'Gagal terhubung ke Meta API' });
+        }
+        // Save config
+        const updated = await botRepository_1.botRepository.update(id, {
+            adapter_type: 'meta_cloud',
+            meta_phone_number_id: phone_number_id,
+            meta_access_token: access_token,
+            meta_waba_id: waba_id || null,
+            meta_app_secret: app_secret || null,
+            status: 'connected',
+            phone_number: testResult.phone_number || null,
+        });
+        // Initialize the adapter
+        await metaCloudAdapter.initializeBot(id);
+        res.json({ success: true, data: updated });
+    }
+    catch (error) {
+        logger_1.logger.error('Meta save-config failed', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+/**
+ * GET /api/bots/:id/meta/templates
+ * Fetch approved Meta message templates
+ */
+router.get('/:id/meta/templates', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const bot = await botRepository_1.botRepository.findById(id);
+        if (!bot)
+            return res.status(404).json({ success: false, error: 'Bot not found' });
+        if (bot.adapter_type !== 'meta_cloud') {
+            return res.status(400).json({ success: false, error: 'Bot ini bukan WABA bot' });
+        }
+        const { metaCloudAdapter } = await Promise.resolve().then(() => __importStar(require('../../adapters/whatsapp/whatsappAdapter.meta-cloud')));
+        if (!metaCloudAdapter.isInitialized(id)) {
+            await metaCloudAdapter.initializeBot(id);
+        }
+        const templates = await metaCloudAdapter.getApprovedTemplates(id);
+        res.json({ success: true, data: templates });
+    }
+    catch (error) {
+        logger_1.logger.error('Failed to get Meta templates', { error: error.message });
         res.status(500).json({ success: false, error: error.message });
     }
 });

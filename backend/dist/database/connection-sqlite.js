@@ -10,6 +10,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = void 0;
 exports.initDatabase = initDatabase;
 exports.saveDatabase = saveDatabase;
+exports.backupDatabase = backupDatabase;
+exports.restoreDatabase = restoreDatabase;
+exports.listBackups = listBackups;
 exports.query = query;
 exports.transaction = transaction;
 exports.closePool = closePool;
@@ -166,6 +169,7 @@ async function initSchema() {
       tenant_id TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      password_plain TEXT,
       name TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('OWNER', 'ADMIN', 'OPERATOR', 'USER', 'VIEWER')),
       permissions TEXT DEFAULT '{}',
@@ -450,6 +454,38 @@ async function initSchema() {
         FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
     );
 
+    -- Inbox Conversations
+    CREATE TABLE IF NOT EXISTS inbox_conversations (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        bot_id TEXT NOT NULL,
+        contact_number TEXT NOT NULL,
+        contact_name TEXT,
+        unread_count INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'open' CHECK(status IN ('open', 'closed', 'resolved')),
+        last_message_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+        FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+    );
+
+    -- Inbox Messages
+    CREATE TABLE IF NOT EXISTS inbox_messages (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL,
+        message_id TEXT,
+        sender_type TEXT NOT NULL CHECK(sender_type IN ('contact', 'bot', 'agent')),
+        sender_id TEXT,
+        content TEXT,
+        message_type TEXT DEFAULT 'text' CHECK(message_type IN ('text', 'image', 'video', 'audio', 'document', 'template')),
+        status TEXT DEFAULT 'sent' CHECK(status IN ('sent', 'delivered', 'read', 'failed')),
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (conversation_id) REFERENCES inbox_conversations(id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
     -- Insert default tenant
     INSERT OR IGNORE INTO tenants (id, name, slug) 
     VALUES ('default-tenant-id', 'Default Tenant', 'default');
@@ -665,6 +701,25 @@ async function initSchema() {
         _db.run(`CREATE INDEX IF NOT EXISTS idx_lid_phone_mappings_phone ON lid_phone_mappings(phone)`);
     }
     catch (e) { }
+    // Message Templates Table (WABA)
+    try {
+        _db.run(`
+        CREATE TABLE IF NOT EXISTS message_templates (
+            id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+            tenant_id TEXT NOT NULL,
+            bot_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            language TEXT NOT NULL DEFAULT 'id',
+            category TEXT NOT NULL DEFAULT 'MARKETING',
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            components_json TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+        )
+    `);
+    }
+    catch (e) { }
     // Apply migrations manually here
     const migrations = [
         "ALTER TABLE messages ADD COLUMN source TEXT DEFAULT 'auto_reply' CHECK(source IN ('auto_reply', 'campaign', 'reminder', 'inbound'))",
@@ -689,7 +744,21 @@ async function initSchema() {
         "ALTER TABLE tenants ADD COLUMN google_service_account TEXT",
         "ALTER TABLE tenants ADD COLUMN settings TEXT DEFAULT '{}'",
         "ALTER TABLE bots ADD COLUMN expires_at TEXT",
-        "ALTER TABLE bots ADD COLUMN expired_reason TEXT"
+        "ALTER TABLE bots ADD COLUMN expired_reason TEXT",
+        "ALTER TABLE users ADD COLUMN password_plain TEXT",
+        // WABA Support (Migration 016)
+        "ALTER TABLE bots ADD COLUMN adapter_type TEXT NOT NULL DEFAULT 'baileys'",
+        "ALTER TABLE bots ADD COLUMN meta_phone_number_id TEXT",
+        "ALTER TABLE bots ADD COLUMN meta_access_token TEXT",
+        "ALTER TABLE bots ADD COLUMN meta_waba_id TEXT",
+        "ALTER TABLE bots ADD COLUMN meta_app_secret TEXT",
+        "ALTER TABLE bots ADD COLUMN meta_business_id TEXT",
+        "ALTER TABLE campaigns ADD COLUMN campaign_type TEXT NOT NULL DEFAULT 'freetext'",
+        "ALTER TABLE campaigns ADD COLUMN template_name TEXT",
+        "ALTER TABLE campaigns ADD COLUMN template_language TEXT DEFAULT 'id'",
+        "ALTER TABLE campaigns ADD COLUMN template_components_json TEXT",
+        "ALTER TABLE inbox_messages ADD COLUMN sender_name TEXT",
+        "ALTER TABLE inbox_messages ADD COLUMN media_meta TEXT",
     ];
     for (const sql of migrations) {
         try {
@@ -735,26 +804,299 @@ async function initSchema() {
     catch (e) {
         logger_1.logger.warn('system_settings migration skipped', { error: e });
     }
+    // =====================================================================
+    // DATA CLEANUP MIGRATION: Remove legacy footer from all system prompts
+    // This runs on every startup to ensure no old footer strings survive.
+    // =====================================================================
+    try {
+        const FOOTER_PATTERNS = [
+            ' —— Automated Message powered by sendr.web.id',
+            '\n—— Automated Message powered by sendr.web.id',
+            '—— Automated Message powered by sendr.web.id',
+            '\n\n\n—\nAutomated Message\npowered by sendr.web.id',
+            '\n\n—\nAutomated System Randomizer\npowered by sendr.web.id',
+            ' —— Automated System Randomizer powered by sendr.web.id',
+            'powered by sendr.web.id',
+            '\n## 🔖 WATERMARK (WAJIB DI AKHIR)\n',
+        ];
+        function stripLegacyFooter(text) {
+            let result = text;
+            let changed = false;
+            for (const pattern of FOOTER_PATTERNS) {
+                while (result.includes(pattern)) {
+                    result = result.replace(pattern, '');
+                    changed = true;
+                }
+            }
+            // Also strip entire WATERMARK section blocks
+            const watermarkSection = /##\s*[🔖\u{1F516}]?\s*WATERMARK[\s\S]*?(?=\n##|\n---|\n\*\*|$)/gu;
+            const stripped = result.replace(watermarkSection, '');
+            if (stripped !== result) {
+                result = stripped;
+                changed = true;
+            }
+            return { result: result.trimEnd(), changed };
+        }
+        // 1. Clean llm_allowed_targets
+        const targets = _db.exec("SELECT id, llm_config FROM llm_allowed_targets WHERE llm_config IS NOT NULL");
+        if (targets.length > 0 && targets[0].values) {
+            let cleanedCount = 0;
+            for (const [id, rawConfig] of targets[0].values) {
+                try {
+                    const config = JSON.parse(rawConfig || '{}');
+                    let changed = false;
+                    if (config.system_prompt) {
+                        const { result, changed: c } = stripLegacyFooter(config.system_prompt);
+                        if (c) {
+                            config.system_prompt = result;
+                            changed = true;
+                        }
+                    }
+                    if (config.systemPrompt) {
+                        const { result, changed: c } = stripLegacyFooter(config.systemPrompt);
+                        if (c) {
+                            config.systemPrompt = result;
+                            changed = true;
+                        }
+                    }
+                    if (changed) {
+                        const stmt = _db.prepare("UPDATE llm_allowed_targets SET llm_config = ? WHERE id = ?");
+                        stmt.bind([JSON.stringify(config), id]);
+                        stmt.step();
+                        stmt.free();
+                        cleanedCount++;
+                    }
+                }
+                catch (e) { /* skip malformed */ }
+            }
+            if (cleanedCount > 0) {
+                logger_1.logger.info(`🧹 Footer cleanup: cleaned ${cleanedCount} llm_allowed_targets system prompts`);
+            }
+        }
+        // 2. Clean bots.ai_config systemPrompt
+        const bots = _db.exec("SELECT id, ai_config FROM bots WHERE ai_config IS NOT NULL");
+        if (bots.length > 0 && bots[0].values) {
+            let cleanedCount = 0;
+            for (const [id, rawConfig] of bots[0].values) {
+                try {
+                    const config = JSON.parse(rawConfig || '{}');
+                    if (config.systemPrompt) {
+                        const { result, changed } = stripLegacyFooter(config.systemPrompt);
+                        if (changed) {
+                            config.systemPrompt = result;
+                            const stmt = _db.prepare("UPDATE bots SET ai_config = ? WHERE id = ?");
+                            stmt.bind([JSON.stringify(config), id]);
+                            stmt.step();
+                            stmt.free();
+                            cleanedCount++;
+                        }
+                    }
+                }
+                catch (e) { /* skip malformed */ }
+            }
+            if (cleanedCount > 0) {
+                logger_1.logger.info(`🧹 Footer cleanup: cleaned ${cleanedCount} bot system prompts`);
+            }
+        }
+        // 3. Clean ai_conversations message history
+        const convs = _db.exec("SELECT id, messages FROM ai_conversations WHERE messages IS NOT NULL AND messages != '[]'");
+        if (convs.length > 0 && convs[0].values) {
+            let cleanedCount = 0;
+            for (const [id, rawMessages] of convs[0].values) {
+                try {
+                    const messages = JSON.parse(rawMessages || '[]');
+                    let changed = false;
+                    const cleaned = messages.map(msg => {
+                        const { result, changed: c } = stripLegacyFooter(msg.content || '');
+                        if (c)
+                            changed = true;
+                        return { ...msg, content: result };
+                    });
+                    if (changed) {
+                        const stmt = _db.prepare("UPDATE ai_conversations SET messages = ? WHERE id = ?");
+                        stmt.bind([JSON.stringify(cleaned), id]);
+                        stmt.step();
+                        stmt.free();
+                        cleanedCount++;
+                    }
+                }
+                catch (e) { /* skip malformed */ }
+            }
+            if (cleanedCount > 0) {
+                logger_1.logger.info(`🧹 Footer cleanup: cleaned ${cleanedCount} conversation histories`);
+            }
+        }
+    }
+    catch (cleanupErr) {
+        logger_1.logger.warn('Footer cleanup migration skipped', { error: cleanupErr });
+    }
+    // =====================================================================
     saveDatabase();
     logger_1.logger.info('✅ Database schema initialized');
 }
+// Debounce timer for save — prevents many simultaneous writes
+let _saveTimer = null;
+let _isSaving = false;
 function saveDatabase() {
     if (!_db)
         return;
+    // Debounce: if a save is already scheduled, just let it handle the latest state
+    if (_saveTimer) {
+        clearTimeout(_saveTimer);
+    }
+    _saveTimer = setTimeout(() => {
+        _saveTimer = null;
+        _flushToDisk();
+    }, 300); // batch writes within 300ms window
+}
+function _flushToDisk(retries = 3) {
+    if (!_db)
+        return;
+    if (_isSaving) {
+        // Another flush is in progress — reschedule
+        setTimeout(() => _flushToDisk(retries), 200);
+        return;
+    }
+    _isSaving = true;
     try {
-        const { mkdirSync } = require('fs');
-        const { dirname } = require('path');
-        // Ensure directory exists
-        const dir = dirname(DB_PATH);
+        const dir = (0, path_1.dirname)(DB_PATH);
         if (!(0, fs_1.existsSync)(dir)) {
-            mkdirSync(dir, { recursive: true });
+            (0, fs_1.mkdirSync)(dir, { recursive: true });
         }
         const data = _db.export();
         const buffer = Buffer.from(data);
-        (0, fs_1.writeFileSync)(DB_PATH, buffer);
+        const tmpPath = DB_PATH + '.tmp';
+        (0, fs_1.writeFileSync)(tmpPath, buffer);
+        // On Windows, renameSync can fail if the target is locked.
+        // Fallback: use copyFileSync + unlink which is more tolerant.
+        try {
+            (0, fs_1.renameSync)(tmpPath, DB_PATH);
+        }
+        catch (renameErr) {
+            if (renameErr.code === 'EPERM' || renameErr.code === 'EACCES') {
+                // Fallback: copy then delete temp
+                (0, fs_1.copyFileSync)(tmpPath, DB_PATH);
+                try {
+                    (0, fs_1.unlinkSync)(tmpPath);
+                }
+                catch (e) { }
+            }
+            else {
+                throw renameErr;
+            }
+        }
     }
     catch (error) {
+        if (retries > 0) {
+            // Retry after short delay
+            setTimeout(() => {
+                _isSaving = false;
+                _flushToDisk(retries - 1);
+            }, 150);
+            return;
+        }
         logger_1.logger.error('❌ Failed to save database to disk', { error });
+        try {
+            (0, fs_1.unlinkSync)(DB_PATH + '.tmp');
+        }
+        catch (e) { }
+    }
+    finally {
+        if (_isSaving)
+            _isSaving = false;
+    }
+}
+/**
+ * Create a timestamped backup of the database
+ * Keeps max 10 backups, rotates oldest
+ */
+function backupDatabase() {
+    if (!(0, fs_1.existsSync)(DB_PATH)) {
+        logger_1.logger.warn('No database file to backup');
+        return null;
+    }
+    try {
+        const backupDir = (0, path_1.join)((0, path_1.dirname)(DB_PATH), 'backups');
+        if (!(0, fs_1.existsSync)(backupDir)) {
+            (0, fs_1.mkdirSync)(backupDir, { recursive: true });
+        }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupPath = (0, path_1.join)(backupDir, `database_${timestamp}.sqlite`);
+        (0, fs_1.copyFileSync)(DB_PATH, backupPath);
+        logger_1.logger.info(`✅ Database backup created: ${backupPath}`);
+        // Rotate: keep only the last 10 backups
+        try {
+            const backups = (0, fs_1.readdirSync)(backupDir)
+                .filter(f => f.startsWith('database_') && f.endsWith('.sqlite'))
+                .map(f => ({ name: f, time: (0, fs_1.statSync)((0, path_1.join)(backupDir, f)).mtimeMs }))
+                .sort((a, b) => b.time - a.time);
+            if (backups.length > 10) {
+                for (const old of backups.slice(10)) {
+                    (0, fs_1.unlinkSync)((0, path_1.join)(backupDir, old.name));
+                    logger_1.logger.info(`🗑️ Deleted old backup: ${old.name}`);
+                }
+            }
+        }
+        catch (e) {
+            logger_1.logger.warn('Failed to rotate backups', { error: e });
+        }
+        return backupPath;
+    }
+    catch (error) {
+        logger_1.logger.error('❌ Failed to backup database', { error });
+        return null;
+    }
+}
+/**
+ * Restore database from a backup file
+ */
+function restoreDatabase(backupPath) {
+    try {
+        if (!(0, fs_1.existsSync)(backupPath)) {
+            logger_1.logger.error('Backup file not found', { backupPath });
+            return false;
+        }
+        // Safety: backup current DB before restoring
+        const safetyBackup = DB_PATH + '.pre-restore';
+        if ((0, fs_1.existsSync)(DB_PATH)) {
+            (0, fs_1.copyFileSync)(DB_PATH, safetyBackup);
+        }
+        (0, fs_1.copyFileSync)(backupPath, DB_PATH);
+        logger_1.logger.info(`✅ Database restored from: ${backupPath}`);
+        // Reload in-memory database
+        if (_db) {
+            const fileData = (0, fs_1.readFileSync)(DB_PATH);
+            _db = new (_db.constructor)(fileData);
+        }
+        return true;
+    }
+    catch (error) {
+        logger_1.logger.error('❌ Failed to restore database', { error });
+        return false;
+    }
+}
+/**
+ * List available backups
+ */
+function listBackups() {
+    const backupDir = (0, path_1.join)((0, path_1.dirname)(DB_PATH), 'backups');
+    if (!(0, fs_1.existsSync)(backupDir))
+        return [];
+    try {
+        return (0, fs_1.readdirSync)(backupDir)
+            .filter(f => f.startsWith('database_') && f.endsWith('.sqlite'))
+            .map(f => {
+            const stat = (0, fs_1.statSync)((0, path_1.join)(backupDir, f));
+            return {
+                name: f,
+                size: stat.size,
+                date: stat.mtime.toISOString()
+            };
+        })
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+    catch (e) {
+        return [];
     }
 }
 async function query(sql, params = []) {

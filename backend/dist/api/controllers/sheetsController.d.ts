@@ -16,6 +16,20 @@ import { Request, Response } from 'express';
 export declare const getSheetTabs: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 export declare const previewDigest: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
 /**
+ * GET /api/sheets/columns
+ * Fetch column headers and sample data from a specific sheet tab
+ *
+ * Query params:
+ *   - url: Google Sheets URL (required)
+ *   - tab: Sheet tab name (optional, defaults to first tab)
+ *
+ * Returns:
+ *   - columns: string[] (header names)
+ *   - sampleData: object[] (first 5 rows as objects)
+ *   - totalRows: number
+ */
+export declare const getSheetColumns: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+/**
  * POST /api/sheets/render-preview
  * Renders a Handlebars template with sample data from Google Sheets
  */
