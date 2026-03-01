@@ -10,6 +10,7 @@
  */
 
 import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import smartSheetsProcessor from './smartSheetsProcessor';
 
 export interface RenderContext {
@@ -48,7 +49,9 @@ class EnhancedTemplateRenderer {
         // 2. Process Global and Built-in Variables
         const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-        const now = new Date();
+        const tz = context.timezone || 'Asia/Jakarta';
+        const now = toZonedTime(new Date(), tz);
+
         const builtIn: Record<string, any> = {
             '@length': contextData.length,
             '@today': format(now, 'dd/MM/yyyy'),
@@ -142,7 +145,9 @@ class EnhancedTemplateRenderer {
         const sectionRegex = /\{\{\s*#section\s+(?:["']([^"']+)["']|([^\s"'}]+))(?:\s+filter:([^}]+))?\s*\}\}([\s\S]*?)\{\{\s*\/section\s*\}\}/g;
 
         const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-        const todayDayName = days[new Date().getDay()].toLowerCase();
+        const tz = context.timezone || 'Asia/Jakarta';
+        const todayDate = toZonedTime(new Date(), tz);
+        const todayDayName = days[todayDate.getDay()].toLowerCase();
 
         return template.replace(sectionRegex, (match, quotedSheet, unquotedSheet, filterExpr, innerContent) => {
             const sheetName = (quotedSheet || unquotedSheet).trim();
@@ -520,7 +525,7 @@ class EnhancedTemplateRenderer {
      * Get built-in variables
      */
     private getBuiltInVars(timezone: string = 'Asia/Jakarta'): Record<string, string> {
-        const now = new Date();
+        const now = toZonedTime(new Date(), timezone);
         const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
