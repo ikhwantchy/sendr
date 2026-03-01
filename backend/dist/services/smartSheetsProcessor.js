@@ -7,6 +7,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const date_fns_1 = require("date-fns");
+const date_fns_tz_1 = require("date-fns-tz");
 class SmartSheetsProcessor {
     /**
      * Process sheet data with flexible configuration
@@ -115,7 +116,9 @@ class SmartSheetsProcessor {
             // Day name filter (Senin, Selasa, etc. compared to today)
             case 'day_equals_today': {
                 const dayNames = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu'];
-                const todayDayName = dayNames[new Date().getDay()];
+                const tz = filter.value2 || 'Asia/Jakarta'; // Pass timezone as second value if possible
+                const todayTz = (0, date_fns_tz_1.toZonedTime)(new Date(), tz);
+                const todayDayName = dayNames[todayTz.getDay()];
                 const cellValue = String(value || '').toLowerCase().trim();
                 return cellValue === todayDayName;
             }
@@ -124,7 +127,8 @@ class SmartSheetsProcessor {
                 const targetDate = this.parseDate(value);
                 if (!targetDate)
                     return false;
-                const now = new Date();
+                const tz = filter.value2 || 'Asia/Jakarta';
+                const now = (0, date_fns_tz_1.toZonedTime)(new Date(), tz);
                 const hoursRange = Number(filterValue) || 72;
                 const diffMs = targetDate.getTime() - now.getTime();
                 const diffHours = diffMs / (1000 * 60 * 60);
@@ -150,7 +154,8 @@ class SmartSheetsProcessor {
         const dateValue = this.parseDate(value);
         if (!dateValue)
             return false;
-        const today = new Date();
+        const tz = filter.value2 || 'Asia/Jakarta';
+        const today = (0, date_fns_tz_1.toZonedTime)(new Date(), tz);
         today.setHours(0, 0, 0, 0);
         switch (filter.operator) {
             case 'date_equals':

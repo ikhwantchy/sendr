@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const date_fns_1 = require("date-fns");
+const date_fns_tz_1 = require("date-fns-tz");
 const smartSheetsProcessor_1 = __importDefault(require("./smartSheetsProcessor"));
 class EnhancedTemplateRenderer {
     /**
@@ -39,7 +40,8 @@ class EnhancedTemplateRenderer {
         // 2. Process Global and Built-in Variables
         const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-        const now = new Date();
+        const tz = context.timezone || 'Asia/Jakarta';
+        const now = (0, date_fns_tz_1.toZonedTime)(new Date(), tz);
         const builtIn = {
             '@length': contextData.length,
             '@today': (0, date_fns_1.format)(now, 'dd/MM/yyyy'),
@@ -122,7 +124,9 @@ class EnhancedTemplateRenderer {
         // Group 4: Inner content
         const sectionRegex = /\{\{\s*#section\s+(?:["']([^"']+)["']|([^\s"'}]+))(?:\s+filter:([^}]+))?\s*\}\}([\s\S]*?)\{\{\s*\/section\s*\}\}/g;
         const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-        const todayDayName = days[new Date().getDay()].toLowerCase();
+        const tz = context.timezone || 'Asia/Jakarta';
+        const todayDate = (0, date_fns_tz_1.toZonedTime)(new Date(), tz);
+        const todayDayName = days[todayDate.getDay()].toLowerCase();
         return template.replace(sectionRegex, (match, quotedSheet, unquotedSheet, filterExpr, innerContent) => {
             const sheetName = (quotedSheet || unquotedSheet).trim();
             const sheetsData = context.sheetsData || {};
@@ -336,7 +340,7 @@ class EnhancedTemplateRenderer {
         if (clean === '@length')
             return (context.data || []).length;
         if (clean === '@today')
-            return (0, date_fns_1.format)(new Date(), 'dd/MM/yyyy');
+            return (0, date_fns_1.format)((0, date_fns_tz_1.toZonedTime)(new Date(), context.timezone || 'Asia/Jakarta'), 'dd/MM/yyyy');
         return undefined;
     }
     replaceItemProperties(text, item) {
@@ -452,7 +456,7 @@ class EnhancedTemplateRenderer {
      * Get built-in variables
      */
     getBuiltInVars(timezone = 'Asia/Jakarta') {
-        const now = new Date();
+        const now = (0, date_fns_tz_1.toZonedTime)(new Date(), timezone);
         const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
         return {
