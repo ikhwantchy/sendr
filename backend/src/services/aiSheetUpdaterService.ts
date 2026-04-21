@@ -481,6 +481,10 @@ Respond with ONLY the classification word (e.g., CONFIRMED, DECLINED, MAYBE, UNK
                 const { GroqProvider } = await import('./llm/providers/groq');
                 provider = new GroqProvider();
                 break;
+            case 'nvidia':
+                const { NvidiaProvider } = await import('./llm/providers/nvidia');
+                provider = new NvidiaProvider();
+                break;
             case 'openai':
                 const { OpenAIProvider } = await import('./llm/providers/openai');
                 provider = new OpenAIProvider();
