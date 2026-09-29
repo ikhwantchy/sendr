@@ -424,6 +424,7 @@ class ReminderSchedulerService {
             sheetsData[sheet.sheetName] = googleSheetsService.convertToObjects(sheet);
         }
 
+
         // 4. Get Primary Sheet Data (legacy 'items')
         const primaryKey = Object.keys(sheetsData).find(k => k.toLowerCase() === primarySheetName.toLowerCase()) || primarySheetName;
         const items = sheetsData[primaryKey] || [];

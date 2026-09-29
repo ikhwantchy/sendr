@@ -30,23 +30,7 @@ class EnhancedTemplateRenderer {
         const contextData = context.data || [];
         let result = template;
 
-        // 0. Process {{#section}} blocks first (multi-sheet support)
-        if (context.sheetsData) {
-            result = this.processSectionBlocks(result, context);
-        }
-
-        // 1. Process in correct order:
-        // First: Filter blocks (they filter data inline before looping)
-        result = this.processFilterBlocks(result, contextData, context);
-
-        // Second: Groups (they contain their own loops/conditionals)
-        result = this.processGroups(result, contextData, context);
-
-        // Third: Process outer conditionals that wrap loops (like {{#if @length > 0}}...{{#each}}...{{/each}}...{{/if}})
-        // We need to handle this specially - extract and process conditional blocks that contain loops
-        result = this.processConditionalWithLoops(result, contextData, context);
-
-        // 2. Process Global and Built-in Variables
+        // 0. Compute Global and Built-in Variables early so all sections/conditionals can access them
         const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
         const tz = context.timezone || 'Asia/Jakarta';
@@ -63,10 +47,32 @@ class EnhancedTemplateRenderer {
             '@datetime': format(now, 'dd/MM/yyyy HH:mm'),
         };
 
+        context.globalVars = {
+            ...(context.globalVars || {}),
+            ...builtIn,
+            '@length': contextData.length,
+        };
+
         const allVars = {
             ...(context.globalVars || {}),
-            ...builtIn
+            ...builtIn,
+            '@length': contextData.length,
         };
+
+        // 1. Process {{#section}} blocks first (multi-sheet support)
+        if (context.sheetsData) {
+            result = this.processSectionBlocks(result, context);
+        }
+
+        // 2. Process in correct order:
+        // First: Filter blocks (they filter data inline before looping)
+        result = this.processFilterBlocks(result, contextData, context);
+
+        // Second: Groups (they contain their own loops/conditionals)
+        result = this.processGroups(result, contextData, context);
+
+        // Third: Process outer conditionals that wrap loops (like {{#if @length > 0}}...{{#each}}...{{/each}}...{{/if}})
+        result = this.processConditionalWithLoops(result, contextData, context);
 
         // Manual replacement for common variables (supports both {{ var }} and {{ @var }})
         Object.entries(allVars).forEach(([key, val]) => {
@@ -137,12 +143,8 @@ class EnhancedTemplateRenderer {
      *   {{#section deadlines filter:Deadline=within3days}}...{{/section}}
      */
     private processSectionBlocks(template: string, context: RenderContext): string {
-        // Match {{#section "Sheet Name" [filter:col=val]}}...{{/section}}
-        // Group 1: Quoted sheet name
-        // Group 2: Unquoted sheet name
-        // Group 3: Filter expression (optional)
-        // Group 4: Inner content
-        const sectionRegex = /\{\{\s*#section\s+(?:["']([^"']+)["']|([^\s"'}]+))(?:\s+filter:([^}]+))?\s*\}\}([\s\S]*?)\{\{\s*\/section\s*\}\}/g;
+        // Match {{#section "Sheet Name" [filter:col=val]}} or {{#section "Sheet Name" [col=val]}}
+        const sectionRegex = /\{\{\s*#section\s+(?:["']([^"']+)["']|([^\s"'}]+))(?:\s+(?:filter:)?([^}]+))?\s*\}\}([\s\S]*?)\{\{\s*\/section\s*\}\}/g;
 
         const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const tz = context.timezone || 'Asia/Jakarta';
@@ -298,7 +300,8 @@ class EnhancedTemplateRenderer {
                 propName.trim();
 
             const value = item[actualKey];
-            const hasValue = value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
+            const strVal = String(value || '').trim();
+            const hasValue = value !== undefined && value !== null && strVal !== '' && strVal !== '-' && strVal !== '--';
             return hasValue ? content : '';
         });
     }
@@ -312,8 +315,9 @@ class EnhancedTemplateRenderer {
 
         // Process all {{#if ...}}...{{/if}} blocks
         const processIfBlocks = (text: string): string => {
-            // Match {{#if condition}}content{{/if}}
-            const simpleIfRegex = /\{\{\s*#if\s+([^}]+)\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
+            // Match {{#if @condition}}content{{/if}} (outer/collection conditionals)
+            // Leave item-level conditionals like {{#if Keterangan}} to processInlineConditionals
+            const simpleIfRegex = /\{\{\s*#if\s+(@[^}]+)\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
 
             let processed = text;
             let match;
