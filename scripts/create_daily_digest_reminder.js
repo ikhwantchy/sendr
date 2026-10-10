@@ -1,5 +1,7 @@
-require('dotenv').config({ path: '/home/ubuntu/Sendr/backend/.env' });
-const { query, saveDatabase } = require('./dist/database/connection-sqlite');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../backend/.env') });
+const backendDist = path.resolve(__dirname, '../backend/dist');
+const { query, saveDatabase } = require(path.join(backendDist, 'database/connection-sqlite'));
 const { v4: uuidv4 } = require('uuid');
 
 const templateBody = `📬 *DAILY DIGEST ({{@date}})*
@@ -58,7 +60,7 @@ _Tidak ada perkuliahan hari ini (Libur)._
 {{#section "deadlines"}}
 {{#each}}
 {{@index}}. *{{Mata Kuliah}}* — {{Tugas}}
-📅 {{Deadline}}
+_{{Deadline | date:EEEE, dd/MM/yyyy}}_
 {{#if Keterangan}}Link Pengumpulan : {{Keterangan}}{{/if}}
 
 {{/each}}

@@ -70,10 +70,10 @@ _Tidak ada perkuliahan hari ini (Libur)._
 
 🧾 *Deadline ≤ 3 Hari*
 ━━━━━━━━━━━━━━━━━━━━
-{{#section "deadlines_input" filter:Deadline=within3days}}
+{{#section "deadlines"}}
 {{#each}}
 {{@index}}. *{{Mata Kuliah}}* — {{Tugas}}
-📅 {{Deadline}}
+_{{Deadline | date:EEEE, dd/MM/yyyy}}_
 {{#if Keterangan}}Link Pengumpulan : {{Keterangan}}{{/if}}
 
 {{/each}}
