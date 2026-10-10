@@ -83,7 +83,7 @@ class EnhancedTemplateRenderer {
 
         // 3. Process any remaining item-like properties (if data has only one item)
         if (context.data && context.data.length > 0) {
-            result = this.replaceItemProperties(result, context.data[0]);
+            result = this.replaceItemProperties(result, context.data[0], context.data);
         }
 
         // 4. Clean up excessive newlines (3+ consecutive newlines → 2 newlines)
@@ -275,7 +275,7 @@ class EnhancedTemplateRenderer {
                 rendered = this.processInlineConditionals(rendered, item);
 
                 // Replace item properties
-                return this.replaceItemProperties(rendered, item);
+                return this.replaceItemProperties(rendered, item, data);
             }).join('\n');
         });
     }
@@ -413,7 +413,7 @@ class EnhancedTemplateRenderer {
         return undefined;
     }
 
-    private replaceItemProperties(text: string, item: any): string {
+    private replaceItemProperties(text: string, item: any, allData?: any[]): string {
         if (!item) return text;
         const propRegex = /{{?\s*([^}|#/@]+?)\s*(?:\|\s*([^}]+))?\s*}?}/g;
 
@@ -436,7 +436,11 @@ class EnhancedTemplateRenderer {
             if (value === undefined || value === null) return '';
 
             if (filter) {
-                value = this.applyFilter(value, filter.trim());
+                let preferredFormat: 'MM/DD' | 'DD/MM' | null = null;
+                if (allData && allData.length > 0) {
+                    preferredFormat = smartSheetsProcessor.detectColumnDateFormat(allData, actualKey || key);
+                }
+                value = this.applyFilter(value, filter.trim(), preferredFormat);
             }
 
             return String(value);
@@ -446,7 +450,7 @@ class EnhancedTemplateRenderer {
     /**
      * Apply filter/formatter
      */
-    private applyFilter(value: any, filter: string): any {
+    private applyFilter(value: any, filter: string, preferredFormat?: 'MM/DD' | 'DD/MM' | null): any {
         const [name, ...params] = filter.split(':');
         const param = params.join(':');
         const valStr = String(value || '');
@@ -461,7 +465,7 @@ class EnhancedTemplateRenderer {
             case 'trim': return valStr.trim();
             case 'date':
                 try {
-                    const date = smartSheetsProcessor['parseDate'](value);
+                    const date = smartSheetsProcessor.parseDate(value, preferredFormat);
                     if (!date) return valStr;
 
                     // Indonesian locale helpers
@@ -495,7 +499,7 @@ class EnhancedTemplateRenderer {
             case 'urgency':
                 // Format deadline with urgency indicator
                 try {
-                    const deadlineDate = smartSheetsProcessor['parseDate'](value);
+                    const deadlineDate = smartSheetsProcessor.parseDate(value, preferredFormat);
                     if (!deadlineDate) return valStr;
 
                     const today = new Date();

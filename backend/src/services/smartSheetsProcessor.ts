@@ -45,12 +45,75 @@ export interface DataProcessingConfig {
 }
 
 class SmartSheetsProcessor {
+    public defaultDateFormat: 'MM/DD' | 'DD/MM' | null = null;
+
+    /**
+     * Automatically detect date format for a column across an array of rows
+     * If parts[1] > 12 (e.g. 10/15/2026), it's definitively MM/DD/YYYY
+     * If parts[0] > 12 (e.g. 15/10/2026), it's definitively DD/MM/YYYY
+     */
+    detectColumnDateFormat(data: any[], column?: string): 'MM/DD' | 'DD/MM' | null {
+        if (!data || !Array.isArray(data) || data.length === 0) return null;
+
+        let hasP1Over12 = false; // parts[1] > 12 -> MM/DD/YYYY
+        let hasP0Over12 = false; // parts[0] > 12 -> DD/MM/YYYY
+
+        for (const row of data) {
+            if (!row || typeof row !== 'object') continue;
+
+            if (column) {
+                const allKeys = Object.keys(row);
+                const searchKey = column.toLowerCase().trim();
+                const actualKey = allKeys.find(k => k.toLowerCase().trim() === searchKey) ||
+                    allKeys.find(k => k.toLowerCase().trim().includes(searchKey));
+                const val = actualKey ? row[actualKey] : undefined;
+                if (!val) continue;
+
+                const str = String(val).trim();
+                const parts = str.split(/[\/\-]/);
+                if (parts.length === 3) {
+                    const p0 = parseInt(parts[0], 10);
+                    const p1 = parseInt(parts[1], 10);
+                    if (!isNaN(p0) && !isNaN(p1)) {
+                        if (p0 > 12 && p1 <= 12) hasP0Over12 = true;
+                        if (p1 > 12 && p0 <= 12) hasP1Over12 = true;
+                    }
+                }
+            } else {
+                // Check all properties of the row
+                for (const k of Object.keys(row)) {
+                    const val = row[k];
+                    if (!val) continue;
+                    const str = String(val).trim();
+                    const parts = str.split(/[\/\-]/);
+                    if (parts.length === 3) {
+                        const p0 = parseInt(parts[0], 10);
+                        const p1 = parseInt(parts[1], 10);
+                        if (!isNaN(p0) && !isNaN(p1)) {
+                            if (p0 > 12 && p1 <= 12) hasP0Over12 = true;
+                            if (p1 > 12 && p0 <= 12) hasP1Over12 = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (hasP1Over12 && !hasP0Over12) return 'MM/DD';
+        if (hasP0Over12 && !hasP1Over12) return 'DD/MM';
+        return null;
+    }
 
     /**
      * Process sheet data with flexible configuration
      */
     processData(data: any[], config: DataProcessingConfig = {}): any[] {
         let result = [...data];
+
+        // Auto-detect date format from data
+        const detected = this.detectColumnDateFormat(data);
+        if (detected) {
+            this.defaultDateFormat = detected;
+        }
 
         // 1. Apply filters
         if (config.filters && config.filters.length > 0) {
@@ -85,14 +148,14 @@ class SmartSheetsProcessor {
     private applyFilters(data: any[], filters: FilterCondition[]): any[] {
         return data.filter(row => {
             // All filters must pass (AND logic)
-            return filters.every(filter => this.evaluateFilter(row, filter));
+            return filters.every(filter => this.evaluateFilter(row, filter, data));
         });
     }
 
     /**
      * Evaluate a single filter condition
      */
-    private evaluateFilter(row: any, filter: FilterCondition): boolean {
+    private evaluateFilter(row: any, filter: FilterCondition, allData?: any[]): boolean {
         // Helper to find the ACTUAL column name (fuzzy)
         const allKeys = Object.keys(row);
         const searchKey = filter.column.toLowerCase().trim();
@@ -186,7 +249,8 @@ class SmartSheetsProcessor {
 
             // Date within hours (for deadline proximity like -12h to +72h)
             case 'date_within_hours': {
-                const targetDate = this.parseDate(value);
+                const colFormat = (allData ? this.detectColumnDateFormat(allData, filter.column) : null) || this.defaultDateFormat;
+                const targetDate = this.parseDate(value, colFormat);
                 if (!targetDate) return false;
                 const tz = filter.value2 || 'Asia/Jakarta';
                 const now = toZonedTime(new Date(), tz);
@@ -204,7 +268,7 @@ class SmartSheetsProcessor {
             case 'date_between':
             case 'date_today':
             case 'date_within_days':
-                return this.evaluateDateFilter(value, filter);
+                return this.evaluateDateFilter(value, filter, allData);
 
             default:
                 return true;
@@ -214,8 +278,9 @@ class SmartSheetsProcessor {
     /**
      * Evaluate date-based filters
      */
-    private evaluateDateFilter(value: any, filter: FilterCondition): boolean {
-        const dateValue = this.parseDate(value);
+    private evaluateDateFilter(value: any, filter: FilterCondition, allData?: any[]): boolean {
+        const colFormat = (allData ? this.detectColumnDateFormat(allData, filter.column) : null) || this.defaultDateFormat;
+        const dateValue = this.parseDate(value, colFormat);
         if (!dateValue) return false;
 
         const tz = filter.value2 || 'Asia/Jakarta';
@@ -224,23 +289,23 @@ class SmartSheetsProcessor {
 
         switch (filter.operator) {
             case 'date_equals':
-                const compareDate = this.parseDate(filter.value);
+                const compareDate = this.parseDate(filter.value, colFormat);
                 if (!compareDate) return false;
                 return isEqual(dateValue, compareDate);
 
             case 'date_before':
-                const beforeDate = this.parseDate(filter.value);
+                const beforeDate = this.parseDate(filter.value, colFormat);
                 if (!beforeDate) return false;
                 return isBefore(dateValue, beforeDate);
 
             case 'date_after':
-                const afterDate = this.parseDate(filter.value);
+                const afterDate = this.parseDate(filter.value, colFormat);
                 if (!afterDate) return false;
                 return isAfter(dateValue, afterDate);
 
             case 'date_between':
-                const startDate = this.parseDate(filter.value);
-                const endDate = this.parseDate(filter.value2);
+                const startDate = this.parseDate(filter.value, colFormat);
+                const endDate = this.parseDate(filter.value2, colFormat);
                 if (!startDate || !endDate) return false;
                 return (isAfter(dateValue, startDate) || isEqual(dateValue, startDate)) &&
                     (isBefore(dateValue, endDate) || isEqual(dateValue, endDate));
@@ -263,7 +328,7 @@ class SmartSheetsProcessor {
     /**
      * Parse date from various formats
      */
-    private parseDate(value: any): Date | null {
+    public parseDate(value: any, preferredFormat?: 'MM/DD' | 'DD/MM' | null): Date | null {
         if (!value) return null;
 
         try {
@@ -272,9 +337,9 @@ class SmartSheetsProcessor {
             // 1. Try ISO or YYYY-MM-DD format
             if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/.test(str)) {
                 const parts = str.slice(0, 10).split(/[\/\-]/);
-                const y = parseInt(parts[0]);
-                const m = parseInt(parts[1]) - 1;
-                const d = parseInt(parts[2]);
+                const y = parseInt(parts[0], 10);
+                const m = parseInt(parts[1], 10) - 1;
+                const d = parseInt(parts[2], 10);
                 const dt = new Date(y, m, d);
                 if (!isNaN(dt.getTime())) {
                     dt.setHours(0, 0, 0, 0);
@@ -285,9 +350,9 @@ class SmartSheetsProcessor {
             // 2. Try 3-part slash/dash format (DD/MM/YYYY or MM/DD/YYYY)
             const parts = str.split(/[\/\-]/);
             if (parts.length === 3) {
-                const p0 = parseInt(parts[0]);
-                const p1 = parseInt(parts[1]);
-                let y = parseInt(parts[2]);
+                const p0 = parseInt(parts[0], 10);
+                const p1 = parseInt(parts[1], 10);
+                let y = parseInt(parts[2], 10);
                 if (y < 100) y += 2000;
 
                 if (!isNaN(p0) && !isNaN(p1) && !isNaN(y)) {
@@ -303,6 +368,20 @@ class SmartSheetsProcessor {
                         dt.setHours(0, 0, 0, 0);
                         return dt;
                     }
+
+                    // Respect explicit or detected format preference
+                    const fmt = preferredFormat || this.defaultDateFormat;
+                    if (fmt === 'MM/DD') {
+                        const dt = new Date(y, p0 - 1, p1);
+                        dt.setHours(0, 0, 0, 0);
+                        return dt;
+                    }
+                    if (fmt === 'DD/MM') {
+                        const dt = new Date(y, p1 - 1, p0);
+                        dt.setHours(0, 0, 0, 0);
+                        return dt;
+                    }
+
                     // If both p0 <= 12 and p1 <= 12 (ambiguous, e.g. 10/12/2026 or 12/9/2026):
                     // For upcoming tasks/deadlines, prioritize upcoming/future date over already expired past date
                     const now = new Date();
@@ -370,7 +449,7 @@ class SmartSheetsProcessor {
 
             transforms.forEach(transform => {
                 const value = newRow[transform.column];
-                newRow[transform.column] = this.applyTransform(value, transform);
+                newRow[transform.column] = this.applyTransform(value, transform, data);
             });
 
             return newRow;
@@ -380,7 +459,7 @@ class SmartSheetsProcessor {
     /**
      * Apply a single transformation
      */
-    private applyTransform(value: any, transform: TransformConfig): any {
+    private applyTransform(value: any, transform: TransformConfig, allData?: any[]): any {
         if (value === null || value === undefined) return value;
 
         const str = String(value);
@@ -399,7 +478,8 @@ class SmartSheetsProcessor {
                 return str.trim();
 
             case 'date_format':
-                const date = this.parseDate(value);
+                const colFormat = (allData ? this.detectColumnDateFormat(allData, transform.column) : null) || this.defaultDateFormat;
+                const date = this.parseDate(value, colFormat);
                 if (!date) return value;
                 return format(date, transform.params?.format || 'dd/MM/yyyy');
 
@@ -429,6 +509,8 @@ class SmartSheetsProcessor {
      * Apply sorting
      */
     private applySort(data: any[], sort: SortConfig): any[] {
+        const colFormat = this.detectColumnDateFormat(data, sort.column) || this.defaultDateFormat;
+
         return [...data].sort((a, b) => {
             const allKeysA = Object.keys(a);
             const keyA = allKeysA.find(k => k.toLowerCase().trim() === sort.column.toLowerCase().trim()) || sort.column;
@@ -438,8 +520,8 @@ class SmartSheetsProcessor {
             const bVal = b[keyB];
 
             // 1. Try date comparison first (supports DD/MM/YYYY, YYYY-MM-DD, etc.)
-            const aDate = this.parseDate(aVal);
-            const bDate = this.parseDate(bVal);
+            const aDate = this.parseDate(aVal, colFormat);
+            const bDate = this.parseDate(bVal, colFormat);
             if (aDate && bDate) {
                 const diff = aDate.getTime() - bDate.getTime();
                 return sort.order === 'asc' ? diff : -diff;

@@ -190,48 +190,7 @@ class SmartDeadlineTracker {
      * Parse date from various formats
      */
     private parseDate(value: any): Date | null {
-        if (!value) return null;
-
-        try {
-            const str = String(value).trim();
-
-            // Try ISO format first
-            if (str.includes('T') || str.includes('-')) {
-                const isoDate = parseISO(str);
-                if (!isNaN(isoDate.getTime())) {
-                    isoDate.setHours(0, 0, 0, 0);
-                    return isoDate;
-                }
-            }
-
-            // Try DD/MM/YYYY or DD-MM-YYYY
-            const parts = str.split(/[\/\-]/);
-            if (parts.length === 3) {
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1; // 0-indexed
-                const year = parseInt(parts[2]);
-
-                // Handle 2-digit years
-                const fullYear = year < 100 ? 2000 + year : year;
-
-                const date = new Date(fullYear, month, day);
-                if (!isNaN(date.getTime())) {
-                    date.setHours(0, 0, 0, 0);
-                    return date;
-                }
-            }
-
-            // Try native Date parsing
-            const nativeDate = new Date(str);
-            if (!isNaN(nativeDate.getTime())) {
-                nativeDate.setHours(0, 0, 0, 0);
-                return nativeDate;
-            }
-
-            return null;
-        } catch (error) {
-            return null;
-        }
+        return smartSheetsProcessor.parseDate(value);
     }
 
     /**
