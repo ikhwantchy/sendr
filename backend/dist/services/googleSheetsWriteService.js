@@ -202,11 +202,20 @@ class GoogleSheetsWriteService {
                     return JSON.parse(content);
                 }
             }
-            // Option 4: Default path
-            const defaultPath = path_1.default.resolve(__dirname, '../../service-account.json');
-            if (fs_1.default.existsSync(defaultPath)) {
-                const content = fs_1.default.readFileSync(defaultPath, 'utf-8');
-                return JSON.parse(content);
+            // Option 4: Default paths for service-account.json or sheetsendr.json
+            const candidatePaths = [
+                path_1.default.resolve(process.cwd(), 'sheetsendr.json'),
+                path_1.default.resolve(process.cwd(), 'backend/sheetsendr.json'),
+                path_1.default.resolve(__dirname, '../../sheetsendr.json'),
+                path_1.default.resolve(__dirname, '../sheetsendr.json'),
+                path_1.default.resolve(__dirname, '../../service-account.json')
+            ];
+            for (const candidate of candidatePaths) {
+                if (fs_1.default.existsSync(candidate)) {
+                    logger_1.logger.info('[SheetsWrite] Found credentials at default path:', candidate);
+                    const content = fs_1.default.readFileSync(candidate, 'utf-8');
+                    return JSON.parse(content);
+                }
             }
             return null;
         }

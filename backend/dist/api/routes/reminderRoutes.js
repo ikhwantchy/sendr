@@ -421,5 +421,26 @@ router.get('/:id/logs', async (req, res) => {
         });
     }
 });
+/**
+ * POST /api/reminders/:id/execute
+ * Execute a reminder immediately
+ */
+router.post('/:id/execute', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await reminderSchedulerService_1.default.executeImmediately(id);
+        res.json({
+            success: true,
+            message: 'Reminder executed immediately',
+        });
+    }
+    catch (error) {
+        console.error('Error executing reminder immediately:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to execute reminder',
+        });
+    }
+});
 exports.default = router;
 //# sourceMappingURL=reminderRoutes.js.map

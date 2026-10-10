@@ -293,8 +293,19 @@ const renderPreview = async (req, res) => {
         const objects = googleSheetsService_1.default.convertToObjects(sheetData);
         const sampleData = objects.slice(0, parseInt(sampleSize));
         // Render template
-        const templateRenderingService = require('../../services/templateRenderingService').default;
-        const rendered = templateRenderingService.renderWithSheetData(template, sampleData);
+        let rendered = '';
+        const isModern = /\{\{.*(@|==|contains|\||#section|#group).*/.test(template);
+        if (isModern) {
+            const enhancedTemplateRenderer = require('../../services/enhancedTemplateRenderer').default;
+            rendered = enhancedTemplateRenderer.render(template, {
+                data: sampleData,
+                timezone: 'Asia/Jakarta'
+            });
+        }
+        else {
+            const templateRenderingService = require('../../services/templateRenderingService').default;
+            rendered = templateRenderingService.renderWithSheetData(template, sampleData);
+        }
         res.json({
             success: true,
             rendered,

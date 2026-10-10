@@ -361,13 +361,7 @@ class ActionExecutionEngine {
         }
         // Apply sorting (if not already done by advanced filters)
         if (sort?.column && !hasAdvancedFilters) {
-            const sortCol = sort.column;
-            const sortOrder = sort.order === 'desc' ? -1 : 1;
-            items.sort((a, b) => {
-                const aVal = String(a[sortCol] || '');
-                const bVal = String(b[sortCol] || '');
-                return aVal.localeCompare(bVal) * sortOrder;
-            });
+            items = smartSheetsProcessor_1.default['applySort'](items, sort);
         }
         // Limit rows
         if (items.length > max_rows) {

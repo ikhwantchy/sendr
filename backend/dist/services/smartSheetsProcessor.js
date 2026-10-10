@@ -183,9 +183,9 @@ class SmartSheetsProcessor {
             case 'date_today':
                 return (0, date_fns_1.isEqual)(dateValue, today);
             case 'date_within_days':
-                // "N hari" = today + (N-1) more days. E.g. "2 hari" on Feb 15 = Feb 15, 16
+                // "N hari" = today + N days ahead
                 const days = Number(filter.value);
-                const futureDate = (0, date_fns_1.addDays)(today, days - 1);
+                const futureDate = (0, date_fns_1.addDays)(today, days);
                 return ((0, date_fns_1.isAfter)(dateValue, today) || (0, date_fns_1.isEqual)(dateValue, today)) &&
                     ((0, date_fns_1.isBefore)(dateValue, futureDate) || (0, date_fns_1.isEqual)(dateValue, futureDate));
             default:
@@ -200,12 +200,57 @@ class SmartSheetsProcessor {
             return null;
         try {
             const str = String(value).trim();
-            // Try common formats
+            // 1. Try ISO or YYYY-MM-DD format
+            if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/.test(str)) {
+                const parts = str.slice(0, 10).split(/[\/\-]/);
+                const y = parseInt(parts[0]);
+                const m = parseInt(parts[1]) - 1;
+                const d = parseInt(parts[2]);
+                const dt = new Date(y, m, d);
+                if (!isNaN(dt.getTime())) {
+                    dt.setHours(0, 0, 0, 0);
+                    return dt;
+                }
+            }
+            // 2. Try 3-part slash/dash format (DD/MM/YYYY or MM/DD/YYYY)
+            const parts = str.split(/[\/\-]/);
+            if (parts.length === 3) {
+                const p0 = parseInt(parts[0]);
+                const p1 = parseInt(parts[1]);
+                let y = parseInt(parts[2]);
+                if (y < 100)
+                    y += 2000;
+                if (!isNaN(p0) && !isNaN(p1) && !isNaN(y)) {
+                    // If p0 > 12: p0 must be Day (DD/MM/YYYY)
+                    if (p0 > 12 && p1 <= 12) {
+                        const dt = new Date(y, p1 - 1, p0);
+                        dt.setHours(0, 0, 0, 0);
+                        return dt;
+                    }
+                    // If p1 > 12: p1 must be Day (MM/DD/YYYY)
+                    if (p1 > 12 && p0 <= 12) {
+                        const dt = new Date(y, p0 - 1, p1);
+                        dt.setHours(0, 0, 0, 0);
+                        return dt;
+                    }
+                    // If both p0 <= 12 and p1 <= 12 (ambiguous, e.g. 10/12/2026):
+                    // Pick the one closest to today's date
+                    const now = new Date();
+                    const d1 = new Date(y, p1 - 1, p0); // DD/MM/YYYY
+                    const d2 = new Date(y, p0 - 1, p1); // MM/DD/YYYY
+                    d1.setHours(0, 0, 0, 0);
+                    d2.setHours(0, 0, 0, 0);
+                    const diff1 = Math.abs(d1.getTime() - now.getTime());
+                    const diff2 = Math.abs(d2.getTime() - now.getTime());
+                    return diff2 < diff1 ? d2 : d1;
+                }
+            }
+            // Try standard formats
             const formats = [
-                'dd/MM/yyyy',
-                'dd-MM-yyyy',
                 'yyyy-MM-dd',
+                'dd/MM/yyyy',
                 'MM/dd/yyyy',
+                'dd-MM-yyyy',
                 'dd/MM/yy',
                 'dd-MM-yy'
             ];
@@ -287,15 +332,26 @@ class SmartSheetsProcessor {
      */
     applySort(data, sort) {
         return [...data].sort((a, b) => {
-            const aVal = a[sort.column];
-            const bVal = b[sort.column];
-            // Try numeric comparison first
+            const allKeysA = Object.keys(a);
+            const keyA = allKeysA.find(k => k.toLowerCase().trim() === sort.column.toLowerCase().trim()) || sort.column;
+            const aVal = a[keyA];
+            const allKeysB = Object.keys(b);
+            const keyB = allKeysB.find(k => k.toLowerCase().trim() === sort.column.toLowerCase().trim()) || sort.column;
+            const bVal = b[keyB];
+            // 1. Try date comparison first (supports DD/MM/YYYY, YYYY-MM-DD, etc.)
+            const aDate = this.parseDate(aVal);
+            const bDate = this.parseDate(bVal);
+            if (aDate && bDate) {
+                const diff = aDate.getTime() - bDate.getTime();
+                return sort.order === 'asc' ? diff : -diff;
+            }
+            // 2. Try numeric comparison
             const aNum = Number(aVal);
             const bNum = Number(bVal);
             if (!isNaN(aNum) && !isNaN(bNum)) {
                 return sort.order === 'asc' ? aNum - bNum : bNum - aNum;
             }
-            // String comparison
+            // 3. String comparison
             const aStr = String(aVal || '');
             const bStr = String(bVal || '');
             const comparison = aStr.localeCompare(bStr);

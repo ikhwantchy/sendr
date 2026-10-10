@@ -21,8 +21,9 @@ const sql_js_1 = __importDefault(require("sql.js"));
 const fs_1 = require("fs");
 const path_1 = require("path");
 const logger_1 = require("../utils/logger");
-// Use process.cwd() to ensure consistent path whether running from tsx or compiled JS
-const DB_PATH = (0, path_1.join)(process.cwd(), 'data/database.sqlite');
+// Robust DB_PATH: checks process.env.DB_PATH, relative to backend root, or process.cwd()
+const DB_PATH = process.env.DB_PATH ||
+    ((0, fs_1.existsSync)((0, path_1.join)(__dirname, '../../data/database.sqlite')) ? (0, path_1.join)(__dirname, '../../data/database.sqlite') : (0, path_1.join)(process.cwd(), 'data/database.sqlite'));
 // Internal raw instance
 let _db = null;
 exports.db = {
@@ -347,6 +348,23 @@ async function initSchema() {
       error_message TEXT,
       execution_time_ms INTEGER,
       FOREIGN KEY (reminder_id) REFERENCES reminders(id)
+    );
+
+    -- Recorded Deadlines (Tasks recorded via WhatsApp / Bot)
+    CREATE TABLE IF NOT EXISTS recorded_deadlines (
+      id TEXT PRIMARY KEY,
+      bot_id TEXT NOT NULL,
+      group_id TEXT,
+      sender_jid TEXT,
+      sender_name TEXT,
+      mata_kuliah TEXT NOT NULL,
+      dosen TEXT,
+      tugas TEXT NOT NULL,
+      deadline TEXT NOT NULL,
+      keterangan TEXT,
+      is_completed INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (bot_id) REFERENCES bots(id)
     );
 
     -- Messages (for tracking sent/received messages)

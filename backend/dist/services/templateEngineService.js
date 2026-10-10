@@ -1,7 +1,11 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const date_fns_1 = require("date-fns");
 const date_fns_tz_1 = require("date-fns-tz");
+const smartSheetsProcessor_1 = __importDefault(require("./smartSheetsProcessor"));
 /**
  * Template Engine Service
  * Handles message template processing and variable replacement
@@ -173,14 +177,9 @@ class TemplateEngineService {
             if (!deadlineStr)
                 return false;
             try {
-                // Parse deadline (assuming format: DD/MM/YYYY)
-                const parts = deadlineStr.split(/[\/\-]/); // Split by / or -
-                if (parts.length !== 3)
+                const deadline = smartSheetsProcessor_1.default.parseDate(deadlineStr);
+                if (!deadline)
                     return false;
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1; // Month is 0-indexed
-                const year = parseInt(parts[2]);
-                const deadline = new Date(year, month, day);
                 // Use simple date comparison (ignoring time)
                 const d1 = new Date(deadline.toDateString());
                 const d2 = new Date(currentDate.toDateString());

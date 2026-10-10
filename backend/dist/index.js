@@ -61,6 +61,8 @@ require("./queue/campaignWorker");
 // It was sending "Mencari tugas..." + errors because it uses wrong spreadsheet ID
 // All keyword handling is now done via Rule Engine + Action Engine
 // import './services/broBotService';
+// ✅ Import task recorder service (Catat tugas via WhatsApp)
+require("./services/taskRecorderService");
 // ✅ Import group integration
 const groupIntegration_1 = require("./integrations/groupIntegration");
 // Import API routes

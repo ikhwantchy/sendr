@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import smartSheetsProcessor from './smartSheetsProcessor';
 
 interface TemplateVariable {
     key: string;
@@ -218,15 +219,8 @@ class TemplateEngineService {
             if (!deadlineStr) return false;
 
             try {
-                // Parse deadline (assuming format: DD/MM/YYYY)
-                const parts = deadlineStr.split(/[\/\-]/); // Split by / or -
-                if (parts.length !== 3) return false;
-
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]) - 1; // Month is 0-indexed
-                const year = parseInt(parts[2]);
-
-                const deadline = new Date(year, month, day);
+                const deadline = (smartSheetsProcessor as any).parseDate(deadlineStr);
+                if (!deadline) return false;
 
                 // Use simple date comparison (ignoring time)
                 const d1 = new Date(deadline.toDateString());

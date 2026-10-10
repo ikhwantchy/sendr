@@ -397,6 +397,10 @@ Respond with ONLY the classification word (e.g., CONFIRMED, DECLINED, MAYBE, UNK
                 const { GroqProvider } = await Promise.resolve().then(() => __importStar(require('./llm/providers/groq')));
                 provider = new GroqProvider();
                 break;
+            case 'nvidia':
+                const { NvidiaProvider } = await Promise.resolve().then(() => __importStar(require('./llm/providers/nvidia')));
+                provider = new NvidiaProvider();
+                break;
             case 'openai':
                 const { OpenAIProvider } = await Promise.resolve().then(() => __importStar(require('./llm/providers/openai')));
                 provider = new OpenAIProvider();
