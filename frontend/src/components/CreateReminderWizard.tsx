@@ -206,19 +206,34 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                     let frequency: Frequency = 'once'
                     let time = '09:00'
                     let startDate = today
+                    let loadedDays: number[] = []
 
                     if (r.schedule && r.schedule !== 'now') {
-                        const parts = r.schedule.split(' ')
+                        const parts = r.schedule.trim().split(/\s+/)
                         if (parts.length === 5) {
                             const [minute, hour, dom, month, dow] = parts
                             time = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
 
                             if (dow !== '*') {
                                 frequency = 'weekly'
+                                loadedDays = dow.split(',').flatMap((p: string) => {
+                                    if (p.includes('-')) {
+                                        const [start, end] = p.split('-').map(Number)
+                                        const range: number[] = []
+                                        for (let i = start; i <= end; i++) range.push(i)
+                                        return range
+                                    }
+                                    const num = Number(p.trim())
+                                    return isNaN(num) ? [] : [num]
+                                }).filter((d: number) => !isNaN(d) && d >= 0 && d <= 6)
                             } else if (dom === '*' && month === '*') {
                                 frequency = 'daily'
                             } else {
                                 frequency = 'once'
+                                if (dom !== '*' && month !== '*') {
+                                    const curYear = new Date().getFullYear()
+                                    startDate = `${curYear}-${month.padStart(2, '0')}-${dom.padStart(2, '0')}`
+                                }
                             }
                         }
                     }
@@ -310,7 +325,7 @@ export default function CreateReminderWizard({ botId, onClose, reminderId }: Cre
                         hasEndDate: false,
                         endDate: '',
                         time: time,
-                        days: [],
+                        days: loadedDays,
                         dataSource: templateConfig.googleSheetsUrl ? 'google_sheets' : 'static',
                         message: templateConfig.body || '',
                         imageFile: null,
