@@ -303,13 +303,23 @@ class SmartSheetsProcessor {
                         dt.setHours(0, 0, 0, 0);
                         return dt;
                     }
-                    // If both p0 <= 12 and p1 <= 12 (ambiguous, e.g. 10/12/2026):
-                    // Pick the one closest to today's date
+                    // If both p0 <= 12 and p1 <= 12 (ambiguous, e.g. 10/12/2026 or 12/9/2026):
+                    // For upcoming tasks/deadlines, prioritize upcoming/future date over already expired past date
                     const now = new Date();
+                    now.setHours(0, 0, 0, 0);
                     const d1 = new Date(y, p1 - 1, p0); // DD/MM/YYYY
                     const d2 = new Date(y, p0 - 1, p1); // MM/DD/YYYY
                     d1.setHours(0, 0, 0, 0);
                     d2.setHours(0, 0, 0, 0);
+
+                    const d1IsFuture = d1.getTime() >= now.getTime();
+                    const d2IsFuture = d2.getTime() >= now.getTime();
+
+                    // If one date is upcoming and the other has passed, pick the upcoming date!
+                    if (d1IsFuture && !d2IsFuture) return d1;
+                    if (d2IsFuture && !d1IsFuture) return d2;
+
+                    // If both are upcoming or both are in the past, pick the one closer to today
                     const diff1 = Math.abs(d1.getTime() - now.getTime());
                     const diff2 = Math.abs(d2.getTime() - now.getTime());
                     return diff2 < diff1 ? d2 : d1;
