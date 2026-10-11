@@ -1,10 +1,13 @@
 import type { Metadata } from 'next'
-import { Inter, Syne } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-const syne = Syne({ subsets: ['latin'], variable: '--font-syne', weight: ['400', '500', '600', '700', '800'] })
+const inter = Inter({
+    subsets: ['latin'],
+    display: 'swap',
+    variable: '--font-inter',
+})
 
 export const metadata: Metadata = {
     title: 'Sendr',
@@ -29,7 +32,7 @@ export default function RootLayout({
             <head>
                 <script src="https://cdn.lordicon.com/lordicon.js"></script>
             </head>
-            <body className={`${inter.variable} ${syne.variable} font-sans`}>
+            <body className={`${inter.className} ${inter.variable} font-sans`}>
                 <Providers>
                     {children}
                 </Providers>

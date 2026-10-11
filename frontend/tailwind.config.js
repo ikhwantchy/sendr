@@ -17,8 +17,8 @@ module.exports = {
         },
         extend: {
             fontFamily: {
-                sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-                display: ['var(--font-syne)', 'system-ui', 'sans-serif'],
+                sans: ['var(--font-inter)', 'Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+                display: ['var(--font-inter)', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
             },
             colors: {
                 border: "hsl(var(--border))",
